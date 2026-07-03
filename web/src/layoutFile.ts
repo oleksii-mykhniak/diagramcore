@@ -1,0 +1,50 @@
+// Mirrors internal/layout (Go) and docs/format.md's <name>.layout.json
+// format, so files exported here are readable by `dc render` and vice
+// versa.
+
+export interface LayoutPosition {
+  x: number;
+  y: number;
+}
+
+export interface LayoutFile {
+  views: {
+    [view: string]: {
+      positions: Record<string, LayoutPosition>;
+    };
+  };
+}
+
+export const DEFAULT_VIEW = 'default';
+
+export function buildLayoutFile(positions: Record<string, LayoutPosition>): LayoutFile {
+  return { views: { [DEFAULT_VIEW]: { positions } } };
+}
+
+export function parseLayoutFile(text: string): LayoutFile {
+  const parsed = JSON.parse(text) as Partial<LayoutFile>;
+  if (!parsed.views || typeof parsed.views !== 'object') {
+    throw new Error('Invalid layout file: missing "views"');
+  }
+  return parsed as LayoutFile;
+}
+
+/** <name>.dc.yaml -> <name>.layout.json, matching internal/layout.PathFor. */
+export function layoutFileName(diagramFileName: string): string {
+  if (diagramFileName.endsWith('.dc.yaml')) {
+    return diagramFileName.slice(0, -'.dc.yaml'.length) + '.layout.json';
+  }
+  return diagramFileName + '.layout.json';
+}
+
+export function downloadLayoutFile(fileName: string, file: LayoutFile) {
+  const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  // Revoke on the next tick so the browser has time to start the download
+  // before the blob URL is invalidated.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}

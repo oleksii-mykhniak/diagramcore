@@ -6,6 +6,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:4173',
+    acceptDownloads: true,
   },
   webServer: {
     command: 'npm run build && npm run preview -- --port 4173',

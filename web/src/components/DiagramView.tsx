@@ -1,17 +1,55 @@
+import { useRef } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { Diagram } from '../types';
 import { nodeLabel } from '../types';
 import type { DiagramLayout } from '../layout';
+import type { LayoutPosition } from '../layoutFile';
 
 interface Props {
   diagram: Diagram;
   layout: DiagramLayout;
+  positions: Record<string, LayoutPosition>;
+  onNodeDrag?: (id: string, pos: LayoutPosition) => void;
 }
 
-export function DiagramView({ diagram, layout }: Props) {
+function clientToSVGPoint(svg: SVGSVGElement, clientX: number, clientY: number): LayoutPosition {
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return { x: clientX, y: clientY };
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const transformed = pt.matrixTransform(ctm.inverse());
+  return { x: transformed.x, y: transformed.y };
+}
+
+export function DiagramView({ diagram, layout, positions, onNodeDrag }: Props) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const labelById = new Map(diagram.nodes.map((n) => [n.id, nodeLabel(n)]));
+
+  const handlePointerDown = (e: ReactPointerEvent<SVGGElement>, id: string) => {
+    if (!onNodeDrag) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    const start = clientToSVGPoint(svg, e.clientX, e.clientY);
+    const origin = positions[id] ?? { x: 0, y: 0 };
+
+    const onMove = (ev: PointerEvent) => {
+      const p = clientToSVGPoint(svg, ev.clientX, ev.clientY);
+      onNodeDrag(id, { x: origin.x + (p.x - start.x), y: origin.y + (p.y - start.y) });
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
 
   return (
     <svg
+      ref={svgRef}
       data-testid="diagram-svg"
       width={layout.width}
       height={layout.height}
@@ -33,14 +71,23 @@ export function DiagramView({ diagram, layout }: Props) {
           markerEnd="url(#arrow)"
         />
       ))}
-      {layout.nodes.map((n) => (
-        <g key={n.id} data-testid={`node-${n.id}`} transform={`translate(${n.x},${n.y})`}>
-          <rect width={n.width} height={n.height} rx={6} fill="#fff" stroke="#333" strokeWidth={1.5} />
-          <text x={n.width / 2} y={n.height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={13}>
-            {labelById.get(n.id) ?? n.id}
-          </text>
-        </g>
-      ))}
+      {layout.nodes.map((n) => {
+        const pos = positions[n.id] ?? n;
+        return (
+          <g
+            key={n.id}
+            data-testid={`node-${n.id}`}
+            transform={`translate(${pos.x},${pos.y})`}
+            onPointerDown={(e) => handlePointerDown(e, n.id)}
+            style={{ cursor: onNodeDrag ? 'grab' : undefined }}
+          >
+            <rect width={n.width} height={n.height} rx={6} fill="#fff" stroke="#333" strokeWidth={1.5} />
+            <text x={n.width / 2} y={n.height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={13}>
+              {labelById.get(n.id) ?? n.id}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
