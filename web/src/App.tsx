@@ -7,6 +7,8 @@ import { computeLayout } from './layout';
 import type { DiagramLayout } from './layout';
 import type { Diagram } from './types';
 import { DiagramView } from './components/DiagramView';
+import type { ActiveStep } from './components/DiagramView';
+import { FlowPlayer } from './components/FlowPlayer';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
 
@@ -17,6 +19,10 @@ export default function App() {
   const [positions, setPositions] = useState<Record<string, LayoutPosition>>({});
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [flowState, setFlowState] = useState<{ activeStep: ActiveStep | null; visitedStepKeys: Set<string> }>({
+    activeStep: null,
+    visitedStepKeys: new Set(),
+  });
 
   const openText = useCallback(async (name: string, text: string) => {
     setLoadError(null);
@@ -123,8 +129,16 @@ export default function App() {
             ))}
           </ul>
         )}
+        {diagram && <FlowPlayer diagram={diagram} onStateChange={setFlowState} />}
         {diagram && layout && (
-          <DiagramView diagram={diagram} layout={layout} positions={positions} onNodeDrag={onNodeDrag} />
+          <DiagramView
+            diagram={diagram}
+            layout={layout}
+            positions={positions}
+            onNodeDrag={onNodeDrag}
+            activeStep={flowState.activeStep ?? undefined}
+            visitedStepKeys={flowState.visitedStepKeys}
+          />
         )}
         {!diagram && !loadError && <p>Drag a .dc.yaml file here, or use the file picker above.</p>}
       </main>
