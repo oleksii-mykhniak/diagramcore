@@ -24,6 +24,10 @@ interface DiagramLevel {
   positions: Record<string, LayoutPosition>;
   errors: ValidationError[];
   flowPlayerState: FlowPlayerState;
+  /** Node ids whose position was set manually (drag or layout import),
+   * as opposed to the last auto-layout computation — "Re-layout"
+   * (PLAN.md step 6.2) leaves these untouched. */
+  manualPositionIds: Set<string>;
 }
 
 /** <file.dc.yaml> -> <file>, for naming exported PNG/zip/markdown files. */
@@ -61,6 +65,7 @@ export default function App() {
       positions: Object.fromEntries(computedLayout.nodes.map((n) => [n.id, { x: n.x, y: n.y }])),
       errors: validationErrors,
       flowPlayerState: initialFlowPlayerState,
+      manualPositionIds: new Set<string>(),
     };
   }, []);
 
@@ -114,10 +119,25 @@ export default function App() {
   const onNodeDrag = useCallback(
     (id: string, pos: LayoutPosition) => {
       if (!current) return;
-      updateCurrentLevel({ positions: { ...current.positions, [id]: pos } });
+      updateCurrentLevel({
+        positions: { ...current.positions, [id]: pos },
+        manualPositionIds: new Set(current.manualPositionIds).add(id),
+      });
     },
     [current, updateCurrentLevel],
   );
+
+  const onRelayout = useCallback(async () => {
+    if (!current) return;
+    const recomputed = await computeLayout(current.diagram);
+    const positions = { ...current.positions };
+    for (const n of recomputed.nodes) {
+      if (!current.manualPositionIds.has(n.id)) {
+        positions[n.id] = { x: n.x, y: n.y };
+      }
+    }
+    updateCurrentLevel({ layout: recomputed, positions });
+  }, [current, updateCurrentLevel]);
 
   const onExportLayout = useCallback(() => {
     if (!current) return;
@@ -132,7 +152,12 @@ export default function App() {
         try {
           const imported = parseLayoutFile(text);
           const importedPositions = imported.views.default?.positions ?? {};
-          updateCurrentLevel({ positions: { ...current.positions, ...importedPositions } });
+          const manualPositionIds = new Set(current.manualPositionIds);
+          for (const id of Object.keys(importedPositions)) manualPositionIds.add(id);
+          updateCurrentLevel({
+            positions: { ...current.positions, ...importedPositions },
+            manualPositionIds,
+          });
         } catch (err) {
           setLoadError(err instanceof Error ? err.message : String(err));
         }
@@ -257,6 +282,9 @@ export default function App() {
               onClick={() => setCanvasEngine((prev) => (prev === 'svg' ? 'reactflow' : 'svg'))}
             >
               Canvas: {canvasEngine === 'svg' ? 'SVG' : 'React Flow'}
+            </button>{' '}
+            <button type="button" data-testid="relayout" onClick={() => void onRelayout()}>
+              Re-layout
             </button>
           </>
         )}

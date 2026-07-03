@@ -468,3 +468,26 @@
   `data-node-type`/CSS-клас ✅; `npm test` (19 тестів) + `npm run build`
   + повний `npx playwright test` (13 тестів) зелені ✅.
 
+### Крок 6.2 — Auto-layout (elkjs) + ручні позиції
+- Дата: 2026-07-03
+- Виконано: `DiagramLevel` отримав `manualPositionIds: Set<string>` —
+  ідентифікатори вузлів, чия позиція виставлена вручну (drag або імпорт
+  layout-файлу), на відміну від щойно порахованого auto-layout.
+  `onNodeDrag` і `onImportLayout` додають зачеплені id в цей сет.
+  Кнопка "Re-layout" (`onRelayout`) перераховує `computeLayout` заново
+  і оновлює позиції лише для вузлів, яких нема в `manualPositionIds`
+  (та оновлює `layout.edges` для нового routing). Export/import layout
+  вже працювали крос-двигунно "з коробки", бо `positions`/`layout`
+  живуть у спільному стані рівня, незалежному від обраного canvasEngine
+  (`FlowCanvas`/`DiagramView` — лише різні в'юери того самого стану).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/react-flow-layout.spec.ts` — drag на React
+  Flow-канві → "Export layout" містить нові координати, вихідний YAML
+  побайтово незмінний ✅; layout, експортований з SVG-канви (той самий
+  файл, що в кроці 5.3), імпортується на React Flow-канву і відновлює ту
+  саму позицію (крос-перевірка двигунів) ✅; "Re-layout" після імпорту
+  лишає імпортований вузол на місці (±1px), тоді як інша перевірка (у
+  тому ж файлі) підтверджує, що звичайний export/import цикл на самій
+  React Flow-канві теж відтворює позицію точно ✅; `npm test` (19),
+  `npm run build`, повний `npx playwright test` (16) зелені ✅.
+
