@@ -96,3 +96,58 @@ func TestToD2FlowHighlightsPathDifferently(t *testing.T) {
 		t.Error("flow-highlighted D2 output is identical to the base output")
 	}
 }
+
+func TestFlowStepFramesPlainSteps(t *testing.T) {
+	src := filepath.Join("..", "..", "examples", "auth-system.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+	frames := FlowStepFrames(&d.Flows[0])
+	if len(frames) != 6 {
+		t.Fatalf("got %d frames, want 6", len(frames))
+	}
+	for i, f := range frames {
+		if f.Position != i+1 {
+			t.Errorf("frame %d: Position = %d, want %d", i, f.Position, i+1)
+		}
+		if f.BranchArm != "" {
+			t.Errorf("frame %d: BranchArm = %q, want \"\"", i, f.BranchArm)
+		}
+		if len(f.Cumulative) != i+1 {
+			t.Errorf("frame %d: len(Cumulative) = %d, want %d", i, len(f.Cumulative), i+1)
+		}
+	}
+}
+
+func TestFlowStepFramesBranchArms(t *testing.T) {
+	src := filepath.Join("..", "..", "examples", "payment-processing.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+	frames := FlowStepFrames(&d.Flows[0])
+
+	type want struct {
+		pos        int
+		arm        string
+		cumulative int
+	}
+	wants := []want{
+		{1, "", 1},
+		{2, "", 2},
+		{3, "", 3},
+		{4, "a", 4}, // 3 plain steps + 1 then step
+		{4, "b", 5}, // 3 plain steps + 2 else steps
+	}
+	if len(frames) != len(wants) {
+		t.Fatalf("got %d frames, want %d", len(frames), len(wants))
+	}
+	for i, w := range wants {
+		f := frames[i]
+		if f.Position != w.pos || f.BranchArm != w.arm || len(f.Cumulative) != w.cumulative {
+			t.Errorf("frame %d: got {pos:%d arm:%q cumulative:%d}, want {pos:%d arm:%q cumulative:%d}",
+				i, f.Position, f.BranchArm, len(f.Cumulative), w.pos, w.arm, w.cumulative)
+		}
+	}
+}

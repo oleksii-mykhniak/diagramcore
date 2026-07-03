@@ -41,6 +41,34 @@ func SVG(d *model.Diagram, opts Options) ([]byte, error) {
 	return svgFromD2(d2Text, opts)
 }
 
+// StepFrame is one rendered frame of a step-by-step flow playback.
+type StepFrame struct {
+	// Name is the frame's file basename without extension, e.g. "step-01"
+	// or "step-04a" for a branch arm.
+	Name string
+	SVG  []byte
+}
+
+// SVGSteps renders one frame per step of flow (see transpile.FlowStepFrames
+// for the branch-arm splitting rules), with the node/link set held
+// structurally identical across frames so the layout coordinates are
+// stable between them.
+func SVGSteps(d *model.Diagram, flow *model.Flow, opts Options) ([]StepFrame, error) {
+	frames := transpile.FlowStepFrames(flow)
+	out := make([]StepFrame, 0, len(frames))
+	for _, f := range frames {
+		svg, err := svgFromD2(transpile.ToD2StepFrame(d, f.Cumulative), opts)
+		if err != nil {
+			return nil, fmt.Errorf("render frame %d%s: %w", f.Position, f.BranchArm, err)
+		}
+		out = append(out, StepFrame{
+			Name: fmt.Sprintf("step-%02d%s", f.Position, f.BranchArm),
+			SVG:  svg,
+		})
+	}
+	return out, nil
+}
+
 func svgFromD2(d2Text string, opts Options) ([]byte, error) {
 	layout := opts.Layout
 	if layout == "" {

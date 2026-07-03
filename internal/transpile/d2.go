@@ -23,7 +23,8 @@ type emphasis int
 
 const (
 	emphasisNone emphasis = iota
-	emphasisHighlight
+	emphasisCurrent
+	emphasisPath
 	emphasisMuted
 )
 
@@ -51,7 +52,7 @@ func toD2(d *model.Diagram, hl *flowHighlight) string {
 		em := emphasisNone
 		if hl != nil {
 			if hl.nodeIDs[n.ID] {
-				em = emphasisHighlight
+				em = emphasisPath
 			} else {
 				em = emphasisMuted
 			}
@@ -65,7 +66,7 @@ func toD2(d *model.Diagram, hl *flowHighlight) string {
 		em := emphasisNone
 		if hl != nil {
 			if hl.linkKeys[pairKey(l.From, l.To)] {
-				em = emphasisHighlight
+				em = emphasisPath
 			} else {
 				em = emphasisMuted
 			}
@@ -74,6 +75,105 @@ func toD2(d *model.Diagram, hl *flowHighlight) string {
 	}
 
 	return b.String()
+}
+
+// ToD2StepFrame renders a single frame of a step-by-step flow playback:
+// cumulative is the ordered list of steps reached so far (inclusive of the
+// current one, which is always the last element). Steps before the last
+// get the "path" (already-visited) style; the last step gets the brighter
+// "current" style; nodes/links untouched by cumulative are muted.
+//
+// The full node/link set is always emitted (only styling changes across
+// frames), which keeps the D2 graph structurally identical between frames
+// so the layout engine places nodes at the same coordinates in every
+// frame.
+func ToD2StepFrame(d *model.Diagram, cumulative []model.Step) string {
+	currentNodeIDs := map[string]bool{}
+	visitedNodeIDs := map[string]bool{}
+	currentLinkKeys := map[string]bool{}
+	visitedLinkKeys := map[string]bool{}
+
+	for i, s := range cumulative {
+		visitedNodeIDs[s.From] = true
+		visitedNodeIDs[s.To] = true
+		visitedLinkKeys[pairKey(s.From, s.To)] = true
+		if i == len(cumulative)-1 {
+			currentNodeIDs[s.From] = true
+			currentNodeIDs[s.To] = true
+			currentLinkKeys[pairKey(s.From, s.To)] = true
+		}
+	}
+
+	var b strings.Builder
+	for _, n := range d.Nodes {
+		em := emphasisMuted
+		switch {
+		case currentNodeIDs[n.ID]:
+			em = emphasisCurrent
+		case visitedNodeIDs[n.ID]:
+			em = emphasisPath
+		}
+		writeD2Node(&b, n, em)
+	}
+	if len(d.Nodes) > 0 && len(d.Links) > 0 {
+		b.WriteString("\n")
+	}
+	for _, l := range d.Links {
+		key := pairKey(l.From, l.To)
+		em := emphasisMuted
+		switch {
+		case currentLinkKeys[key]:
+			em = emphasisCurrent
+		case visitedLinkKeys[key]:
+			em = emphasisPath
+		}
+		writeD2Link(&b, l, em)
+	}
+	return b.String()
+}
+
+// FlowStepFrames flattens flow into the ordered sequence of cumulative-step
+// frames used by ToD2StepFrame / dc render --flow X --steps: one frame per
+// plain Step, and one frame per non-empty branch arm (then/else), each
+// labeled with the 1-based position of its step in flow.Steps and, for
+// branch arms, a letter ("a" for then, "b" for else).
+type FlowFrame struct {
+	Position   int    // 1-based index into flow.Steps
+	BranchArm  string // "" for a plain step, "a" (then) or "b" (else) for a branch
+	Cumulative []model.Step
+}
+
+func FlowStepFrames(flow *model.Flow) []FlowFrame {
+	var frames []FlowFrame
+	var cumulative []model.Step
+
+	for i, sb := range flow.Steps {
+		pos := i + 1
+		if sb.Step != nil {
+			cumulative = append(cumulative, *sb.Step)
+			frames = append(frames, FlowFrame{
+				Position:   pos,
+				Cumulative: append([]model.Step{}, cumulative...),
+			})
+			continue
+		}
+
+		b := sb.Branch
+		if len(b.Then) > 0 {
+			frameSteps := append(append([]model.Step{}, cumulative...), b.Then...)
+			frames = append(frames, FlowFrame{Position: pos, BranchArm: "a", Cumulative: frameSteps})
+		}
+		if len(b.Else) > 0 {
+			frameSteps := append(append([]model.Step{}, cumulative...), b.Else...)
+			frames = append(frames, FlowFrame{Position: pos, BranchArm: "b", Cumulative: frameSteps})
+		}
+		// A branch is treated as the end of the linear cumulative path: any
+		// steps declared after a branch (not used by any current example)
+		// would continue from the "then" arm.
+		cumulative = append(cumulative, b.Then...)
+	}
+
+	return frames
 }
 
 // flowParticipants collects the node ids and unordered from/to link keys
@@ -132,7 +232,10 @@ func writeD2Node(b *strings.Builder, n model.Node, em emphasis) {
 		fmt.Fprintf(b, "  style.stroke-dash: 3\n")
 	}
 	switch em {
-	case emphasisHighlight:
+	case emphasisCurrent:
+		fmt.Fprintf(b, "  style.stroke: %q\n", "#e04b4b")
+		fmt.Fprintf(b, "  style.stroke-width: 5\n")
+	case emphasisPath:
 		fmt.Fprintf(b, "  style.stroke: %q\n", "#e04b4b")
 		fmt.Fprintf(b, "  style.stroke-width: 3\n")
 	case emphasisMuted:
@@ -156,7 +259,10 @@ func writeD2Link(b *strings.Builder, l model.Link, em emphasis) {
 	}
 	b.WriteString(" {\n")
 	switch em {
-	case emphasisHighlight:
+	case emphasisCurrent:
+		fmt.Fprintf(b, "  style.stroke: %q\n", "#e04b4b")
+		fmt.Fprintf(b, "  style.stroke-width: 5\n")
+	case emphasisPath:
 		fmt.Fprintf(b, "  style.stroke: %q\n", "#e04b4b")
 		fmt.Fprintf(b, "  style.stroke-width: 3\n")
 	case emphasisMuted:

@@ -290,11 +290,12 @@ func runExport(args []string) int {
 // runRender parses its own args for the same reason as runContext/runExport.
 func runRender(args []string) int {
 	usage := func() int {
-		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg] [--layout dagre|elk] [--flow <name>] <file>")
+		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg|dir/] [--layout dagre|elk] [--flow <name>] [--steps] <file>")
 		return 2
 	}
 
 	var out, layout, flowName string
+	var steps bool
 	var files []string
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; {
@@ -314,6 +315,8 @@ func runRender(args []string) int {
 			flowName = args[i]
 		case strings.HasPrefix(a, "--flow="):
 			flowName = strings.TrimPrefix(a, "--flow=")
+		case a == "--steps":
+			steps = true
 		case a == "-o" || a == "--o":
 			i++
 			if i >= len(args) {
@@ -333,7 +336,11 @@ func runRender(args []string) int {
 	}
 	file := files[0]
 	if out == "" {
-		fmt.Fprintln(os.Stderr, "dc render requires -o <out.svg>")
+		fmt.Fprintln(os.Stderr, "dc render requires -o <out.svg|dir/>")
+		return 2
+	}
+	if steps && flowName == "" {
+		fmt.Fprintln(os.Stderr, "dc render --steps requires --flow <name>")
 		return 2
 	}
 
@@ -356,13 +363,18 @@ func runRender(args []string) int {
 	}
 
 	renderOpts := render.Options{Layout: layout}
+	var flow *model.Flow
 	if flowName != "" {
-		flow, err := findFlow(d, flowName)
+		flow, err = findFlow(d, flowName)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
 		renderOpts.Flow = flow
+	}
+
+	if steps {
+		return renderSteps(d, flow, renderOpts, out)
 	}
 
 	svg, err := render.SVG(d, renderOpts)
@@ -374,6 +386,26 @@ func runRender(args []string) int {
 	if err := os.WriteFile(out, svg, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write %s: %s\n", out, err)
 		return 2
+	}
+	return 0
+}
+
+func renderSteps(d *model.Diagram, flow *model.Flow, opts render.Options, dir string) int {
+	frames, err := render.SVGSteps(d, flow, opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "render steps error: %s\n", err)
+		return 2
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "create %s: %s\n", dir, err)
+		return 2
+	}
+	for _, f := range frames {
+		path := filepath.Join(dir, f.Name+".svg")
+		if err := os.WriteFile(path, f.SVG, 0o644); err != nil {
+			fmt.Fprintf(os.Stderr, "write %s: %s\n", path, err)
+			return 2
+		}
 	}
 	return 0
 }
