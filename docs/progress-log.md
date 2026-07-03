@@ -86,3 +86,27 @@
   завершується (тест з таймаутом 2s), exit без зависання, помилка
   всередині B репортиться рівно один раз ✅; `go test ./... && go vet
   ./...` — зелені ✅.
+
+### Крок 1.3 — CLI `dc validate`
+- Дата: 2026-07-03
+- Виконано: `cmd/dc/main.go` — команда `dc validate <files...>` з
+  підтримкою glob (`filepath.Glob`, літеральні шляхи без glob-символів
+  проходять як є, щоб відсутній файл дав execution error, а не мовчки
+  зникав), людиночитний вивід `file:line [DCxxx] message` + підсумок
+  `N/M files OK`, прапорець `--json`. Exit codes: 0 valid, 1 validation
+  errors, 2 execution error (execution error має пріоритет над
+  validation).
+- Коміт: `9312885`
+- AC (перевірено вручну): `go build -o dc ./cmd/dc` збирає бінарник ✅;
+  `./dc validate examples/*.dc.yaml` → exit 0, `3/3 files OK` ✅;
+  `./dc validate internal/validate/testdata/dc004_flow_no_link.dc.yaml` →
+  exit 1, вивід містить `DC004` і номер рядка ✅; `./dc validate
+  nonexistent.yaml` → exit 2 ✅; `./dc validate --json examples/*.dc.yaml
+  | python3 -m json.tool` — валідний JSON ✅.
+
+### Крок 1.4 — CI репозиторію
+- Дата: 2026-07-03
+- Виконано: `.github/workflows/ci.yml` — на push/PR у `main`: `go build`,
+  `go test`, `go vet`, збірка `dc`, `./dc validate examples/*.dc.yaml`.
+- Коміт: `1baf1c3`
+- AC: локальна симуляція тих самих команд у shell пройшла зелено ✅.
