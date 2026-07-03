@@ -557,3 +557,28 @@
 
 **Фаза 6 завершена.**
 
+## Фаза 7 — Повноцінне візуальне редагування
+
+### Крок 7.1 — Серіалізація: модель → YAML-патчі
+- Дата: 2026-07-03
+- Виконано: додано залежність `yaml` (eemeli/yaml) v2.9.
+  `web/src/yamlPatch.ts` — `applyPatch(text, ops[])`: парсить текст у
+  `yaml.Document`, застосовує операції `addNode, updateNode, removeNode,
+  addLink, removeLink, addFlowStep, removeFlowStep, renameNodeId` через
+  мутації самого `Document` (`seq.add/delete`, `map.set/get`,
+  `items.splice`) і серіалізує назад — `Document` зберігає коментарі,
+  порядок ключів і форматування незмінених частин "з коробки" (це і є
+  CST-патчинг з плану — на рівні публічного Document API бібліотеки, без
+  прямого доступу до низькорівневого CST). `renameNodeId` рекурсивно
+  проходить `links[]` і `flows[].steps` (включно з `branch.then`/`else`)
+  і замінює всі згадки id.
+- Коміт: (цей крок)
+- AC: `yamlPatch.test.ts` (9 тестів) — по одному unit-тесту на кожну
+  операцію (патч валідного документа парситься і містить зміну) ✅;
+  golden-тест — документ з коментарями після `addNode` + `removeLink`
+  зберігає коментарі та порядок незмінених секцій побайтово ✅;
+  `renameNodeId` на `payment-processing.dc.yaml` (з branch) оновлює
+  згадки id в links і в обох гілках branch ✅; `npm test` (28),
+  `npm run build`, `npx playwright test` (13) зелені; go-регресія
+  зелена (модуль поки не підключений до UI — це кроки 7.2+) ✅.
+
