@@ -64,6 +64,48 @@ describe('applyPatch', () => {
     expect(flow.steps.at(-1)).toEqual({ from: 'AuthService', to: 'OAuthProvider', note: 'extra' });
   });
 
+  it('addFlow: creates a new named flow with empty steps', () => {
+    const out = applyPatch(authSystemYAML, [{ op: 'addFlow', name: 'New scenario' }]);
+    const doc = parse(out);
+    const flow = doc.flows.find((f: { name: string }) => f.name === 'New scenario');
+    expect(flow).toBeDefined();
+    expect(flow.steps).toEqual([]);
+  });
+
+  it('updateFlowStep: patches the note of an existing top-level step', () => {
+    const out = applyPatch(authSystemYAML, [
+      { op: 'updateFlowStep', flowName: 'Пряма авторизація логін/пароль', atIndex: 0, patch: { note: 'changed' } },
+    ]);
+    const doc = parse(out);
+    const flow = doc.flows.find((f: { name: string }) => f.name === 'Пряма авторизація логін/пароль');
+    expect(flow.steps[0].note).toBe('changed');
+  });
+
+  it('addBranch + addFlowStep with a branch target: appends a step into the then/else arm', () => {
+    const out = applyPatch(authSystemYAML, [
+      { op: 'addFlow', name: 'Branching scenario' },
+      { op: 'addBranch', flowName: 'Branching scenario', condition: 'token valid' },
+      {
+        op: 'addFlowStep',
+        flowName: 'Branching scenario',
+        step: { from: 'AuthService', to: 'DB' },
+        target: { branchAtIndex: 0, arm: 'then' },
+      },
+      {
+        op: 'addFlowStep',
+        flowName: 'Branching scenario',
+        step: { from: 'AuthService', to: 'OAuthProvider' },
+        target: { branchAtIndex: 0, arm: 'else' },
+      },
+    ]);
+    const doc = parse(out);
+    const flow = doc.flows.find((f: { name: string }) => f.name === 'Branching scenario');
+    expect(flow.steps).toHaveLength(1);
+    expect(flow.steps[0].branch.condition).toBe('token valid');
+    expect(flow.steps[0].branch.then).toEqual([{ from: 'AuthService', to: 'DB' }]);
+    expect(flow.steps[0].branch.else).toEqual([{ from: 'AuthService', to: 'OAuthProvider' }]);
+  });
+
   it('removeFlowStep: removes the step at the given index', () => {
     const out = applyPatch(authSystemYAML, [
       { op: 'removeFlowStep', flowName: 'Пряма авторизація логін/пароль', atIndex: 0 },

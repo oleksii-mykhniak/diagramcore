@@ -43,6 +43,7 @@ interface Props {
   onConnectNodes?: (source: string, target: string) => void;
   hoveredLinkIndex?: number | null;
   onEdgeHover?: (index: number | null) => void;
+  onEdgeClick?: (index: number) => void;
 }
 
 function FlowCanvasInner({
@@ -59,6 +60,7 @@ function FlowCanvasInner({
   onConnectNodes,
   hoveredLinkIndex,
   onEdgeHover,
+  onEdgeClick,
 }: Props) {
   const nodeById = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram.nodes]);
   // A single click commits a state update (selection) that recomputes the
@@ -183,6 +185,10 @@ function FlowCanvasInner({
           onEdgeHover?.(Number.isNaN(index) ? null : index);
         }}
         onEdgeMouseLeave={() => onEdgeHover?.(null)}
+        onEdgeClick={(_, edge) => {
+          const index = Number(edge.id.split('-')[1]);
+          if (!Number.isNaN(index)) onEdgeClick?.(index);
+        }}
         fitView
       >
         <Background />

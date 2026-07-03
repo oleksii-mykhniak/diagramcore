@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { parseDiagram } from './parseDiagram';
 import { generateContext, validateDiagram } from './wasmValidate';
@@ -11,6 +11,8 @@ import { FlowPlayer } from './components/FlowPlayer';
 import { Palette } from './components/Palette';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { LinksPanel } from './components/LinksPanel';
+import { FlowEditorPanel } from './components/FlowEditorPanel';
+import type { BranchTarget } from './components/FlowEditorPanel';
 import type { DiagramLink } from './types';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
@@ -57,8 +59,18 @@ export default function App() {
   const [drillError, setDrillError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [branchTarget, setBranchTarget] = useState<BranchTarget | null>(null);
 
   const current = stack.length > 0 ? stack[stack.length - 1] : null;
+  /** Mirrors the current level synchronously (React state updates are not
+   * synchronous, so a second `applyOps` call fired before the first one's
+   * `setStack` has been reflected in `current` would otherwise read stale
+   * `rawText` and clobber the first edit — see docs/deviations.md, step
+   * 7.4). `applyChainRef` additionally serializes overlapping calls so
+   * each one builds on the previous one's result. */
+  const levelRef = useRef<DiagramLevel | null>(null);
+  const applyChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const buildLevel = useCallback(async (fileName: string, text: string): Promise<DiagramLevel> => {
     const parsed = parseDiagram(text);
@@ -86,9 +98,11 @@ export default function App() {
         setVirtualFS(Object.fromEntries(contents));
         const [primaryName, primaryText] = contents[0];
         const level = await buildLevel(primaryName, primaryText);
+        levelRef.current = level;
         setStack([level]);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : String(err));
+        levelRef.current = null;
         setStack([]);
       }
     },
@@ -118,7 +132,9 @@ export default function App() {
     setStack((prev) => {
       if (prev.length === 0) return prev;
       const next = [...prev];
-      next[next.length - 1] = { ...next[next.length - 1], ...patch };
+      const merged = { ...next[next.length - 1], ...patch };
+      next[next.length - 1] = merged;
+      levelRef.current = merged;
       return next;
     });
   }, []);
@@ -131,32 +147,42 @@ export default function App() {
    * node as manual — used when a node is created by dropping it at a
    * specific canvas location. */
   const applyOps = useCallback(
-    async (ops: PatchOp[], opts?: { manualPosition?: { id: string; pos: LayoutPosition } }) => {
-      if (!current) return;
-      const newText = applyPatch(current.rawText, ops);
-      const newDiagram = parseDiagram(newText);
-      const newErrors = await validateDiagram(newText);
-      const recomputed = await computeLayout(newDiagram);
-      const manualPositionIds = new Set(current.manualPositionIds);
-      const positions: Record<string, LayoutPosition> = {};
-      for (const n of recomputed.nodes) {
-        positions[n.id] =
-          manualPositionIds.has(n.id) && current.positions[n.id] ? current.positions[n.id] : { x: n.x, y: n.y };
-      }
-      if (opts?.manualPosition) {
-        positions[opts.manualPosition.id] = opts.manualPosition.pos;
-        manualPositionIds.add(opts.manualPosition.id);
-      }
-      updateCurrentLevel({
-        rawText: newText,
-        diagram: newDiagram,
-        errors: newErrors,
-        layout: recomputed,
-        positions,
-        manualPositionIds,
-      });
+    (ops: PatchOp[], opts?: { manualPosition?: { id: string; pos: LayoutPosition } }) => {
+      const run = async () => {
+        const level = levelRef.current;
+        if (!level) return;
+        const newText = applyPatch(level.rawText, ops);
+        const newDiagram = parseDiagram(newText);
+        const newErrors = await validateDiagram(newText);
+        const recomputed = await computeLayout(newDiagram);
+        const manualPositionIds = new Set(level.manualPositionIds);
+        const positions: Record<string, LayoutPosition> = {};
+        for (const n of recomputed.nodes) {
+          positions[n.id] =
+            manualPositionIds.has(n.id) && level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
+        }
+        if (opts?.manualPosition) {
+          positions[opts.manualPosition.id] = opts.manualPosition.pos;
+          manualPositionIds.add(opts.manualPosition.id);
+        }
+        updateCurrentLevel({
+          rawText: newText,
+          diagram: newDiagram,
+          errors: newErrors,
+          layout: recomputed,
+          positions,
+          manualPositionIds,
+        });
+      };
+      // Serialize overlapping calls (e.g. clicking edges in quick
+      // succession while recording a flow) so each one patches the text
+      // left behind by the previous one, instead of racing on stale
+      // `levelRef.current.rawText` (docs/deviations.md, step 7.4).
+      const next = applyChainRef.current.then(run, run);
+      applyChainRef.current = next;
+      return next;
     },
-    [current, updateCurrentLevel],
+    [updateCurrentLevel],
   );
 
   const onDropNodeType = useCallback(
@@ -251,6 +277,75 @@ export default function App() {
       });
     },
     [current, updateCurrentLevel],
+  );
+
+  const recordingFlow = current?.flowPlayerState.flowIndex != null ? current.diagram.flows?.[current.flowPlayerState.flowIndex] ?? null : null;
+
+  const onNewFlow = useCallback(() => {
+    if (!current) return;
+    const name = window.prompt('New flow name');
+    if (!name) return;
+    const newIndex = current.diagram.flows?.length ?? 0;
+    void applyOps([{ op: 'addFlow', name }]).then(() => {
+      updateCurrentLevel({ flowPlayerState: { flowIndex: newIndex, currentIndex: -1, choices: {} } });
+      setRecording(true);
+      setBranchTarget(null);
+    });
+  }, [current, applyOps, updateCurrentLevel]);
+
+  const onToggleRecording = useCallback(() => {
+    setRecording((r) => !r);
+    setBranchTarget(null);
+  }, []);
+
+  const onAddBranch = useCallback(() => {
+    if (!recordingFlow) return;
+    const condition = window.prompt('Branch condition');
+    if (!condition) return;
+    const branchAtIndex = recordingFlow.steps.length;
+    void applyOps([{ op: 'addBranch', flowName: recordingFlow.name, condition }]);
+    setBranchTarget({ branchAtIndex, arm: 'then' });
+  }, [recordingFlow, applyOps]);
+
+  const onSwitchArm = useCallback(() => {
+    setBranchTarget((t) => (t ? { ...t, arm: t.arm === 'then' ? 'else' : 'then' } : t));
+  }, []);
+
+  const onFinishBranch = useCallback(() => setBranchTarget(null), []);
+
+  const onEdgeClickRecord = useCallback(
+    (index: number) => {
+      if (!recording || !recordingFlow || !current) return;
+      const link = current.diagram.links[index];
+      if (!link) return;
+      const note = window.prompt('Step note (optional)') ?? undefined;
+      const step = note ? { from: link.from, to: link.to, note } : { from: link.from, to: link.to };
+      void applyOps([
+        {
+          op: 'addFlowStep',
+          flowName: recordingFlow.name,
+          step,
+          target: branchTarget ?? undefined,
+        },
+      ]);
+    },
+    [recording, recordingFlow, current, branchTarget, applyOps],
+  );
+
+  const onUpdateFlowStepNote = useCallback(
+    (atIndex: number, note: string) => {
+      if (!recordingFlow) return;
+      void applyOps([{ op: 'updateFlowStep', flowName: recordingFlow.name, atIndex, patch: { note } }]);
+    },
+    [recordingFlow, applyOps],
+  );
+
+  const onDeleteFlowStep = useCallback(
+    (atIndex: number) => {
+      if (!recordingFlow) return;
+      void applyOps([{ op: 'removeFlowStep', flowName: recordingFlow.name, atIndex }]);
+    },
+    [recordingFlow, applyOps],
   );
 
   const onRelayout = useCallback(async () => {
@@ -348,6 +443,7 @@ export default function App() {
       }
       try {
         const level = await buildLevel(basename, text);
+        levelRef.current = level;
         setStack((prev) => [...prev, level]);
       } catch (err) {
         setDrillError(err instanceof Error ? err.message : String(err));
@@ -358,7 +454,11 @@ export default function App() {
 
   const goToLevel = useCallback((index: number) => {
     setDrillError(null);
-    setStack((prev) => prev.slice(0, index + 1));
+    setStack((prev) => {
+      const next = prev.slice(0, index + 1);
+      levelRef.current = next[next.length - 1] ?? null;
+      return next;
+    });
   }, []);
 
   const highlight = current ? computeFlowHighlight(current.diagram, current.flowPlayerState) : null;
@@ -453,6 +553,20 @@ export default function App() {
         {current && (
           <FlowPlayer diagram={current.diagram} state={current.flowPlayerState} onChange={onFlowPlayerChange} />
         )}
+        {current && (
+          <FlowEditorPanel
+            flow={recordingFlow}
+            recording={recording}
+            branchTarget={branchTarget}
+            onNewFlow={onNewFlow}
+            onToggleRecording={onToggleRecording}
+            onAddBranch={onAddBranch}
+            onSwitchArm={onSwitchArm}
+            onFinishBranch={onFinishBranch}
+            onUpdateStepNote={onUpdateFlowStepNote}
+            onDeleteStep={onDeleteFlowStep}
+          />
+        )}
         {current && <Palette />}
         {current && (
           <div style={{ display: 'flex' }}>
@@ -469,6 +583,7 @@ export default function App() {
                 onConnectNodes={onConnectNodes}
                 hoveredLinkIndex={hoveredLinkIndex}
                 onEdgeHover={setHoveredLinkIndex}
+                onEdgeClick={onEdgeClickRecord}
                 activeStep={highlight?.activeStep ?? undefined}
                 visitedStepKeys={highlight?.visitedStepKeys}
               />

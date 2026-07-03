@@ -642,3 +642,37 @@
   YAML ✅. Повна регресія: `npm test` (31), `npm run build`,
   `npx playwright test` (20) зелені; go-регресія зелена ✅.
 
+### Крок 7.4 — Редактор flows
+- Дата: 2026-07-03
+- Виконано: `yamlPatch.ts` отримав `addFlow` (нова іменована flow з
+  порожніми steps), `addBranch` (додає `{branch:{condition, then:[],
+  else:[]}}`), `addFlowStep` розширено опційним `target:
+  {branchAtIndex, arm}` для запису кроку в then/else-гілку, і
+  `updateFlowStep` (правка поля, напр. note, за індексом) — жодного з
+  цих чотирьох не було в списку кроку 7.1, вони знадобились саме для
+  редактора flows. `components/FlowEditorPanel.tsx` — "New flow"
+  (prompt на ім'я → `addFlow`, одразу вибирається у flow-плеєрі і
+  вмикається запис), "Start/Stop recording", "Add branch" (prompt на
+  умову → `addBranch`, перемикає режим запису на гілку `then`),
+  "Switch to else/then", "Finish branch" (повернення до
+  верхньорівневого запису), і список кроків поточної flow з
+  редагованим note та кнопкою видалення. `FlowCanvas` отримав
+  `onEdgeClick` (парсить індекс з `edge.id`); клік по ребру під час
+  запису викликає `prompt` на note і додає крок через `addFlowStep`
+  (з `target`, якщо триває запис гілки) — клік по неіснуючому ребру
+  неможливий, бо ребра рендеряться лише для реальних `links[]`.
+  Виявлена й виправлена гонка даних у `applyOps` (кілька швидких
+  кліків по ребрах губили проміжні кроки) — див. `docs/deviations.md`,
+  крок 7.4.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/flow-editor.spec.ts` — запис 3 кроків кліками по
+  ребрах у порядку User→Gateway→AuthService→OAuthProvider дає flow з
+  правильним порядком `from`/`to` у YAML-стані ✅; після запису 0
+  помилок валідації (`validation-errors` відсутній, тобто й 0 DC004) ✅;
+  записаний flow одразу з'являється у списку flow-плеєра і програється
+  (`flow-next` → `Step 1 / 3`) ✅. Unit-тести `yamlPatch.test.ts` — по
+  тесту на `addFlow`, `updateFlowStep`, `addBranch`+`addFlowStep` у
+  гілку (13 тестів разом) ✅. Повна регресія: `npm test` (34),
+  `npm run build`, `npx playwright test` (21) зелені; go-регресія
+  зелена ✅.
+
