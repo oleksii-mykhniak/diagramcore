@@ -143,3 +143,30 @@
   (`OAuthGateway` та ін.) ✅; `./dc context
   internal/validate/testdata/dc004_flow_no_link.dc.yaml` → exit 1,
   друкує помилку валідації, файл не створюється ✅.
+
+## Фаза 3 — Рендеринг через D2/Mermaid + CI-інтеграція
+
+Додано залежність `oss.terrastruct.com/d2` (нативна Go-бібліотека, як
+зафіксовано в "Загальних рішеннях").
+
+### Крок 3.1 — Транспілятор у D2-текст
+- Дата: 2026-07-03
+- Виконано: `internal/transpile.ToD2` — мапінг типів на shapes
+  (`actor→person`, `storage/queue→cylinder`, `external` — стиль
+  `stroke-dash` замість shape), інші типи (в т.ч. `custom_types`) —
+  дефолтний rectangle. Directed links → `->`, undirected → `--`, мітки
+  в лапках. `dc export <file> --to d2 [-o out]` у `cmd/dc`.
+- Коміт: `175ec77`
+- AC: golden-тести D2 для всіх 3 examples ✅; вивід додатково
+  компілюється через `d2lib.Compile` (dagre layout, реальний D2-компайлер)
+  без помилок для всіх 3 ✅.
+
+### Крок 3.2 — Транспілятор у Mermaid
+- Дата: 2026-07-03
+- Виконано: `internal/transpile.ToMermaid` — `flowchart TD`, вироджений
+  експорт без гарантій стилю. `--to mermaid` у `dc export`.
+- Коміт: `175ec77`
+- AC: golden-тести, вивід починається з `flowchart`, містить усі вузли й
+  ребра ✅; `mmdc` (через `npx @mermaid-js/mermaid-cli`) виявився
+  доступним у середовищі — усі 3 golden `.mmd` вручну відрендерено в
+  валідний SVG без помилок (TODO-заміна з плану не знадобилась) ✅.
