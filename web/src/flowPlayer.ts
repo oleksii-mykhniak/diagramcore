@@ -1,4 +1,4 @@
-import type { Flow, FlowStep } from './types';
+import type { Diagram, Flow, FlowStep } from './types';
 import { isFlowBranch } from './types';
 
 /** Order-independent key for a node id pair, matching the Go
@@ -52,4 +52,38 @@ export function resolveFlowSteps(flow: Flow, choices: BranchChoices): ResolvedFl
     steps.push(...arm);
   }
   return { steps, pendingBranch: null };
+}
+
+/** The flow player's state, controlled by the parent so it can be saved
+ * per navigation-stack level and restored when a breadcrumb is clicked
+ * (see App.tsx / docs/format.md drill-down navigation, PLAN.md step 5.5). */
+export interface FlowPlayerState {
+  flowIndex: number | null;
+  /** -1 = no step highlighted yet. */
+  currentIndex: number;
+  choices: BranchChoices;
+}
+
+export const initialFlowPlayerState: FlowPlayerState = {
+  flowIndex: null,
+  currentIndex: -1,
+  choices: {},
+};
+
+export interface FlowHighlight {
+  activeStep: FlowStep | null;
+  visitedStepKeys: Set<string>;
+}
+
+/** Derives the DiagramView highlight (active/visited edges) from a
+ * FlowPlayerState; pure so it can be recomputed on every render/level
+ * switch without any component owning derived state. */
+export function computeFlowHighlight(diagram: Diagram, state: FlowPlayerState): FlowHighlight {
+  const flow = state.flowIndex === null ? undefined : diagram.flows?.[state.flowIndex];
+  if (!flow || state.currentIndex < 0) {
+    return { activeStep: null, visitedStepKeys: new Set() };
+  }
+  const { steps } = resolveFlowSteps(flow, state.choices);
+  const visitedStepKeys = new Set(steps.slice(0, state.currentIndex).map((s) => pairKey(s.from, s.to)));
+  return { activeStep: steps[state.currentIndex] ?? null, visitedStepKeys };
 }

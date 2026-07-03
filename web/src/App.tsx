@@ -5,87 +5,165 @@ import { validateDiagram } from './wasmValidate';
 import type { ValidationError } from './wasmValidate';
 import { computeLayout } from './layout';
 import type { DiagramLayout } from './layout';
-import type { Diagram } from './types';
+import type { Diagram, DiagramNode } from './types';
 import { DiagramView } from './components/DiagramView';
-import type { ActiveStep } from './components/DiagramView';
 import { FlowPlayer } from './components/FlowPlayer';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
+import { computeFlowHighlight, initialFlowPlayerState } from './flowPlayer';
+import type { FlowPlayerState } from './flowPlayer';
+
+interface DiagramLevel {
+  fileName: string;
+  diagram: Diagram;
+  layout: DiagramLayout;
+  positions: Record<string, LayoutPosition>;
+  errors: ValidationError[];
+  flowPlayerState: FlowPlayerState;
+}
+
+/** <details reference> -> basename, matching how details are resolved
+ * against the virtual filesystem of files opened together (see openFiles
+ * below). Real relative-path resolution (../, subdirectories) is out of
+ * scope for v0 - all files are expected in the same flat selection. */
+function detailsBasename(details: string): string {
+  const parts = details.split('/');
+  return parts[parts.length - 1];
+}
 
 export default function App() {
-  const [fileName, setFileName] = useState<string>('diagram.dc.yaml');
-  const [diagram, setDiagram] = useState<Diagram | null>(null);
-  const [layout, setLayout] = useState<DiagramLayout | null>(null);
-  const [positions, setPositions] = useState<Record<string, LayoutPosition>>({});
-  const [errors, setErrors] = useState<ValidationError[]>([]);
+  const [virtualFS, setVirtualFS] = useState<Record<string, string>>({});
+  const [stack, setStack] = useState<DiagramLevel[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [flowState, setFlowState] = useState<{ activeStep: ActiveStep | null; visitedStepKeys: Set<string> }>({
-    activeStep: null,
-    visitedStepKeys: new Set(),
-  });
+  const [drillError, setDrillError] = useState<string | null>(null);
 
-  const openText = useCallback(async (name: string, text: string) => {
-    setLoadError(null);
-    try {
-      const parsed = parseDiagram(text);
-      const validationErrors = await validateDiagram(text);
-      const computedLayout = await computeLayout(parsed);
-      setErrors(validationErrors);
-      setDiagram(parsed);
-      setLayout(computedLayout);
-      setPositions(Object.fromEntries(computedLayout.nodes.map((n) => [n.id, { x: n.x, y: n.y }])));
-      setFileName(name);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-      setDiagram(null);
-      setLayout(null);
-    }
+  const current = stack.length > 0 ? stack[stack.length - 1] : null;
+
+  const buildLevel = useCallback(async (fileName: string, text: string): Promise<DiagramLevel> => {
+    const parsed = parseDiagram(text);
+    const validationErrors = await validateDiagram(text);
+    const computedLayout = await computeLayout(parsed);
+    return {
+      fileName,
+      diagram: parsed,
+      layout: computedLayout,
+      positions: Object.fromEntries(computedLayout.nodes.map((n) => [n.id, { x: n.x, y: n.y }])),
+      errors: validationErrors,
+      flowPlayerState: initialFlowPlayerState,
+    };
   }, []);
+
+  const openFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      setLoadError(null);
+      setDrillError(null);
+      try {
+        const contents = await Promise.all(files.map(async (f) => [f.name, await f.text()] as const));
+        setVirtualFS(Object.fromEntries(contents));
+        const [primaryName, primaryText] = contents[0];
+        const level = await buildLevel(primaryName, primaryText);
+        setStack([level]);
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : String(err));
+        setStack([]);
+      }
+    },
+    [buildLevel],
+  );
 
   const onFileInput = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      void file.text().then((text) => openText(file.name, text));
+      void openFiles(Array.from(e.target.files ?? []));
     },
-    [openText],
+    [openFiles],
   );
 
   const onDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
-      const file = e.dataTransfer.files?.[0];
-      if (!file) return;
-      void file.text().then((text) => openText(file.name, text));
+      void openFiles(Array.from(e.dataTransfer.files ?? []));
     },
-    [openText],
+    [openFiles],
   );
 
   const onDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
   }, []);
 
-  const onNodeDrag = useCallback((id: string, pos: LayoutPosition) => {
-    setPositions((prev) => ({ ...prev, [id]: pos }));
-  }, []);
-
-  const onExportLayout = useCallback(() => {
-    downloadLayoutFile(layoutFileName(fileName), buildLayoutFile(positions));
-  }, [fileName, positions]);
-
-  const onImportLayout = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    void file.text().then((text) => {
-      try {
-        const imported = parseLayoutFile(text);
-        const importedPositions = imported.views.default?.positions ?? {};
-        setPositions((prev) => ({ ...prev, ...importedPositions }));
-      } catch (err) {
-        setLoadError(err instanceof Error ? err.message : String(err));
-      }
+  const updateCurrentLevel = useCallback((patch: Partial<DiagramLevel>) => {
+    setStack((prev) => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      next[next.length - 1] = { ...next[next.length - 1], ...patch };
+      return next;
     });
   }, []);
+
+  const onNodeDrag = useCallback(
+    (id: string, pos: LayoutPosition) => {
+      if (!current) return;
+      updateCurrentLevel({ positions: { ...current.positions, [id]: pos } });
+    },
+    [current, updateCurrentLevel],
+  );
+
+  const onExportLayout = useCallback(() => {
+    if (!current) return;
+    downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFile(current.positions));
+  }, [current]);
+
+  const onImportLayout = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !current) return;
+      void file.text().then((text) => {
+        try {
+          const imported = parseLayoutFile(text);
+          const importedPositions = imported.views.default?.positions ?? {};
+          updateCurrentLevel({ positions: { ...current.positions, ...importedPositions } });
+        } catch (err) {
+          setLoadError(err instanceof Error ? err.message : String(err));
+        }
+      });
+    },
+    [current, updateCurrentLevel],
+  );
+
+  const onFlowPlayerChange = useCallback(
+    (flowPlayerState: FlowPlayerState) => updateCurrentLevel({ flowPlayerState }),
+    [updateCurrentLevel],
+  );
+
+  const openDetails = useCallback(
+    async (node: DiagramNode) => {
+      setDrillError(null);
+      if (!node.details) return;
+      const basename = detailsBasename(node.details);
+      const text = virtualFS[basename];
+      if (text === undefined) {
+        setDrillError(
+          `Cannot open sub-diagram "${node.details}": that file wasn't opened together with this one. ` +
+            'Select both files (or a whole folder) in the file picker to enable drill-down.',
+        );
+        return;
+      }
+      try {
+        const level = await buildLevel(basename, text);
+        setStack((prev) => [...prev, level]);
+      } catch (err) {
+        setDrillError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [virtualFS, buildLevel],
+  );
+
+  const goToLevel = useCallback((index: number) => {
+    setDrillError(null);
+    setStack((prev) => prev.slice(0, index + 1));
+  }, []);
+
+  const highlight = current ? computeFlowHighlight(current.diagram, current.flowPlayerState) : null;
 
   return (
     <div
@@ -95,8 +173,14 @@ export default function App() {
     >
       <header style={{ padding: '8px 16px', borderBottom: '1px solid #ccc' }}>
         <h1 style={{ fontSize: 18, margin: '0 0 8px' }}>DiagramCore</h1>
-        <input type="file" accept=".yaml,.yml" data-testid="file-input" onChange={onFileInput} />
-        {diagram && (
+        <input
+          type="file"
+          accept=".yaml,.yml"
+          multiple
+          data-testid="file-input"
+          onChange={onFileInput}
+        />
+        {current && (
           <>
             {' '}
             <button type="button" data-testid="export-layout" onClick={onExportLayout}>
@@ -104,14 +188,30 @@ export default function App() {
             </button>{' '}
             <label>
               Import layout:{' '}
-              <input
-                type="file"
-                accept=".json"
-                data-testid="layout-input"
-                onChange={onImportLayout}
-              />
+              <input type="file" accept=".json" data-testid="layout-input" onChange={onImportLayout} />
             </label>
           </>
+        )}
+        {stack.length > 0 && (
+          <nav data-testid="breadcrumbs" style={{ marginTop: 8 }}>
+            {stack.map((level, i) => (
+              <span key={`${level.fileName}-${i}`}>
+                {i > 0 && ' › '}
+                {i === stack.length - 1 ? (
+                  <strong data-testid={`breadcrumb-${i}`}>{level.diagram.diagram.title}</strong>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid={`breadcrumb-${i}`}
+                    onClick={() => goToLevel(i)}
+                    style={{ background: 'none', border: 'none', color: '#06c', cursor: 'pointer', padding: 0 }}
+                  >
+                    {level.diagram.diagram.title}
+                  </button>
+                )}
+              </span>
+            ))}
+          </nav>
         )}
       </header>
       <main style={{ flex: 1, overflow: 'auto', padding: 16 }}>
@@ -120,27 +220,35 @@ export default function App() {
             {loadError}
           </p>
         )}
-        {errors.length > 0 && (
+        {drillError && (
+          <p role="alert" data-testid="drill-error">
+            {drillError}
+          </p>
+        )}
+        {current && current.errors.length > 0 && (
           <ul data-testid="validation-errors">
-            {errors.map((e) => (
+            {current.errors.map((e) => (
               <li key={`${e.file}:${e.line}:${e.code}`}>
                 {e.file}:{e.line} [{e.code}] {e.message}
               </li>
             ))}
           </ul>
         )}
-        {diagram && <FlowPlayer diagram={diagram} onStateChange={setFlowState} />}
-        {diagram && layout && (
+        {current && (
+          <FlowPlayer diagram={current.diagram} state={current.flowPlayerState} onChange={onFlowPlayerChange} />
+        )}
+        {current && (
           <DiagramView
-            diagram={diagram}
-            layout={layout}
-            positions={positions}
+            diagram={current.diagram}
+            layout={current.layout}
+            positions={current.positions}
             onNodeDrag={onNodeDrag}
-            activeStep={flowState.activeStep ?? undefined}
-            visitedStepKeys={flowState.visitedStepKeys}
+            onNodeDoubleClick={(node) => void openDetails(node)}
+            activeStep={highlight?.activeStep ?? undefined}
+            visitedStepKeys={highlight?.visitedStepKeys}
           />
         )}
-        {!diagram && !loadError && <p>Drag a .dc.yaml file here, or use the file picker above.</p>}
+        {!current && !loadError && <p>Drag a .dc.yaml file here, or use the file picker above.</p>}
       </main>
     </div>
   );

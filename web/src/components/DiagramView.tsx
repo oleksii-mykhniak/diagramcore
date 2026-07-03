@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import type { Diagram } from '../types';
+import type { Diagram, DiagramNode } from '../types';
 import { nodeLabel } from '../types';
 import type { DiagramLayout, LayoutEdge, LayoutPoint } from '../layout';
 import type { LayoutPosition } from '../layoutFile';
@@ -22,6 +22,9 @@ interface Props {
   /** The flow player's current step: rendered with the brightest accent
    * stroke plus an <animateMotion> marker traveling along the edge. */
   activeStep?: ActiveStep;
+  /** Double-clicking a node with a `details` reference calls this so the
+   * parent can drill down into the sub-diagram (PLAN.md step 5.5). */
+  onNodeDoubleClick?: (node: DiagramNode) => void;
 }
 
 function clientToSVGPoint(svg: SVGSVGElement, clientX: number, clientY: number): LayoutPosition {
@@ -51,8 +54,10 @@ export function DiagramView({
   onNodeDrag,
   visitedStepKeys,
   activeStep,
+  onNodeDoubleClick,
 }: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const nodeById = new Map(diagram.nodes.map((n) => [n.id, n]));
   const labelById = new Map(diagram.nodes.map((n) => [n.id, nodeLabel(n)]));
 
   const handlePointerDown = (e: ReactPointerEvent<SVGGElement>, id: string) => {
@@ -122,17 +127,45 @@ export function DiagramView({
       )}
       {layout.nodes.map((n) => {
         const pos = positions[n.id] ?? n;
+        const hasDetails = Boolean(nodeById.get(n.id)?.details);
         return (
           <g
             key={n.id}
             data-testid={`node-${n.id}`}
+            data-has-details={hasDetails || undefined}
             transform={`translate(${pos.x},${pos.y})`}
             onPointerDown={(e) => handlePointerDown(e, n.id)}
+            onDoubleClick={() => {
+              const node = nodeById.get(n.id);
+              if (node && onNodeDoubleClick) onNodeDoubleClick(node);
+            }}
             style={{ cursor: onNodeDrag ? 'grab' : undefined }}
           >
-            <rect width={n.width} height={n.height} rx={6} fill="#fff" stroke="#333" strokeWidth={1.5} />
+            <rect
+              width={n.width}
+              height={n.height}
+              rx={6}
+              fill="#fff"
+              stroke="#333"
+              strokeWidth={hasDetails ? 3 : 1.5}
+            />
+            {hasDetails && (
+              <rect
+                x={3}
+                y={3}
+                width={n.width - 6}
+                height={n.height - 6}
+                rx={4}
+                fill="none"
+                stroke="#333"
+                strokeWidth={1}
+              />
+            )}
             <text x={n.width / 2} y={n.height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={13}>
               {labelById.get(n.id) ?? n.id}
+              {hasDetails && (
+                <tspan data-testid={`details-marker-${n.id}`}> ⊞</tspan>
+              )}
             </text>
           </g>
         );
