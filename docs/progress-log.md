@@ -254,3 +254,20 @@
   `auth-system` містить рівно один маркер `⊞` і обгортає `OAuthProvider`
   у `<a href="./oauth-detail.svg"` ✅; SVG `payment-processing` (без
   `details`) не містить ні маркера, ні `<a href` ✅.
+
+### Крок 3.8 — Готовий CI-рецепт для користувачів
+- Дата: 2026-07-03
+- Виконано: `.goreleaser.yml` — збірка `dc` для linux/darwin/windows ×
+  amd64/arm64 (6 платформ, CGO disabled). `docs/ci.md` описує рецепт і
+  адаптацію в зовнішньому репозиторії. `.github/workflows/
+  diagrams.example.yml` — робочий (не заглушка) приклад для
+  `examples/*.dc.yaml` цього репозиторію: build → validate → render SVG
+  → context → upload artifact, лише команди `dc`, реалізовані в
+  попередніх кроках.
+- Коміт: `0f0f323`
+- AC: `goreleaser build --snapshot --clean` зібрав усі 6 бінарників
+  (linux/darwin/windows × amd64/arm64, ≥4 з плану) ✅; кроки
+  example-workflow прогнані локально вручну проти `examples/*.dc.yaml` —
+  усі 6 вихідних файлів (3 SVG + 3 markdown) успішно згенеровані ✅.
+
+**Фаза 3 завершена.**
