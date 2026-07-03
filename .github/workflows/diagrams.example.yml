@@ -1,0 +1,44 @@
+# Example CI recipe for repositories that keep *.dc.yaml diagrams.
+# Copy to .github/workflows/diagrams.yml and adjust the DIAGRAMS_GLOB
+# below to your own directory. See docs/ci.md for details.
+#
+# This example targets this repository's own examples/ directory, so it
+# is a runnable, self-contained demonstration (not just a stub).
+name: Diagrams
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  DIAGRAMS_GLOB: "examples/*.dc.yaml"
+
+jobs:
+  diagrams:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build dc
+        run: go build -o dc ./cmd/dc
+
+      - name: Validate
+        run: ./dc validate ${{ env.DIAGRAMS_GLOB }}
+
+      - name: Render SVG + AI context
+        run: |
+          mkdir -p out
+          for f in ${{ env.DIAGRAMS_GLOB }}; do
+            name="$(basename "$f" .dc.yaml)"
+            ./dc render "$f" -o "out/${name}.svg"
+            ./dc context "$f" -o "out/${name}.md"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diagrams
+          path: out/
