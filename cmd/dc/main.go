@@ -290,12 +290,12 @@ func runExport(args []string) int {
 // runRender parses its own args for the same reason as runContext/runExport.
 func runRender(args []string) int {
 	usage := func() int {
-		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg|dir/] [--layout dagre|elk] [--flow <name>] [--steps] <file>")
+		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg|dir/] [--layout dagre|elk] [--flow <name>] [--steps|--animate] <file>")
 		return 2
 	}
 
 	var out, layout, flowName string
-	var steps bool
+	var steps, animate bool
 	var files []string
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; {
@@ -317,6 +317,8 @@ func runRender(args []string) int {
 			flowName = strings.TrimPrefix(a, "--flow=")
 		case a == "--steps":
 			steps = true
+		case a == "--animate":
+			animate = true
 		case a == "-o" || a == "--o":
 			i++
 			if i >= len(args) {
@@ -339,8 +341,12 @@ func runRender(args []string) int {
 		fmt.Fprintln(os.Stderr, "dc render requires -o <out.svg|dir/>")
 		return 2
 	}
-	if steps && flowName == "" {
-		fmt.Fprintln(os.Stderr, "dc render --steps requires --flow <name>")
+	if steps && animate {
+		fmt.Fprintln(os.Stderr, "dc render: --steps and --animate are mutually exclusive")
+		return 2
+	}
+	if (steps || animate) && flowName == "" {
+		fmt.Fprintln(os.Stderr, "dc render --steps/--animate requires --flow <name>")
 		return 2
 	}
 
@@ -377,7 +383,12 @@ func runRender(args []string) int {
 		return renderSteps(d, flow, renderOpts, out)
 	}
 
-	svg, err := render.SVG(d, renderOpts)
+	var svg []byte
+	if animate {
+		svg, err = render.SVGAnimated(d, flow, renderOpts)
+	} else {
+		svg, err = render.SVG(d, renderOpts)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: render error: %s\n", file, err)
 		return 2

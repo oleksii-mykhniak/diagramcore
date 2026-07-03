@@ -10,7 +10,9 @@ import (
 	"oss.terrastruct.com/d2/d2layouts/d2dagrelayout"
 	"oss.terrastruct.com/d2/d2layouts/d2elklayout"
 	"oss.terrastruct.com/d2/d2lib"
+	"oss.terrastruct.com/d2/d2renderers/d2animate"
 	"oss.terrastruct.com/d2/d2renderers/d2svg"
+	"oss.terrastruct.com/d2/d2target"
 	"oss.terrastruct.com/d2/d2themes/d2themescatalog"
 	"oss.terrastruct.com/d2/lib/log"
 	"oss.terrastruct.com/d2/lib/textmeasure"
@@ -69,7 +71,84 @@ func SVGSteps(d *model.Diagram, flow *model.Flow, opts Options) ([]StepFrame, er
 	return out, nil
 }
 
+// DefaultAnimateIntervalMS is the per-frame duration used by SVGAnimated.
+const DefaultAnimateIntervalMS = 1200
+
+// SVGAnimated renders flow as a single SVG that cycles through its step
+// frames (see transpile.FlowStepFrames) using D2's animate-interval
+// mechanism (d2renderers/d2animate): each frame is rendered independently
+// and then composed into one SVG with a CSS @keyframes opacity animation
+// that shows exactly one frame at a time.
+func SVGAnimated(d *model.Diagram, flow *model.Flow, opts Options) ([]byte, error) {
+	frames := transpile.FlowStepFrames(flow)
+	if len(frames) == 0 {
+		return nil, fmt.Errorf("flow %q has no steps", flow.Name)
+	}
+
+	renderOpts := newRenderOpts(opts)
+
+	// d2svg.Render only emits a full standalone <svg>...</svg> document
+	// (with its own XML declaration) when RenderOpts.MasterID is empty;
+	// with MasterID set it emits a bare <g> fragment meant to be nested
+	// inside a wrapping <svg>, which is what d2animate.Wrap expects. The
+	// MasterID must be derived from a diagram's hash, so compile the first
+	// frame once to obtain it before rendering any frame.
+	firstDiagram, err := compileD2(transpile.ToD2StepFrame(d, frames[0].Cumulative), opts, renderOpts)
+	if err != nil {
+		return nil, fmt.Errorf("compile frame %d%s: %w", frames[0].Position, frames[0].BranchArm, err)
+	}
+	masterID, err := firstDiagram.HashID(renderOpts.Salt)
+	if err != nil {
+		return nil, fmt.Errorf("hash diagram: %w", err)
+	}
+	renderOpts.MasterID = masterID
+
+	svgs := make([][]byte, 0, len(frames))
+	var rootDiagram *d2target.Diagram
+	for _, f := range frames {
+		diagram, err := compileD2(transpile.ToD2StepFrame(d, f.Cumulative), opts, renderOpts)
+		if err != nil {
+			return nil, fmt.Errorf("compile frame %d%s: %w", f.Position, f.BranchArm, err)
+		}
+		svg, err := d2svg.Render(diagram, renderOpts)
+		if err != nil {
+			return nil, fmt.Errorf("render frame %d%s: %w", f.Position, f.BranchArm, err)
+		}
+		svgs = append(svgs, svg)
+		rootDiagram = diagram
+	}
+
+	out, err := d2animate.Wrap(rootDiagram, svgs, *renderOpts, DefaultAnimateIntervalMS)
+	if err != nil {
+		return nil, fmt.Errorf("assemble animated SVG: %w", err)
+	}
+	return out, nil
+}
+
 func svgFromD2(d2Text string, opts Options) ([]byte, error) {
+	renderOpts := newRenderOpts(opts)
+	diagram, err := compileD2(d2Text, opts, renderOpts)
+	if err != nil {
+		return nil, err
+	}
+	out, err := d2svg.Render(diagram, renderOpts)
+	if err != nil {
+		return nil, fmt.Errorf("render SVG: %w", err)
+	}
+	return out, nil
+}
+
+func newRenderOpts(opts Options) *d2svg.RenderOpts {
+	renderOpts := &d2svg.RenderOpts{}
+	if opts.ThemeID != nil {
+		renderOpts.ThemeID = opts.ThemeID
+	} else {
+		renderOpts.ThemeID = &d2themescatalog.NeutralDefault.ID
+	}
+	return renderOpts
+}
+
+func compileD2(d2Text string, opts Options, renderOpts *d2svg.RenderOpts) (*d2target.Diagram, error) {
 	layout := opts.Layout
 	if layout == "" {
 		layout = "dagre"
@@ -95,22 +174,10 @@ func svgFromD2(d2Text string, opts Options) ([]byte, error) {
 		Ruler: ruler,
 	}
 
-	renderOpts := &d2svg.RenderOpts{}
-	if opts.ThemeID != nil {
-		renderOpts.ThemeID = opts.ThemeID
-	} else {
-		renderOpts.ThemeID = &d2themescatalog.NeutralDefault.ID
-	}
-
 	ctx := log.WithDefault(context.Background())
 	diagram, _, err := d2lib.Compile(ctx, d2Text, compileOpts, renderOpts)
 	if err != nil {
 		return nil, fmt.Errorf("compile D2: %w", err)
 	}
-
-	out, err := d2svg.Render(diagram, renderOpts)
-	if err != nil {
-		return nil, fmt.Errorf("render SVG: %w", err)
-	}
-	return out, nil
+	return diagram, nil
 }

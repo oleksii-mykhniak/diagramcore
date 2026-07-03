@@ -2,6 +2,9 @@ package render
 
 import (
 	"bytes"
+	"encoding/xml"
+	"errors"
+	"io"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -128,6 +131,40 @@ func TestSVGStepsBranchArms(t *testing.T) {
 		}
 		if !bytes.Contains(frames[i].SVG, []byte("<svg")) {
 			t.Errorf("frame %s is not a valid SVG", name)
+		}
+	}
+}
+
+func TestSVGAnimated(t *testing.T) {
+	src := filepath.Join("..", "..", "examples", "auth-system.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+	flow := &d.Flows[0]
+
+	out, err := SVGAnimated(d, flow, Options{})
+	if err != nil {
+		t.Fatalf("SVGAnimated failed: %v", err)
+	}
+	if !bytes.Contains(out, []byte("<svg")) {
+		t.Error("output does not contain '<svg'")
+	}
+	if !bytes.Contains(out, []byte("@keyframes")) {
+		t.Error("output does not contain a @keyframes animation")
+	}
+	if !bytes.Contains(out, []byte("animation:")) {
+		t.Error("output does not apply the animation to any element")
+	}
+
+	dec := xml.NewDecoder(bytes.NewReader(out))
+	for {
+		_, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("output is not well-formed XML (would fail to open in a browser): %v", err)
 		}
 	}
 }
