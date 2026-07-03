@@ -1,0 +1,13 @@
+diagram:
+  title: "DC002"
+
+nodes:
+  - id: A
+    type: actor
+
+links:
+  - from: A
+    to: Ghost
+    type: request
+
+flows: []

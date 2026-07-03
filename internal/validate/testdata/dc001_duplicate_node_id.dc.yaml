@@ -1,0 +1,11 @@
+diagram:
+  title: "DC001"
+
+nodes:
+  - id: A
+    type: actor
+  - id: A
+    type: service
+
+links: []
+flows: []

@@ -1,0 +1,15 @@
+diagram:
+  title: "DC003 link"
+
+nodes:
+  - id: A
+    type: actor
+  - id: B
+    type: service
+
+links:
+  - from: A
+    to: B
+    type: teleport
+
+flows: []

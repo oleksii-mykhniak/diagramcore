@@ -1,0 +1,23 @@
+diagram:
+  title: "DC008"
+
+nodes:
+  - id: A
+    type: actor
+  - id: B
+    type: service
+
+links:
+  - from: A
+    to: B
+    type: request
+
+flows:
+  - name: "Broken branch"
+    steps:
+      - branch:
+          condition: "always"
+          else:
+            - from: A
+              to: B
+              note: "else only"

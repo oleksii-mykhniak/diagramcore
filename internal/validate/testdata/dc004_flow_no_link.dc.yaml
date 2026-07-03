@@ -1,0 +1,17 @@
+diagram:
+  title: "DC004"
+
+nodes:
+  - id: A
+    type: actor
+  - id: B
+    type: service
+
+links: []
+
+flows:
+  - name: "Broken"
+    steps:
+      - from: A
+        to: B
+        note: "no link exists for this pair"

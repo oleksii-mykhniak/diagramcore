@@ -1,0 +1,15 @@
+diagram:
+  title: "DC005"
+
+nodes:
+  - id: A
+    type: actor
+
+links: []
+
+flows:
+  - name: "Broken"
+    steps:
+      - from: A
+        to: Ghost
+        note: "Ghost does not exist"

@@ -1,0 +1,15 @@
+diagram:
+  title: "Two errors"
+
+nodes:
+  - id: A
+    type: actor
+  - id: A
+    type: service
+
+links:
+  - from: A
+    to: Ghost
+    type: request
+
+flows: []

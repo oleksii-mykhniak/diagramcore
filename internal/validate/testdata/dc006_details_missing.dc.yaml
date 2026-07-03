@@ -1,0 +1,10 @@
+diagram:
+  title: "DC006"
+
+nodes:
+  - id: A
+    type: actor
+    details: ./does-not-exist.dc.yaml
+
+links: []
+flows: []

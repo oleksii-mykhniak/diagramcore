@@ -1,0 +1,12 @@
+diagram:
+  title: "DC007"
+
+nodes:
+  - id: A
+    type: actor
+
+links: []
+
+flows:
+  - name: "Empty"
+    steps: []

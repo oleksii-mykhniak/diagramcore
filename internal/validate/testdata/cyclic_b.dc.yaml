@@ -1,0 +1,17 @@
+diagram:
+  title: "Cyclic B"
+
+nodes:
+  - id: Sub
+    type: actor
+    details: ./cyclic_a.dc.yaml
+  - id: Ghost
+    type: actor
+    details: ./cyclic_a.dc.yaml
+
+links:
+  - from: Sub
+    to: Missing
+    type: request
+
+flows: []

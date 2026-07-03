@@ -1,0 +1,10 @@
+diagram:
+  title: "Cyclic A"
+
+nodes:
+  - id: Root
+    type: actor
+    details: ./cyclic_b.dc.yaml
+
+links: []
+flows: []
