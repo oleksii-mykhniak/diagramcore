@@ -308,3 +308,22 @@
   layout друкує warning, exit 0) ✅.
 
 **Фаза 4 завершена.**
+
+## Фаза 5 — Web-редактор (TypeScript)
+
+### Крок 5.1 — Go→WASM валідатор
+- Дата: 2026-07-03
+- Виконано: `cmd/wasm/main.go` (build tag `js && wasm`, тому `go build
+  ./...`/`go vet ./...` на хості мовчки його пропускають) експортує
+  глобальну JS-функцію `validate(yamlString) -> errors[]`. Додано
+  `internal/parser.ParseString` (декодує YAML без файлової системи) і
+  `internal/validate.ValidateString` (структурні правила DC001-DC005/
+  DC007/DC008 без обходу `details` — нема файлової системи, щоб іти по
+  референсах). `Makefile`: `make wasm` збирає `web/public/dc.wasm` і
+  оновлює `web/public/wasm_exec.js`; `make wasm-test` додатково прогонає
+  `web/scripts/test-wasm.cjs`.
+- Коміт: `dcb1fea`
+- AC: `web/public/dc.wasm` збирається `make wasm` ✅; JS-тест (Node +
+  `wasm_exec.js`) — `payment-processing.dc.yaml` → 0 помилок,
+  `dc004_flow_no_link.dc.yaml` → `DC004` ✅ (`make wasm-test` пройшов
+  зелено).
