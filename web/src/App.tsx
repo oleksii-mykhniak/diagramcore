@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { parseDiagram } from './parseDiagram';
-import { validateDiagram } from './wasmValidate';
+import { generateContext, validateDiagram } from './wasmValidate';
 import type { ValidationError } from './wasmValidate';
 import { computeLayout } from './layout';
 import type { DiagramLayout } from './layout';
@@ -10,16 +10,24 @@ import { DiagramView } from './components/DiagramView';
 import { FlowPlayer } from './components/FlowPlayer';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
-import { computeFlowHighlight, initialFlowPlayerState } from './flowPlayer';
+import { computeFlowHighlight, flowStepFrames, initialFlowPlayerState, resolveFlowSteps } from './flowPlayer';
 import type { FlowPlayerState } from './flowPlayer';
+import { downloadBlob, renderDiagramSVGString, svgStringToPngBlob } from './svgExport';
+import { zipSync } from 'fflate';
 
 interface DiagramLevel {
   fileName: string;
+  rawText: string;
   diagram: Diagram;
   layout: DiagramLayout;
   positions: Record<string, LayoutPosition>;
   errors: ValidationError[];
   flowPlayerState: FlowPlayerState;
+}
+
+/** <file.dc.yaml> -> <file>, for naming exported PNG/zip/markdown files. */
+function baseName(fileName: string): string {
+  return fileName.replace(/\.dc\.yaml$/, '').replace(/\.ya?ml$/, '');
 }
 
 /** <details reference> -> basename, matching how details are resolved
@@ -45,6 +53,7 @@ export default function App() {
     const computedLayout = await computeLayout(parsed);
     return {
       fileName,
+      rawText: text,
       diagram: parsed,
       layout: computedLayout,
       positions: Object.fromEntries(computedLayout.nodes.map((n) => [n.id, { x: n.x, y: n.y }])),
@@ -135,6 +144,42 @@ export default function App() {
     [updateCurrentLevel],
   );
 
+  const onExportPng = useCallback(async () => {
+    if (!current) return;
+    const highlight = computeFlowHighlight(current.diagram, current.flowPlayerState);
+    const svg = renderDiagramSVGString(current.diagram, current.layout, current.positions, {
+      activeStep: highlight.activeStep ?? undefined,
+      visitedStepKeys: highlight.visitedStepKeys,
+    });
+    const blob = await svgStringToPngBlob(svg, current.layout.width, current.layout.height);
+    downloadBlob(`${baseName(current.fileName)}.png`, blob);
+  }, [current]);
+
+  const onExportFlowStepsZip = useCallback(async () => {
+    if (!current || current.flowPlayerState.flowIndex === null) return;
+    const flow = current.diagram.flows?.[current.flowPlayerState.flowIndex];
+    if (!flow) return;
+    const { steps } = resolveFlowSteps(flow, current.flowPlayerState.choices);
+    const frames = flowStepFrames(steps);
+    const zipInput: Record<string, Uint8Array> = {};
+    for (const frame of frames) {
+      const svg = renderDiagramSVGString(current.diagram, current.layout, current.positions, {
+        activeStep: frame.activeStep,
+        visitedStepKeys: frame.visitedStepKeys,
+      });
+      const blob = await svgStringToPngBlob(svg, current.layout.width, current.layout.height);
+      zipInput[`${frame.name}.png`] = new Uint8Array(await blob.arrayBuffer());
+    }
+    const zipped = zipSync(zipInput);
+    downloadBlob(`${baseName(current.fileName)}-${flow.name}-steps.zip`, new Blob([zipped as BlobPart]));
+  }, [current]);
+
+  const onExportContext = useCallback(async () => {
+    if (!current) return;
+    const md = await generateContext(current.rawText);
+    downloadBlob(`${baseName(current.fileName)}.md`, new Blob([md], { type: 'text/markdown' }));
+  }, [current]);
+
   const openDetails = useCallback(
     async (node: DiagramNode) => {
       setDrillError(null);
@@ -189,7 +234,21 @@ export default function App() {
             <label>
               Import layout:{' '}
               <input type="file" accept=".json" data-testid="layout-input" onChange={onImportLayout} />
-            </label>
+            </label>{' '}
+            <button type="button" data-testid="export-png" onClick={() => void onExportPng()}>
+              Export PNG
+            </button>{' '}
+            <button
+              type="button"
+              data-testid="export-flow-steps-zip"
+              onClick={() => void onExportFlowStepsZip()}
+              disabled={current.flowPlayerState.flowIndex === null}
+            >
+              Export flow steps (zip)
+            </button>{' '}
+            <button type="button" data-testid="export-context" onClick={() => void onExportContext()}>
+              Export AI context (markdown)
+            </button>
           </>
         )}
         {stack.length > 0 && (

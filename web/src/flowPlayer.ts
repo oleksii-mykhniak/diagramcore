@@ -87,3 +87,23 @@ export function computeFlowHighlight(diagram: Diagram, state: FlowPlayerState): 
   const visitedStepKeys = new Set(steps.slice(0, state.currentIndex).map((s) => pairKey(s.from, s.to)));
   return { activeStep: steps[state.currentIndex] ?? null, visitedStepKeys };
 }
+
+export interface FlowStepFrame {
+  /** Frame file basename without extension, e.g. "step-01". */
+  name: string;
+  activeStep: FlowStep;
+  visitedStepKeys: Set<string>;
+}
+
+/** Splits a concrete step sequence into one frame per step, each with the
+ * cumulative highlight up to and including that step — mirrors the Go
+ * transpile.FlowStepFrames used by `dc render --flow X --steps`, but
+ * operates on an already-resolved (branch-free) step list, since the web
+ * player resolves branches interactively rather than exporting every arm. */
+export function flowStepFrames(steps: FlowStep[]): FlowStepFrame[] {
+  return steps.map((step, i) => ({
+    name: `step-${String(i + 1).padStart(2, '0')}`,
+    activeStep: step,
+    visitedStepKeys: new Set(steps.slice(0, i).map((s) => pairKey(s.from, s.to))),
+  }));
+}

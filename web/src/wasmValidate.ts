@@ -1,7 +1,8 @@
-// Loads the Go-compiled WASM validator (public/dc.wasm, built by `make
-// wasm` from cmd/wasm) and exposes it as an async TypeScript function.
-// public/wasm_exec.js (also produced by `make wasm`) is loaded via a plain
-// <script> tag in index.html and defines the global `Go` class.
+// Loads the Go-compiled WASM module (public/dc.wasm, built by `make wasm`
+// from cmd/wasm) and exposes its two exported globals — validate() and
+// context() — as async TypeScript functions. public/wasm_exec.js (also
+// produced by `make wasm`) is loaded via a plain <script> tag in
+// index.html and defines the global `Go` class.
 
 export interface ValidationError {
   file: string;
@@ -17,6 +18,7 @@ declare global {
       run: (instance: WebAssembly.Instance) => Promise<void>;
     };
     validate: (yamlText: string) => ValidationError[];
+    context: (yamlText: string) => string;
   }
 }
 
@@ -44,4 +46,11 @@ function init(): Promise<void> {
 export async function validateDiagram(yamlText: string): Promise<ValidationError[]> {
   await init();
   return window.validate(yamlText);
+}
+
+/** Generates the same AI-context markdown as `dc context <file>` (non-deep;
+ * see internal/context.Generate) for the given raw *.dc.yaml text. */
+export async function generateContext(yamlText: string): Promise<string> {
+  await init();
+  return window.context(yamlText);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pairKey, resolveFlowSteps } from './flowPlayer';
+import { flowStepFrames, pairKey, resolveFlowSteps } from './flowPlayer';
 import type { Flow } from './types';
 
 describe('pairKey', () => {
@@ -56,5 +56,20 @@ describe('resolveFlowSteps', () => {
     const { steps, pendingBranch } = resolveFlowSteps(branchFlow, { 1: 'else' });
     expect(steps.map((s) => s.note)).toEqual(['first', 'recorded', 'notified']);
     expect(pendingBranch).toBeNull();
+  });
+});
+
+describe('flowStepFrames', () => {
+  it('produces one cumulative frame per step', () => {
+    const steps = [
+      { from: 'A', to: 'B', note: 'one' },
+      { from: 'B', to: 'C', note: 'two' },
+      { from: 'C', to: 'D', note: 'three' },
+    ];
+    const frames = flowStepFrames(steps);
+    expect(frames.map((f) => f.name)).toEqual(['step-01', 'step-02', 'step-03']);
+    expect(frames[0].visitedStepKeys.size).toBe(0);
+    expect(frames[2].visitedStepKeys).toEqual(new Set([pairKey('A', 'B'), pairKey('B', 'C')]));
+    expect(frames[2].activeStep).toEqual(steps[2]);
   });
 });

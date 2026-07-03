@@ -5,6 +5,7 @@ import App from './App';
 
 vi.mock('./wasmValidate', () => ({
   validateDiagram: vi.fn(async () => []),
+  generateContext: vi.fn(async () => '# Example\n'),
 }));
 
 const yamlText = `
@@ -38,5 +39,16 @@ describe('App', () => {
     expect(screen.getByTestId('node-User')).toBeInTheDocument();
     expect(screen.getByTestId('node-Gateway')).toBeInTheDocument();
     expect(screen.getByTestId('edge-User-Gateway')).toBeInTheDocument();
+  });
+
+  it('shows export controls once a diagram is open, with the flow-steps export disabled until a flow is selected', async () => {
+    render(<App />);
+    const file = new File([yamlText], 'example.dc.yaml', { type: 'application/x-yaml' });
+    await userEvent.upload(screen.getByTestId('file-input'), file);
+    await waitFor(() => expect(screen.getByTestId('diagram-svg')).toBeInTheDocument());
+
+    expect(screen.getByTestId('export-png')).toBeEnabled();
+    expect(screen.getByTestId('export-context')).toBeEnabled();
+    expect(screen.getByTestId('export-flow-steps-zip')).toBeDisabled();
   });
 });
