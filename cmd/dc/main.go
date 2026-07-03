@@ -2,6 +2,7 @@
 package main
 
 import (
+	stdcontext "context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/oleksii94/diagramcore/internal/context"
 	"github.com/oleksii94/diagramcore/internal/layout"
+	"github.com/oleksii94/diagramcore/internal/mcpserver"
 	"github.com/oleksii94/diagramcore/internal/model"
 	"github.com/oleksii94/diagramcore/internal/parser"
 	"github.com/oleksii94/diagramcore/internal/render"
@@ -34,6 +36,11 @@ func main() {
 		os.Exit(runExport(os.Args[2:]))
 	case "render":
 		os.Exit(runRender(os.Args[2:]))
+	case "mcp":
+		if err := mcpserver.Run(stdcontext.Background()); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", os.Args[1])
 		os.Exit(2)

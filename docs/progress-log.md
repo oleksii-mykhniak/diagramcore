@@ -893,3 +893,32 @@
 
 **Фаза 8 завершена.**
 
+## Фаза 9 — MCP-сервер і AI-стиль
+
+### Крок 9.1 — `dc mcp`: базові інструменти
+- Дата: 2026-07-03
+- Виконано: додано залежність `github.com/modelcontextprotocol/go-sdk`
+  (офіційний Go MCP SDK, v1.6.1). `internal/mcpserver/server.go` —
+  `NewServer()` реєструє три інструменти через дженерик `mcp.AddTool`:
+  `validate_diagram` (path АБО content, повертає `{ok, errors[]}` з
+  `diagramError{file,line,code,message}` — тонка обгортка над
+  `internal/validate`), `get_context` (path+deep, обгортка над
+  `internal/context.Generate`), `list_diagrams` (dir, рекурсивний обхід
+  `*.dc.yaml` через `filepath.WalkDir`). `Run(ctx)` — `server.Run(ctx,
+  &mcp.StdioTransport{})`. `cmd/dc`: підкоманда `mcp` (стандартний
+  `stdcontext.Background()`, з аліасом через колізію імені з уже
+  імпортованим `internal/context`). `docs/mcp.md` — команда підключення
+  і опис інструментів.
+- Коміт: (цей крок)
+- AC: інтеграційний тест `internal/mcpserver/server_test.go` —
+  MCP-клієнт (через `mcp.NewInMemoryTransports`, офіційний спосіб
+  тестування SDK) викликає `validate_diagram` на
+  `examples/auth-system.dc.yaml` → `ok:true`, 0 помилок ✅; на фікстурі
+  `dc004_flow_no_link.dc.yaml` → `ok:false`, помилка з кодом DC004 і
+  ненульовим рядком ✅; `get_context`/`list_diagrams` теж перевірені ✅.
+  `dc mcp` заведений у реальний Claude Code (`claude mcp add --scope
+  local diagramcore -- ./dc mcp`, `claude mcp list` → "✔ Connected") —
+  ручна перевірка пройдена, команда записана в `docs/mcp.md` ✅.
+  `go build/test/vet ./...` і `./dc validate examples/*.dc.yaml`
+  зелені ✅.
+
