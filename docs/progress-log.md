@@ -220,3 +220,21 @@
   SVG ✅; для flow з branch (payment-processing: 3 steps + then/else) —
   `step-01..03, step-04a, step-04b` ✅; координати вузла `Gateway`
   (x/y з D2-групи, base64 id) ідентичні в усіх 6 кадрах auth-system ✅.
+
+### Крок 3.6 — Анімований SVG (D2 steps)
+- Дата: 2026-07-03
+- Виконано: `render.SVGAnimated(d, flow, opts)` — рендерить кожен кадр
+  окремо, збирає їх у один SVG через `d2renderers/d2animate.Wrap`
+  (@keyframes opacity-анімація, той самий механізм, що й `--animate-
+  interval` у D2 CLI). Ключовий нюанс: `RenderOpts.MasterID` (хеш
+  діаграми) треба виставити ДО рендеру будь-якого кадру — інакше
+  `d2svg.Render` генерує кожен кадр як окремий самостійний `<svg>` з
+  власною XML-декларацією, і після вкладення `Wrap`-ом виходить
+  невалідний XML (спіймано тестом через `encoding/xml.Decoder`, не лише
+  візуально). `dc render --flow X --animate -o out.svg`; `--steps` і
+  `--animate` взаємовиключні, обидва вимагають `--flow`.
+- Коміт: `b6466a4`
+- AC: вивід містить `<svg`, `@keyframes`, `animation:` і успішно
+  парситься `encoding/xml.Decoder` (тест) ✅; вручну згенеровано
+  анімований SVG для flow `auth-system` — 6 keyframe-блоків, валідний
+  XML (перевірено `python3 -c "import xml.etree..."`) ✅.
