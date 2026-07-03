@@ -25,6 +25,7 @@ import { zipSync } from 'fflate';
 import { applyPatch } from './yamlPatch';
 import type { PatchOp } from './yamlPatch';
 import { findNodeDependents } from './dependents';
+import { isNativeFsSupported, openDiagramFiles, pickSaveHandle, writeTextToHandle } from './nativeFile';
 
 interface DiagramLevel {
   fileName: string;
@@ -38,6 +39,15 @@ interface DiagramLevel {
    * as opposed to the last auto-layout computation — "Re-layout"
    * (PLAN.md step 6.2) leaves these untouched. */
   manualPositionIds: Set<string>;
+  /** File System Access handles (PLAN.md step 8.1), only set when the
+   * level was opened via the native picker (Chromium). `null` (as
+   * opposed to `undefined`) means "opened natively, but no layout file
+   * existed yet — Save should create one". */
+  mainHandle?: FileSystemFileHandle;
+  layoutHandle?: FileSystemFileHandle | null;
+  /** `rawText` at the last successful save (or at open/drop-in) — used
+   * to show the unsaved-changes indicator. */
+  savedRawText: string;
 }
 
 /** <file.dc.yaml> -> <file>, for naming exported PNG/zip/markdown files. */
@@ -116,6 +126,7 @@ export default function App() {
       errors: validationErrors,
       flowPlayerState: initialFlowPlayerState,
       manualPositionIds: new Set<string>(),
+      savedRawText: text,
     };
   }, []);
 
@@ -179,6 +190,83 @@ export default function App() {
       next[next.length - 1] = merged;
       return next;
     });
+  }, []);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** "Open" via the File System Access API (PLAN.md step 8.1, Chromium
+   * only): lets Save write straight back to the same files. Falls back
+   * to the plain file input (already handled by `onFileInput`/`openFiles`)
+   * when the API isn't available, without throwing. */
+  const onOpenNative = useCallback(async () => {
+    if (!isNativeFsSupported()) {
+      fileInputRef.current?.click();
+      return;
+    }
+    setLoadError(null);
+    setDrillError(null);
+    try {
+      const opened = await openDiagramFiles();
+      if (!opened) return;
+      const level = await buildLevel(opened.mainName, opened.mainText);
+      level.mainHandle = opened.mainHandle;
+      level.layoutHandle = opened.layoutHandle;
+      if (opened.layoutText) {
+        const imported = parseLayoutFile(opened.layoutText);
+        const importedPositions = imported.views.default?.positions ?? {};
+        level.positions = { ...level.positions, ...importedPositions };
+        level.manualPositionIds = new Set(Object.keys(importedPositions));
+      }
+      levelRef.current = level;
+      resetHistory();
+      setStack([level]);
+    } catch (err) {
+      // AbortError: user cancelled the picker — not a real error.
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  }, [buildLevel, resetHistory]);
+
+  /** "Save"/"Save as" (PLAN.md step 8.1): writes the core YAML and (if any
+   * position is manual) the layout back to their native handles, creating
+   * a layout file via a save picker the first time one is needed. Falls
+   * back to downloading both files when there's no native handle (API
+   * unsupported, or the level was opened via the plain file input). */
+  const onSave = useCallback(async () => {
+    if (!current) return;
+    if (!current.mainHandle || !isNativeFsSupported()) {
+      downloadBlob(current.fileName, new Blob([current.rawText], { type: 'application/x-yaml' }));
+      if (current.manualPositionIds.size > 0) {
+        downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFile(current.positions));
+      }
+      updateCurrentLevel({ savedRawText: current.rawText });
+      return;
+    }
+    await writeTextToHandle(current.mainHandle, current.rawText);
+    let layoutHandle = current.layoutHandle ?? null;
+    if (current.manualPositionIds.size > 0) {
+      if (!layoutHandle) {
+        layoutHandle = await pickSaveHandle(layoutFileName(current.fileName));
+      }
+      if (layoutHandle) {
+        await writeTextToHandle(layoutHandle, JSON.stringify(buildLayoutFile(current.positions), null, 2));
+      }
+    }
+    updateCurrentLevel({ savedRawText: current.rawText, layoutHandle: layoutHandle ?? undefined });
+  }, [current, updateCurrentLevel]);
+
+  const hasUnsavedChanges = current ? current.rawText !== current.savedRawText : false;
+  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+  hasUnsavedChangesRef.current = hasUnsavedChanges;
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedChangesRef.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
   /** Applies structured YAML patches (PLAN.md step 7.1) to the current
@@ -657,12 +745,24 @@ export default function App() {
       <header style={{ padding: '8px 16px', borderBottom: '1px solid #ccc' }}>
         <h1 style={{ fontSize: 18, margin: '0 0 8px' }}>DiagramCore</h1>
         <input
+          ref={fileInputRef}
           type="file"
           accept=".yaml,.yml"
           multiple
           data-testid="file-input"
           onChange={onFileInput}
-        />
+        />{' '}
+        <button type="button" data-testid="open-native" onClick={() => void onOpenNative()}>
+          Open
+        </button>{' '}
+        {current && (
+          <>
+            <button type="button" data-testid="save" onClick={() => void onSave()}>
+              Save{hasUnsavedChanges ? ' •' : ''}
+            </button>{' '}
+            {hasUnsavedChanges && <span data-testid="unsaved-indicator">Unsaved changes</span>}
+          </>
+        )}
         {current && (
           <>
             {' '}

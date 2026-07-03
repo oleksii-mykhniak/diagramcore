@@ -775,3 +775,35 @@
 
 **Фаза 7 завершена.**
 
+## Фаза 8 — Публічний сайт
+
+### Крок 8.1 — Відкриття та збереження файлів
+- Дата: 2026-07-03
+- Виконано: `src/fileSystemAccess.d.ts` — мінімальні ambient-типи для
+  File System Access API (`showOpenFilePicker`/`showSaveFilePicker`/
+  `FileSystemFileHandle`/`FileSystemWritableFileStream`) — не входять у
+  бандлований DOM lib TypeScript. `nativeFile.ts` —
+  `isNativeFsSupported`, `openDiagramFiles` (мульти-вибір, сортує
+  вибрані файли на "ядро" і `*.layout.json` за іменем — API не дає
+  доступу до несусідніх/невибраних файлів, тому "автопідхоплення"
+  реалізовано як одночасний вибір обох файлів, як і в існуючому
+  multi-select file input), `writeTextToHandle`, `pickSaveHandle`.
+  `App.tsx`: `onOpenNative` (деградує до кліку по прихованому
+  `file-input`, якщо API немає), `onSave` (пише в `mainHandle`/
+  `layoutHandle`; без `mainHandle` або без API — falls back на
+  `downloadBlob`/`downloadLayoutFile`); `savedRawText` на рівні
+  дiаграми + `hasUnsavedChanges` — індикатор і `beforeunload`-попередження
+  (через ref, щоб не переприв'язувати листенер щорендеру).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/native-fs.spec.ts` (3 тести) — відкриття через
+  фейковий (in-memory) File System Access API (реальний OS-пікер
+  недоступний для автоматизації; стандартний спосіб тестування цього
+  API), додавання й перетягування вузла, збереження → ядро на "диску"
+  (fake store) містить нову ноду, layout збережено окремим файлом з
+  позицією ✅; видалення `showOpenFilePicker`/`showSaveFilePicker` →
+  Open деградує до file-input, Save — до download, без винятків
+  сторінки ✅; індикатор незбережених змін з'являється після редагування
+  і зникає після збереження, `beforeunload` дійсно викликає
+  `preventDefault` ✅. Повна регресія: `npm test` (34), `npm run build`,
+  `npx playwright test` (32) зелені; go-регресія зелена ✅.
+
