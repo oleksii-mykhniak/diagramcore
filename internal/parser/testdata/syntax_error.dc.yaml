@@ -1,0 +1,6 @@
+diagram:
+  title: "Broken"
+nodes:
+  - id: A
+    type: actor
+  bad indent here
