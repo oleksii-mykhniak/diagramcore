@@ -27,11 +27,20 @@ func ToMermaid(d *model.Diagram) string {
 		if label == "" {
 			label = n.ID
 		}
+		if n.Details != "" {
+			label += detailsMarker
+		}
 		open, close := "[", "]"
 		if br, ok := mermaidShapeBrackets[n.Type]; ok {
 			open, close = br[0], br[1]
 		}
 		fmt.Fprintf(&b, "  %s%s%q%s\n", n.ID, open, label, close)
+	}
+	for _, n := range d.Nodes {
+		if n.Details == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "  click %s %q\n", n.ID, DetailsSVGPath(n.Details))
 	}
 
 	for _, l := range d.Links {

@@ -2,8 +2,9 @@ flowchart TD
   User(["Користувач"])
   Gateway["API Gateway"]
   AuthService["Auth Service"]
-  OAuthProvider["OAuth-провайдер"]
+  OAuthProvider["OAuth-провайдер ⊞"]
   DB[("База даних користувачів")]
+  click OAuthProvider "./oauth-detail.svg"
   User -->|"HTTPS запит на вхід"| Gateway
   Gateway -->|"Делегує автентифікацію"| AuthService
   AuthService -->|"Запит на OAuth-автентифікацію"| OAuthProvider

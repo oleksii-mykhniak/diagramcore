@@ -211,14 +211,32 @@ func pairKey(a, b string) string {
 	return a + "|" + b
 }
 
+// detailsMarker is appended to a node's label when it has a details
+// sub-diagram, in every export format (D2, SVG, Mermaid).
+const detailsMarker = " ⊞"
+
+// DetailsSVGPath rewrites a details reference (a path to another
+// *.dc.yaml file, relative to the file that declares it) into the path of
+// that sub-diagram's rendered SVG, for use as a link/href in exports.
+func DetailsSVGPath(details string) string {
+	if strings.HasSuffix(details, ".dc.yaml") {
+		return strings.TrimSuffix(details, ".dc.yaml") + ".svg"
+	}
+	return details
+}
+
 func writeD2Node(b *strings.Builder, n model.Node, em emphasis) {
 	label := n.Label
 	if label == "" {
 		label = n.ID
 	}
+	hasDetails := n.Details != ""
+	if hasDetails {
+		label += detailsMarker
+	}
 	shape := d2ShapeByType[n.Type]
 
-	hasBody := shape != "" || n.Type == "external" || em != emphasisNone
+	hasBody := shape != "" || n.Type == "external" || em != emphasisNone || hasDetails
 	if !hasBody {
 		fmt.Fprintf(b, "%s: %s\n", n.ID, d2Quote(label))
 		return
@@ -230,6 +248,10 @@ func writeD2Node(b *strings.Builder, n model.Node, em emphasis) {
 	}
 	if n.Type == "external" {
 		fmt.Fprintf(b, "  style.stroke-dash: 3\n")
+	}
+	if hasDetails {
+		fmt.Fprintf(b, "  style.double-border: true\n")
+		fmt.Fprintf(b, "  link: %s\n", d2Quote(DetailsSVGPath(n.Details)))
 	}
 	switch em {
 	case emphasisCurrent:

@@ -168,3 +168,45 @@ func TestSVGAnimated(t *testing.T) {
 		}
 	}
 }
+
+func TestSVGDetailsMarker(t *testing.T) {
+	src := filepath.Join("..", "..", "examples", "auth-system.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+
+	svg, err := SVG(d, Options{})
+	if err != nil {
+		t.Fatalf("SVG failed: %v", err)
+	}
+	s := string(svg)
+
+	if got := strings.Count(s, "⊞"); got != 1 {
+		t.Errorf("got %d details markers, want exactly 1 (only OAuthProvider has details)", got)
+	}
+	if !strings.Contains(s, `<a href="./oauth-detail.svg"`) {
+		t.Error("output does not wrap the OAuthProvider node in a link to its sub-diagram SVG")
+	}
+}
+
+func TestSVGNoDetailsIsUnaffected(t *testing.T) {
+	// payment-processing.dc.yaml has no `details` references anywhere, so
+	// rendering it must not introduce any marker/link machinery.
+	src := filepath.Join("..", "..", "examples", "payment-processing.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+	svg, err := SVG(d, Options{})
+	if err != nil {
+		t.Fatalf("SVG failed: %v", err)
+	}
+	s := string(svg)
+	if strings.Contains(s, "⊞") {
+		t.Error("output contains a details marker but no node has a details reference")
+	}
+	if strings.Contains(s, "<a href") {
+		t.Error("output contains a link but no node has a details reference")
+	}
+}
