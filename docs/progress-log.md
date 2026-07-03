@@ -327,3 +327,25 @@
   `wasm_exec.js`) — `payment-processing.dc.yaml` → 0 помилок,
   `dc004_flow_no_link.dc.yaml` → `DC004` ✅ (`make wasm-test` пройшов
   зелено).
+
+### Крок 5.2 — Скелет застосунку
+- Дата: 2026-07-03
+- Виконано: Vite + React 19 + TypeScript у `web/` (scaffold через
+  `create-vite`). `parseDiagram.ts` (js-yaml + мінімальна перевірка
+  форми), `wasmValidate.ts` (завантажує `public/dc.wasm` через клас `Go`
+  з `public/wasm_exec.js`, підключений як звичайний `<script>` у
+  `index.html`), `layout.ts` (elkjs, layered/top-down), `DiagramView.tsx`
+  (SVG-рендер), `App.tsx` (file input + drag&drop, parse → validate →
+  layout → render, повідомлення про помилки завантаження/валідації без
+  падіння застосунку).
+- Коміт: `d11fc70`
+- AC: `npm run build` без помилок ✅; `npm test` (vitest: parseDiagram,
+  layout, App-смоук з замоканим `wasmValidate`) — 8/8 зелено ✅;
+  Playwright (`npm run test:e2e`, chromium встановлено через `npx
+  playwright install`) відкриває `examples/auth-system.dc.yaml` через
+  справжній file input проти `vite preview` і бачить усі 5 вузлів і 4
+  ребра ✅.
+- Нюанс (не відхилення від плану, технічна деталь): `playwright.config.ts`
+  мусив використати `http://localhost:4173`, а не `127.0.0.1:4173` — `vite
+  preview` на цій машині слухає лише IPv6-loopback для "localhost", тож
+  IPv4-літерал не з'єднувався і `webServer` очікування зависало.
