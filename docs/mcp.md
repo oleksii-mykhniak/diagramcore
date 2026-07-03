@@ -83,6 +83,22 @@ already there.
 Returns `{ "ok": bool, "errors": [...] }` — same shape as
 `validate_diagram`.
 
+### `get_style_guide`
+
+Reads the `dc-style.yaml` conventions (allowed types/tags, id pattern,
+required description, node count limit, theme) for a directory of
+diagrams — call before drawing new diagrams there. See `docs/format.md`
+for the full `dc-style.yaml` spec and `examples/dc-style.yaml` for a
+worked example.
+
+### `lint_style`
+
+Checks a `*.dc.yaml` diagram against the `dc-style.yaml` found in its
+own directory (not inherited from parents; a missing style file means no
+violations). Shares `internal/style` with `dc lint --style <files...>`,
+so both report the same `DS0xx` codes for the same file. Returns
+`{ "ok": bool, "violations": [...] }`.
+
 ## Full-cycle example
 
 1. Write a new `*.dc.yaml` file (structured edits: `edit_diagram`) or

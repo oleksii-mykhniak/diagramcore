@@ -955,3 +955,29 @@
   доповнено описом інструменту. `go build/test/vet ./...` і
   `./dc validate examples/*.dc.yaml` зелені ✅.
 
+### Крок 9.3 — Style guide і `lint_style`
+- Дата: 2026-07-03
+- Виконано: `internal/style/style.go` — `Config` (decoded
+  `dc-style.yaml`: `allowed_types, allowed_tags, id_pattern,
+  require_description, max_nodes, theme`), `Load(path)` (відсутній файл
+  → `nil, nil`, не помилка), `Lint(d, cfg)` — 5 правил → коди
+  DS001-DS005 (тип/тег не в білому списку, id не за regex, відсутній
+  опис, забагато вузлів); `nil cfg` → 0 порушень. `examples/dc-style.yaml`
+  — реальний style-файл, якому вже відповідають усі 3 приклади (тест
+  `TestExamplesConformToTheirOwnStyleGuide`). `docs/format.md`
+  доповнено специфікацією `dc-style.yaml` і таблицею кодів.
+  `internal/mcpserver/style.go` — MCP-інструменти `get_style_guide(dir)`
+  і `lint_style(path)` (шукає `dc-style.yaml` в директорії `path`, не
+  успадковує з батьківських). `cmd/dc`: `dc lint --style [--json]
+  <files...>` — той самий `internal/style.Load`/`Lint`, що й
+  MCP-інструмент (спільна реалізація, не дублювання логіки).
+- Коміт: (цей крок)
+- AC: `internal/style/style_test.go` (5 тестів) — фікстура
+  `testdata/violates.dc.yaml` порушує 4 правила (DS001-DS004) одним
+  вузлом ✅; `testdata/conforming.dc.yaml` — 0 порушень ✅.
+  `internal/mcpserver/style_cli_test.go` —
+  `TestLintStyleAgreesWithCLI`: викликає MCP `lint_style` і `dc lint
+  --style --json` (через `go run`) на тому самому файлі, порівнює
+  множини кодів — ідентичні ✅. `go build/test/vet ./...`,
+  `./dc validate` і `./dc lint --style examples/*.dc.yaml` зелені ✅.
+

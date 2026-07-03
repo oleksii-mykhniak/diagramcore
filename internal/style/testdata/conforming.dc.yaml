@@ -1,0 +1,16 @@
+diagram:
+  title: "Conforms to dc-style.yaml"
+
+nodes:
+  - id: Alpha
+    type: actor
+    description: "fine"
+  - id: Beta
+    type: service
+    description: "also fine"
+    tags: [internal]
+
+links:
+  - from: Alpha
+    to: Beta
+    type: request

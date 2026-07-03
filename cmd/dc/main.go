@@ -17,6 +17,7 @@ import (
 	"github.com/oleksii94/diagramcore/internal/model"
 	"github.com/oleksii94/diagramcore/internal/parser"
 	"github.com/oleksii94/diagramcore/internal/render"
+	"github.com/oleksii94/diagramcore/internal/style"
 	"github.com/oleksii94/diagramcore/internal/transpile"
 	"github.com/oleksii94/diagramcore/internal/validate"
 )
@@ -36,6 +37,8 @@ func main() {
 		os.Exit(runExport(os.Args[2:]))
 	case "render":
 		os.Exit(runRender(os.Args[2:]))
+	case "lint":
+		os.Exit(runLint(os.Args[2:]))
 	case "mcp":
 		if err := mcpserver.Run(stdcontext.Background()); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -481,4 +484,87 @@ func findFlow(d *model.Diagram, name string) (*model.Flow, error) {
 		names[i] = f.Name
 	}
 	return nil, fmt.Errorf("unknown flow %q; available flows: %s", name, strings.Join(names, ", "))
+}
+
+type lintFileResult struct {
+	File       string            `json:"file"`
+	OK         bool              `json:"ok"`
+	Violations []style.Violation `json:"violations,omitempty"`
+	ExecError  string            `json:"exec_error,omitempty"`
+}
+
+// runLint implements `dc lint --style <files...>`: checks each file
+// against its directory's dc-style.yaml (PLAN.md step 9.3). Shares
+// internal/style with the MCP `lint_style` tool so both paths agree.
+func runLint(args []string) int {
+	fs := flag.NewFlagSet("lint", flag.ContinueOnError)
+	styleFlag := fs.Bool("style", false, "check style conventions (dc-style.yaml)")
+	jsonOut := fs.Bool("json", false, "output machine-readable JSON")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if !*styleFlag {
+		fmt.Fprintln(os.Stderr, "usage: dc lint --style [--json] <files...>")
+		return 2
+	}
+	patterns := fs.Args()
+	if len(patterns) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: dc lint --style [--json] <files...>")
+		return 2
+	}
+
+	files := expandPatterns(patterns)
+
+	var results []lintFileResult
+	hadExecError := false
+	hadViolation := false
+	okCount := 0
+
+	for _, file := range files {
+		d, err := parser.Parse(file)
+		if err != nil {
+			hadExecError = true
+			results = append(results, lintFileResult{File: file, OK: false, ExecError: err.Error()})
+			continue
+		}
+		cfg, err := style.Load(filepath.Join(filepath.Dir(file), style.FileName))
+		if err != nil {
+			hadExecError = true
+			results = append(results, lintFileResult{File: file, OK: false, ExecError: err.Error()})
+			continue
+		}
+		violations := style.Lint(d, cfg)
+		results = append(results, lintFileResult{File: file, OK: len(violations) == 0, Violations: violations})
+		if len(violations) == 0 {
+			okCount++
+		} else {
+			hadViolation = true
+		}
+	}
+
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(results)
+	} else {
+		for _, r := range results {
+			if r.ExecError != "" {
+				fmt.Fprintf(os.Stderr, "%s: error: %s\n", r.File, r.ExecError)
+				continue
+			}
+			for _, v := range r.Violations {
+				fmt.Println(v.String())
+			}
+		}
+		fmt.Printf("%d/%d files OK\n", okCount, len(files))
+	}
+
+	switch {
+	case hadExecError:
+		return 2
+	case hadViolation:
+		return 1
+	default:
+		return 0
+	}
 }

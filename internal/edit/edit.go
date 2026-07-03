@@ -55,8 +55,8 @@ type BranchTarget struct {
 type Operation struct {
 	Op string `json:"op"`
 
-	Node *NodeSpec      `json:"node,omitempty"`
-	ID   string         `json:"id,omitempty"`
+	Node  *NodeSpec      `json:"node,omitempty"`
+	ID    string         `json:"id,omitempty"`
 	Patch map[string]any `json:"patch,omitempty"`
 
 	Link *LinkSpec `json:"link,omitempty"`

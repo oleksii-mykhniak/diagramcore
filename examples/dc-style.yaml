@@ -1,0 +1,16 @@
+# Example dc-style.yaml (PLAN.md step 9.3): conventions for the
+# diagrams in this directory. See docs/format.md for the full spec.
+allowed_types:
+  - actor
+  - service
+  - storage
+  - queue
+  - external
+  - component
+allowed_tags:
+  - oauth
+  - external
+id_pattern: "^[A-Z][A-Za-z0-9]*$"
+require_description: true
+max_nodes: 20
+theme: default

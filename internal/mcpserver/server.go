@@ -46,6 +46,14 @@ func NewServer() *mcp.Server {
 			"file on disk, preserving comments and formatting. Atomic: validates the result before " +
 			"writing, and writes nothing at all if that fails.",
 	}, editDiagram)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_style_guide",
+		Description: "Read the dc-style.yaml conventions (allowed types/tags, id pattern, required fields, node limits, theme) for a directory of diagrams.",
+	}, getStyleGuide)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "lint_style",
+		Description: "Check a *.dc.yaml diagram against its directory's dc-style.yaml conventions (DS0xx codes). No style file means no violations.",
+	}, lintStyle)
 	return server
 }
 

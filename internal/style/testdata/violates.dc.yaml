@@ -1,0 +1,12 @@
+diagram:
+  title: "Style violations fixture"
+
+nodes:
+  - id: bad_id
+    type: mystery_type
+    tags: [forbidden]
+  - id: Ok
+    type: actor
+    description: "fine"
+
+links: []
