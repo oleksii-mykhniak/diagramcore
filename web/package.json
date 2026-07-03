@@ -12,6 +12,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.1",
     "elkjs": "^0.9.3",
     "fflate": "^0.8.3",
     "js-yaml": "^4.1.0",

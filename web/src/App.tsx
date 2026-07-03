@@ -7,6 +7,7 @@ import { computeLayout } from './layout';
 import type { DiagramLayout } from './layout';
 import type { Diagram, DiagramNode } from './types';
 import { DiagramView } from './components/DiagramView';
+import { FlowCanvas } from './components/FlowCanvas';
 import { FlowPlayer } from './components/FlowPlayer';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
@@ -44,6 +45,7 @@ export default function App() {
   const [stack, setStack] = useState<DiagramLevel[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drillError, setDrillError] = useState<string | null>(null);
+  const [canvasEngine, setCanvasEngine] = useState<'svg' | 'reactflow'>('svg');
 
   const current = stack.length > 0 ? stack[stack.length - 1] : null;
 
@@ -248,6 +250,13 @@ export default function App() {
             </button>{' '}
             <button type="button" data-testid="export-context" onClick={() => void onExportContext()}>
               Export AI context (markdown)
+            </button>{' '}
+            <button
+              type="button"
+              data-testid="canvas-toggle"
+              onClick={() => setCanvasEngine((prev) => (prev === 'svg' ? 'reactflow' : 'svg'))}
+            >
+              Canvas: {canvasEngine === 'svg' ? 'SVG' : 'React Flow'}
             </button>
           </>
         )}
@@ -296,8 +305,19 @@ export default function App() {
         {current && (
           <FlowPlayer diagram={current.diagram} state={current.flowPlayerState} onChange={onFlowPlayerChange} />
         )}
-        {current && (
+        {current && canvasEngine === 'svg' && (
           <DiagramView
+            diagram={current.diagram}
+            layout={current.layout}
+            positions={current.positions}
+            onNodeDrag={onNodeDrag}
+            onNodeDoubleClick={(node) => void openDetails(node)}
+            activeStep={highlight?.activeStep ?? undefined}
+            visitedStepKeys={highlight?.visitedStepKeys}
+          />
+        )}
+        {current && canvasEngine === 'reactflow' && (
+          <FlowCanvas
             diagram={current.diagram}
             layout={current.layout}
             positions={current.positions}

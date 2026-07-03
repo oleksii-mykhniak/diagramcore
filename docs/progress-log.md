@@ -436,4 +436,35 @@
   ✅; zip з кроками flow (fflate `unzipSync`) містить рівно
   `step-01..06.png` для 6-крокового OAuth flow, кожен непорожній ✅.
 
-**Фаза 5 завершена. Весь PLAN.md виконано.**
+**Фаза 5 завершена.**
+
+## Фаза 6 — Движок канви: міграція на React Flow
+
+### Крок 6.1 — Базовий рендер на React Flow
+- Дата: 2026-07-03
+- Виконано: додано `@xyflow/react`. `components/rfNodeTypes.tsx` — спільний
+  `NodeShell` (handles, лейбл, `⊞`-маркер details, стан
+  active/visited через `data-active`/`data-visited`) + 6 тонких
+  обгорток-компонентів (`ActorNode, ServiceNode, StorageNode, QueueNode,
+  ExternalNode, ComponentNode`), кожен зі своїм `data-node-type` і
+  CSS-класом `rf-node--<type>` та відмінною формою (коло, скруглений
+  прямокутник, "циліндр", пунктир, крапки, гострий прямокутник);
+  `resolveNodeType` — фолбек на `component` для невідомих/custom типів.
+  `components/rfEdgeTypes.tsx` — `DcEdge` на `getSmoothStepPath` +
+  `EdgeLabelRenderer` для лейблу зв'язку, той самий колірний код
+  active/visited, що в SVG-в'ювері. `components/FlowCanvas.tsx` — обгортка
+  `<ReactFlow>` (у `ReactFlowProvider`) з `Background`, `MiniMap`,
+  `Controls`, конвертацією `Diagram`+`DiagramLayout`+positions у RF
+  nodes/edges, `onNodesChange` → той самий колбек `onNodeDrag`, що і
+  старий в'ювер (той самий формат `LayoutPosition`). `App.tsx` отримав
+  перемикач `Canvas: SVG | React Flow` (кнопка `canvas-toggle`,
+  default = SVG) — обидва рендерери співіснують до кроку 6.5, як і
+  передбачає план.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/react-flow-canvas.spec.ts` — перемикання на
+  React Flow рендерить усі 5 вузлів (`rf-node-<id>`) і 4 ребра
+  `auth-system.dc.yaml`, minimap і controls видимі ✅; unit-тест
+  `rfNodeTypes.test.tsx` — кожен з 6 базових типів дає відмінний
+  `data-node-type`/CSS-клас ✅; `npm test` (19 тестів) + `npm run build`
+  + повний `npx playwright test` (13 тестів) зелені ✅.
+
