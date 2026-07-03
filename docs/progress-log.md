@@ -582,3 +582,39 @@
   `npm run build`, `npx playwright test` (13) зелені; go-регресія
   зелена (модуль поки не підключений до UI — це кроки 7.2+) ✅.
 
+### Крок 7.2 — CRUD вузлів з канви
+- Дата: 2026-07-03
+- Виконано: `components/Palette.tsx` — 6 draggable-елементів (базові
+  типи), `dataTransfer` MIME `application/dc-node-type`. `FlowCanvas`
+  отримав `onDropNodeType` (через `useReactFlow().screenToFlowPosition`)
+  і `onNodeClick`/`selectedNodeId` (виділення передається через
+  `data.isSelected` в `DcNodeData`, не через вбудований `node.selected`
+  React Flow — останній конфліктував із подвійним кліком, див.
+  `docs/deviations.md`, крок 7.2). `components/PropertiesPanel.tsx` —
+  форма label/type/description/tags, кожна зміна одразу викликає
+  `updateNode`-патч; кнопка "Delete node". `App.tsx`: `applyOps(ops,
+  {manualPosition?})` — застосовує `yamlPatch.applyPatch`, перепарсює
+  і перевалідовує текст, перераховує layout (той самий merge-підхід,
+  що в "Re-layout" кроку 6.2 — ручні позиції лишаються, решта отримує
+  нові auto-layout координати; нова нода відразу позначається manual
+  з координатами точки, куди її кинули). `dependents.ts` —
+  `findNodeDependents` (links + top-level flow-кроки, що згадують
+  вузол; кроки всередині branch-гілок — поза межами каскадного
+  видалення, задокументовано як обмеження в deviations.md). Видалення
+  вузла з залежностями показує `window.confirm` зі списком, підтвердж
+  ення каскадно видаляє flow-кроки (з кінця індексів, щоб не збити
+  решту), links і сам вузол. Для тестованості додано прихований
+  `data-testid="yaml-source"` textarea з поточним raw YAML (буде
+  замінений повноцінною CodeMirror-панеллю в кроці 7.5).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/node-crud.spec.ts` (4 тести) — drag-and-drop
+  палітри → нода на канві й у YAML-стані з валідним id (`service1`) ✅;
+  редагування label у панелі → канва й YAML оновлені ✅; видалення вузла
+  із залежностями (`AuthService`) → `window.confirm` зі списком
+  посилань, підтвердження прибирає вузол і всі його links з YAML ✅;
+  видалення вузла без залежностей — без діалогу ✅. Регресія:
+  `e2e/drill-down.spec.ts` (подвійний клік) зламалась і була
+  полагоджена (див. deviations.md); повний `npm test` (30),
+  `npm run build`, `npx playwright test` (17) зелені; go-регресія
+  зелена ✅.
+

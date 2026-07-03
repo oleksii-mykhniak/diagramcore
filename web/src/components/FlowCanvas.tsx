@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import type { DragEvent } from 'react';
 import {
   Background,
   Controls,
@@ -6,6 +7,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
+  useReactFlow,
 } from '@xyflow/react';
 import type { Node, NodeChange } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -24,6 +26,9 @@ export interface ActiveStep {
   to: string;
 }
 
+/** dataTransfer MIME type used by the node palette (PLAN.md step 7.2). */
+export const DND_NODE_TYPE = 'application/dc-node-type';
+
 interface Props {
   diagram: Diagram;
   layout: DiagramLayout;
@@ -32,11 +37,34 @@ interface Props {
   visitedStepKeys?: Set<string>;
   activeStep?: ActiveStep;
   onNodeDoubleClick?: (node: DiagramNode) => void;
+  onNodeClick?: (node: DiagramNode) => void;
+  selectedNodeId?: string | null;
+  onDropNodeType?: (type: string, position: LayoutPosition) => void;
 }
 
-function FlowCanvasInner({ diagram, layout, positions, onNodeDrag, visitedStepKeys, activeStep, onNodeDoubleClick }: Props) {
+function FlowCanvasInner({
+  diagram,
+  layout,
+  positions,
+  onNodeDrag,
+  visitedStepKeys,
+  activeStep,
+  onNodeDoubleClick,
+  onNodeClick,
+  selectedNodeId,
+  onDropNodeType,
+}: Props) {
   const nodeById = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram.nodes]);
+  // A single click commits a state update (selection) that recomputes the
+  // `nodes` array passed into <ReactFlow>, which can churn the underlying
+  // DOM node — if that happens between the two physical clicks of a
+  // double-click, the browser stops treating them as one gesture and
+  // `dblclick` never fires. Deferring the click side effect past the
+  // double-click detection window (and cancelling it if a dblclick
+  // arrives first) keeps both gestures working (PLAN.md step 7.2).
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeKey = activeStep ? pairKey(activeStep.from, activeStep.to) : null;
+  const { screenToFlowPosition } = useReactFlow();
 
   const rfNodes: Node<DcNodeData>[] = useMemo(
     () =>
@@ -52,10 +80,11 @@ function FlowCanvasInner({ diagram, layout, positions, onNodeDrag, visitedStepKe
             hasDetails: Boolean(dcNode?.details),
             isActive: activeKey !== null && (activeStep?.from === n.id || activeStep?.to === n.id),
             isVisited: false,
+            isSelected: selectedNodeId === n.id,
           },
         };
       }),
-    [layout.nodes, nodeById, positions, activeStep, activeKey],
+    [layout.nodes, nodeById, positions, activeStep, activeKey, selectedNodeId],
   );
 
   const rfEdges = useMemo(
@@ -88,8 +117,28 @@ function FlowCanvasInner({ diagram, layout, positions, onNodeDrag, visitedStepKe
     void next;
   };
 
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    if (!onDropNodeType) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    if (!onDropNodeType) return;
+    const type = e.dataTransfer.getData(DND_NODE_TYPE);
+    if (!type) return;
+    e.preventDefault();
+    const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    onDropNodeType(type, position);
+  };
+
   return (
-    <div data-testid="reactflow-canvas" style={{ width: '100%', height: 600 }}>
+    <div
+      data-testid="reactflow-canvas"
+      style={{ width: '100%', height: 600 }}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -97,8 +146,20 @@ function FlowCanvasInner({ diagram, layout, positions, onNodeDrag, visitedStepKe
         edgeTypes={edgeTypes}
         onNodesChange={handleNodesChange}
         onNodeDoubleClick={(_, node) => {
+          if (clickTimer.current) {
+            clearTimeout(clickTimer.current);
+            clickTimer.current = null;
+          }
           const dcNode = nodeById.get(node.id);
           if (dcNode && onNodeDoubleClick) onNodeDoubleClick(dcNode);
+        }}
+        onNodeClick={(_, node) => {
+          if (clickTimer.current) clearTimeout(clickTimer.current);
+          clickTimer.current = setTimeout(() => {
+            clickTimer.current = null;
+            const dcNode = nodeById.get(node.id);
+            if (dcNode && onNodeClick) onNodeClick(dcNode);
+          }, 250);
         }}
         fitView
       >

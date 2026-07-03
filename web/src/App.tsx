@@ -8,12 +8,17 @@ import type { DiagramLayout } from './layout';
 import type { Diagram, DiagramNode } from './types';
 import { FlowCanvas } from './components/FlowCanvas';
 import { FlowPlayer } from './components/FlowPlayer';
+import { Palette } from './components/Palette';
+import { PropertiesPanel } from './components/PropertiesPanel';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
 import { computeFlowHighlight, flowStepFrames, initialFlowPlayerState, resolveFlowSteps } from './flowPlayer';
 import type { FlowPlayerState } from './flowPlayer';
 import { downloadBlob, renderDiagramSVGString, svgStringToPngBlob } from './svgExport';
 import { zipSync } from 'fflate';
+import { applyPatch } from './yamlPatch';
+import type { PatchOp } from './yamlPatch';
+import { findNodeDependents } from './dependents';
 
 interface DiagramLevel {
   fileName: string;
@@ -48,6 +53,7 @@ export default function App() {
   const [stack, setStack] = useState<DiagramLevel[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drillError, setDrillError] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const current = stack.length > 0 ? stack[stack.length - 1] : null;
 
@@ -113,6 +119,101 @@ export default function App() {
       return next;
     });
   }, []);
+
+  /** Applies structured YAML patches (PLAN.md step 7.1) to the current
+   * level: re-parses/re-validates the patched text and re-derives layout,
+   * keeping manual positions and giving newly-added or newly-auto-laid-out
+   * nodes fresh auto-layout coordinates (mirrors the merge in
+   * `onRelayout`). `manualPosition` additionally marks/positions a single
+   * node as manual — used when a node is created by dropping it at a
+   * specific canvas location. */
+  const applyOps = useCallback(
+    async (ops: PatchOp[], opts?: { manualPosition?: { id: string; pos: LayoutPosition } }) => {
+      if (!current) return;
+      const newText = applyPatch(current.rawText, ops);
+      const newDiagram = parseDiagram(newText);
+      const newErrors = await validateDiagram(newText);
+      const recomputed = await computeLayout(newDiagram);
+      const manualPositionIds = new Set(current.manualPositionIds);
+      const positions: Record<string, LayoutPosition> = {};
+      for (const n of recomputed.nodes) {
+        positions[n.id] =
+          manualPositionIds.has(n.id) && current.positions[n.id] ? current.positions[n.id] : { x: n.x, y: n.y };
+      }
+      if (opts?.manualPosition) {
+        positions[opts.manualPosition.id] = opts.manualPosition.pos;
+        manualPositionIds.add(opts.manualPosition.id);
+      }
+      updateCurrentLevel({
+        rawText: newText,
+        diagram: newDiagram,
+        errors: newErrors,
+        layout: recomputed,
+        positions,
+        manualPositionIds,
+      });
+    },
+    [current, updateCurrentLevel],
+  );
+
+  const onDropNodeType = useCallback(
+    (type: string, pos: LayoutPosition) => {
+      if (!current) return;
+      const existingIds = new Set(current.diagram.nodes.map((n) => n.id));
+      let n = 1;
+      let id = `${type}${n}`;
+      while (existingIds.has(id)) {
+        n += 1;
+        id = `${type}${n}`;
+      }
+      void applyOps([{ op: 'addNode', node: { id, type } }], { manualPosition: { id, pos } });
+      setSelectedNodeId(id);
+    },
+    [current, applyOps],
+  );
+
+  const onNodeClick = useCallback((node: DiagramNode) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
+  const onUpdateSelectedNode = useCallback(
+    (patch: Partial<DiagramNode>) => {
+      if (!selectedNodeId) return;
+      void applyOps([{ op: 'updateNode', id: selectedNodeId, patch }]);
+    },
+    [selectedNodeId, applyOps],
+  );
+
+  const onDeleteSelectedNode = useCallback(() => {
+    if (!current || !selectedNodeId) return;
+    const deps = findNodeDependents(current.diagram, selectedNodeId);
+    if (deps.links.length > 0 || deps.flowSteps.length > 0) {
+      const lines = [
+        ...deps.links.map((l) => `link ${l.from} -> ${l.to}`),
+        ...deps.flowSteps.map((s) => `step in flow "${s.flowName}"`),
+      ];
+      const proceed = window.confirm(
+        `Deleting node "${selectedNodeId}" also removes:\n${lines.join('\n')}\n\nContinue?`,
+      );
+      if (!proceed) return;
+    }
+    const ops: PatchOp[] = [];
+    const indicesByFlow = new Map<string, number[]>();
+    for (const s of deps.flowSteps) {
+      const arr = indicesByFlow.get(s.flowName) ?? [];
+      arr.push(s.index);
+      indicesByFlow.set(s.flowName, arr);
+    }
+    for (const [flowName, indices] of indicesByFlow) {
+      for (const atIndex of [...indices].sort((a, b) => b - a)) {
+        ops.push({ op: 'removeFlowStep', flowName, atIndex });
+      }
+    }
+    for (const l of deps.links) ops.push({ op: 'removeLink', from: l.from, to: l.to });
+    ops.push({ op: 'removeNode', id: selectedNodeId });
+    void applyOps(ops);
+    setSelectedNodeId(null);
+  }, [current, selectedNodeId, applyOps]);
 
   const onNodeDrag = useCallback(
     (id: string, pos: LayoutPosition) => {
@@ -234,6 +335,7 @@ export default function App() {
   }, []);
 
   const highlight = current ? computeFlowHighlight(current.diagram, current.flowPlayerState) : null;
+  const selectedNode = current?.diagram.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
   return (
     <div
@@ -324,15 +426,34 @@ export default function App() {
         {current && (
           <FlowPlayer diagram={current.diagram} state={current.flowPlayerState} onChange={onFlowPlayerChange} />
         )}
+        {current && <Palette />}
         {current && (
-          <FlowCanvas
-            diagram={current.diagram}
-            layout={current.layout}
-            positions={current.positions}
-            onNodeDrag={onNodeDrag}
-            onNodeDoubleClick={(node) => void openDetails(node)}
-            activeStep={highlight?.activeStep ?? undefined}
-            visitedStepKeys={highlight?.visitedStepKeys}
+          <div style={{ position: 'relative' }}>
+            <FlowCanvas
+              diagram={current.diagram}
+              layout={current.layout}
+              positions={current.positions}
+              onNodeDrag={onNodeDrag}
+              onNodeDoubleClick={(node) => void openDetails(node)}
+              onNodeClick={onNodeClick}
+              selectedNodeId={selectedNodeId}
+              onDropNodeType={onDropNodeType}
+              activeStep={highlight?.activeStep ?? undefined}
+              visitedStepKeys={highlight?.visitedStepKeys}
+            />
+            {selectedNode && (
+              <div style={{ position: 'absolute', top: 0, right: 0, background: '#fff' }}>
+                <PropertiesPanel node={selectedNode} onUpdate={onUpdateSelectedNode} onDelete={onDeleteSelectedNode} />
+              </div>
+            )}
+          </div>
+        )}
+        {current && (
+          <textarea
+            data-testid="yaml-source"
+            readOnly
+            value={current.rawText}
+            style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0 }}
           />
         )}
         {!current && !loadError && <p>Drag a .dc.yaml file here, or use the file picker above.</p>}

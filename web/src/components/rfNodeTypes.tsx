@@ -6,6 +6,7 @@ export interface DcNodeData extends Record<string, unknown> {
   hasDetails: boolean;
   isActive: boolean;
   isVisited: boolean;
+  isSelected?: boolean;
 }
 
 interface ShellProps {
@@ -27,10 +28,11 @@ function NodeShell({ id, data, nodeType, className, style }: ShellProps) {
       data-has-details={data.hasDetails || undefined}
       data-active={data.isActive || undefined}
       data-visited={data.isVisited || undefined}
+      data-selected={data.isSelected || undefined}
       className={`rf-node ${className}`}
       style={{
         padding: '8px 14px',
-        border: `${data.hasDetails ? 3 : 1.5}px solid ${data.isActive ? '#e04b4b' : data.isVisited ? '#e08a4b' : '#333'}`,
+        border: `${data.hasDetails ? 3 : 1.5}px solid ${data.isActive ? '#e04b4b' : data.isVisited ? '#e08a4b' : data.isSelected ? '#0066cc' : '#333'}`,
         background: '#fff',
         fontSize: 13,
         textAlign: 'center',
