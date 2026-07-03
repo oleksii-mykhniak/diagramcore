@@ -1,0 +1,17 @@
+# Go
+/dc
+*.test
+*.out
+/dist/
+
+# Node / web (фаза 5)
+node_modules/
+web/dist/
+web/build/
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
