@@ -170,3 +170,17 @@
   ребра ✅; `mmdc` (через `npx @mermaid-js/mermaid-cli`) виявився
   доступним у середовищі — усі 3 golden `.mmd` вручну відрендерено в
   валідний SVG без помилок (TODO-заміна з плану не знадобилась) ✅.
+
+### Крок 3.3 — Нативний рендер SVG
+- Дата: 2026-07-03
+- Виконано: `internal/render.SVG(d, Options{Layout, ThemeID})` —
+  `internal/transpile.ToD2` → `d2lib.Compile` → `d2svg.Render`. Обидва
+  layout-движки підключені через `LayoutResolver`
+  (`dagre → d2dagrelayout.DefaultLayout`, `elk → d2elklayout.DefaultLayout`).
+  `log.WithDefault` — щоб внутрішній debug/warn-лог D2 не засмічував
+  stderr. `dc render <file> -o out.svg [--layout dagre|elk]` у `cmd/dc`.
+- Коміт: `1bb444a`
+- AC: unit-тести для обох layout-движків — вивід містить `<svg` і текст
+  вузла `Gateway` ✅; вручну перевірено `./dc render
+  examples/auth-system.dc.yaml -o /tmp/auth.svg` (і з `--layout elk`) —
+  валідний SVG, exit 0, для обох движків ✅.
