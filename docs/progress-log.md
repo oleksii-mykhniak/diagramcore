@@ -833,3 +833,30 @@
   (37), `npm run build`, `npx playwright test` (34) зелені; go-регресія
   зелена ✅.
 
+### Крок 8.3 — Галерея прикладів і онбординг
+- Дата: 2026-07-03
+- Виконано: `scripts/generate-example-previews.mjs` — шелить реальний
+  бінарник `dc render <file> -o <out.svg>` (не переписує рендер у JS)
+  для кожного `examples/*.dc.yaml` у `public/example-previews/`;
+  підключено як `prebuild` (npm lifecycle) перед `build`, результат у
+  `.gitignore` (генерований артефакт). `src/examples.ts` —
+  `import.meta.glob('../../examples/*.dc.yaml', {query:'?raw', eager})`
+  вбудовує реальний текст прикладів у бандл. `components/StartScreen.tsx`
+  — галерея (превью-картинка + ім'я файлу, клік відкриває приклад),
+  "New diagram" (порожній шаблон), кнопка "Show tour" →
+  `components/Tour.tsx` (4 підказки: палітра, links, flow-плеєр,
+  Problems-панель; план не вимагає AC на сам тур, тому реалізовано
+  мінімально — без примусового показу при першому візиті).
+  `App.tsx` отримав `openTextAsDiagram` (той самий шлях, що й
+  `openFiles`, але для вже наявного в пам'яті тексту — без нативного
+  handle, Save деградує до download); стартовий екран показується
+  замість старого "Drag a file here" при `!current`.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/example-gallery.spec.ts` (2 тести) — клік по
+  прикладу з галереї відкриває його в редакторі з усіма вузлами ✅;
+  прев'ю — реальний SVG, згенерований білд-скриптом (перевірено HTTP-
+  запитом на `/example-previews/auth-system.svg`: валідний `<svg>`,
+  містить лейбли всіх вузлів реального файлу) ✅. Повна регресія:
+  `npm test` (37), `npm run build` (з prebuild), `npx playwright test`
+  (36) зелені; go-регресія зелена ✅.
+

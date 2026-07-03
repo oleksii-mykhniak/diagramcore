@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate-previews": "node scripts/generate-example-previews.mjs",
+    "prebuild": "npm run generate-previews",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",

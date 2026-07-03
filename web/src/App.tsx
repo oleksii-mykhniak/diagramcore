@@ -27,6 +27,7 @@ import type { PatchOp } from './yamlPatch';
 import { findNodeDependents } from './dependents';
 import { isNativeFsSupported, openDiagramFiles, pickSaveHandle, writeTextToHandle } from './nativeFile';
 import { decodeShareState, encodeShareState, SHARE_URL_SIZE_LIMIT } from './shareLink';
+import { StartScreen } from './components/StartScreen';
 
 interface DiagramLevel {
   fileName: string;
@@ -143,6 +144,29 @@ export default function App() {
         setVirtualFS(Object.fromEntries(contents));
         const [primaryName, primaryText] = contents[0];
         const level = await buildLevel(primaryName, primaryText);
+        levelRef.current = level;
+        resetHistory();
+        setStack([level]);
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : String(err));
+        levelRef.current = null;
+        resetHistory();
+        setStack([]);
+      }
+    },
+    [buildLevel, resetHistory],
+  );
+
+  /** Opens an in-memory diagram (a bundled example, or a blank "New
+   * diagram" template — PLAN.md step 8.3) the same way `openFiles` opens
+   * a File: no native handle, so Save falls back to download. */
+  const openTextAsDiagram = useCallback(
+    async (fileName: string, text: string) => {
+      setLoadError(null);
+      setDrillError(null);
+      try {
+        setVirtualFS({ [fileName]: text });
+        const level = await buildLevel(fileName, text);
         levelRef.current = level;
         resetHistory();
         setStack([level]);
@@ -962,7 +986,9 @@ export default function App() {
             style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0 }}
           />
         )}
-        {!current && !loadError && <p>Drag a .dc.yaml file here, or use the file picker above.</p>}
+        {!current && !loadError && (
+          <StartScreen onOpenExample={(fileName, text) => void openTextAsDiagram(fileName, text)} onNewDiagram={(text) => void openTextAsDiagram('untitled.dc.yaml', text)} />
+        )}
       </main>
     </div>
   );
