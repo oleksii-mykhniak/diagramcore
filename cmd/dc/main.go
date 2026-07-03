@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/oleksii94/diagramcore/internal/context"
+	"github.com/oleksii94/diagramcore/internal/parser"
 	"github.com/oleksii94/diagramcore/internal/validate"
 )
 
@@ -22,6 +24,8 @@ func main() {
 	switch os.Args[1] {
 	case "validate":
 		os.Exit(runValidate(os.Args[2:]))
+	case "context":
+		os.Exit(runContext(os.Args[2:]))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", os.Args[1])
 		os.Exit(2)
@@ -124,4 +128,75 @@ func printJSON(results []fileResult) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(results)
+}
+
+// runContext parses its own args (rather than using flag.FlagSet) because
+// flag.Parse stops at the first non-flag argument, but the documented CLI
+// puts flags after the positional <file> argument (`dc context f.yaml -o
+// out.md`).
+func runContext(args []string) int {
+	usage := func() int {
+		fmt.Fprintln(os.Stderr, "usage: dc context [-o out.md] [--deep] <file>")
+		return 2
+	}
+
+	var out string
+	var deep bool
+	var files []string
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--deep":
+			deep = true
+		case a == "-o" || a == "--o":
+			i++
+			if i >= len(args) {
+				return usage()
+			}
+			out = args[i]
+		case strings.HasPrefix(a, "-o="):
+			out = strings.TrimPrefix(a, "-o=")
+		case strings.HasPrefix(a, "--o="):
+			out = strings.TrimPrefix(a, "--o=")
+		default:
+			files = append(files, a)
+		}
+	}
+	if len(files) != 1 {
+		return usage()
+	}
+	file := files[0]
+
+	errs, err := validate.ValidateFile(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: error: %s\n", file, err)
+		return 2
+	}
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, e.String())
+		}
+		return 1
+	}
+
+	d, err := parser.Parse(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: error: %s\n", file, err)
+		return 2
+	}
+
+	md, err := context.Generate(d, deep)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: error: %s\n", file, err)
+		return 2
+	}
+
+	if out == "" {
+		fmt.Print(md)
+		return 0
+	}
+	if err := os.WriteFile(out, []byte(md), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "write %s: %s\n", out, err)
+		return 2
+	}
+	return 0
 }
