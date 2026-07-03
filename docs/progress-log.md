@@ -981,3 +981,29 @@
   множини кодів — ідентичні ✅. `go build/test/vet ./...`,
   `./dc validate` і `./dc lint --style examples/*.dc.yaml` зелені ✅.
 
+### Крок 9.4 — Рендер для "очей" агента
+- Дата: 2026-07-03
+- Виконано: `internal/mcpserver/render_diagram.go` — MCP-інструмент
+  `render_diagram(path, flow?, format?)`: рендерить через той самий
+  `internal/render.SVG`/`SVGAnimated`, що й `dc render`, застосовуючи
+  `<name>.layout.json`, якщо є; `flow` вмикає підсвітку шляху (як
+  `dc render --flow --animate`); повертає `mcp.ImageContent` напряму
+  (не JSON-обгортку `{ok,...}`, як інші інструменти — образ це і є
+  результат). `format: "png"` — best-effort через `rsvg-convert` (якщо
+  є в PATH), інакше мовчки SVG замість помилки — PNG був відкладений
+  ще в фазі 3/кроці 4.1 (немає SVG-растеризатора серед Go-залежностей
+  проєкту), план явно дозволяє цей відхил для цього інструменту; див.
+  `docs/deviations.md`, крок 9.4.
+- Коміт: (цей крок)
+- AC: `internal/mcpserver/render_diagram_test.go` (3 тести) —
+  `render_diagram` на `auth-system` повертає непорожній `ImageContent` з
+  валідним SVG (`<svg` у вмісті), `mimeType: image/svg+xml` (тестове
+  середовище без `rsvg-convert`) ✅; виклик з `flow` дає інший вміст, ніж
+  без нього (підсвічений шлях відрізняється від базового рендеру) ✅;
+  невідома назва flow → `IsError: true` ✅. `docs/mcp.md` доповнено
+  описом інструменту й повного циклу агента (створити → провалідувати
+  → відрендерити → виправити). `go build/test/vet ./...`,
+  `./dc validate` і `./dc lint --style` зелені ✅.
+
+**Фаза 9 завершена. Весь PLAN.md виконано.**
+

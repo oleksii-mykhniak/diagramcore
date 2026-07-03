@@ -167,3 +167,22 @@
   `/example-previews/auth-system.svg` — усі 200).
   Сайт: https://oleksii-mykhniak.github.io/diagramcore/
 - Дата: 2026-07-03, коміт: (див. `phase8-step4` у progress-log.md)
+
+## Крок 9.4 — Рендер для "очей" агента
+- Причина: план вже передбачав можливий відхил ("PNG — через існуючий
+  шлях фази 3 (якщо PNG був відкладений — SVG обов'язковий, PNG
+  best-effort)"). PNG дійсно був відкладений ще в кроці 4.1/фазі 3:
+  `internal/render` і `dc render` мають лише SVG-шлях (`render.SVG`,
+  `render.SVGAnimated`) — жодного растеризатора SVG→PNG в Go-залежностях
+  проєкту нема, а додавання нового (cgo-бібліотека чи headless-браузер)
+  заради опційного PNG-виводу одного MCP-інструменту — непропорційно.
+- Рішення: `render_diagram` MCP-інструмент повертає SVG завжди (через
+  той самий `internal/render`, що й `dc render`, включно із
+  застосуванням `<name>.layout.json` і підсвіткою `--flow`).
+  `format: "png"` — best-effort: якщо в PATH є `rsvg-convert`, шелимось
+  у нього (`rsvg-convert --format=png` зі stdin/stdout); інакше мовчки
+  повертаємо SVG з `mimeType: "image/svg+xml"` замість помилки. Тестове
+  середовище (і, ймовірно, CI) не має `rsvg-convert`, тож
+  `render_diagram_test.go` перевіряє повернений MIME-тип SVG явно
+  (`image/svg+xml`), а не намагається змусити спрацювати PNG-шлях.
+- Дата: 2026-07-03, коміт: (див. `phase9-step4` у progress-log.md)

@@ -54,6 +54,11 @@ func NewServer() *mcp.Server {
 		Name:        "lint_style",
 		Description: "Check a *.dc.yaml diagram against its directory's dc-style.yaml conventions (DS0xx codes). No style file means no violations.",
 	}, lintStyle)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "render_diagram",
+		Description: "Render a *.dc.yaml diagram to an image (svg, always available, or best-effort png), " +
+			"optionally with a flow's path highlighted — lets an agent see the diagram without a browser.",
+	}, renderDiagram)
 	return server
 }
 

@@ -99,6 +99,24 @@ violations). Shares `internal/style` with `dc lint --style <files...>`,
 so both report the same `DS0xx` codes for the same file. Returns
 `{ "ok": bool, "violations": [...] }`.
 
+### `render_diagram`
+
+Renders a diagram to an image so an agent can see it without a browser
+— the same `internal/render` path as `dc render`, including the
+diagram's own `<name>.layout.json` if one exists next to it.
+
+- `path` (required), `flow` (optional — highlights that flow's path,
+  like `dc render --flow <name> --animate`), `format` (`svg`, the
+  default, or `png`).
+- `format: "png"` is best-effort (see `docs/deviations.md`, step 9.4):
+  PNG rendering was deferred back in phase 3 (no SVG rasterizer in this
+  module's Go dependencies). If `rsvg-convert` is on `PATH` it's used;
+  otherwise the tool silently returns SVG instead of failing.
+
+Returns MCP image content directly (not the `{ok, ...}` JSON shape the
+other tools use) — an `ImageContent` block with `mimeType` reflecting
+whichever format actually came back.
+
 ## Full-cycle example
 
 1. Write a new `*.dc.yaml` file (structured edits: `edit_diagram`) or
@@ -110,5 +128,5 @@ so both report the same `DS0xx` codes for the same file. Returns
    `edit_diagram` (e.g. manual file writes).
 4. `get_context` — confirm the diagram reads as intended for an
    unfamiliar audience.
-5. `render_diagram` (PLAN.md step 9.4, once implemented) — see the
-   rendered result without a browser.
+5. `render_diagram` — see the rendered result (with a flow highlighted,
+   if relevant) without a browser.
