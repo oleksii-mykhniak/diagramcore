@@ -26,11 +26,19 @@ type Options struct {
 	Layout string
 	// ThemeID selects a D2 theme; zero value uses D2's neutral default.
 	ThemeID *int64
+	// Flow, if set, highlights that flow's path and mutes everything else.
+	Flow *model.Flow
 }
 
-// SVG renders d to an SVG document.
+// SVG renders d to an SVG document. If opts.Flow is set, the nodes and
+// links on that flow's path are visually highlighted and everything else
+// is muted.
 func SVG(d *model.Diagram, opts Options) ([]byte, error) {
-	return svgFromD2(transpile.ToD2(d), opts)
+	d2Text := transpile.ToD2(d)
+	if opts.Flow != nil {
+		d2Text = transpile.ToD2Flow(d, opts.Flow)
+	}
+	return svgFromD2(d2Text, opts)
 }
 
 func svgFromD2(d2Text string, opts Options) ([]byte, error) {

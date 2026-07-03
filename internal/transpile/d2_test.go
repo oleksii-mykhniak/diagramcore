@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"oss.terrastruct.com/d2/d2graph"
@@ -67,5 +68,31 @@ func TestToD2Golden(t *testing.T) {
 				t.Errorf("D2 output for %s does not match golden file %s\n--- got ---\n%s\n--- want ---\n%s", name, golden, got, want)
 			}
 		})
+	}
+}
+
+func TestToD2FlowHighlightsPathDifferently(t *testing.T) {
+	src := filepath.Join("..", "..", "examples", "auth-system.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+	// "Пряма авторизація логін/пароль" doesn't touch OAuthProvider or its
+	// link, so it exercises both the highlight and the muted styling.
+	flow := &d.Flows[1]
+
+	got := ToD2Flow(d, flow)
+	compilesAsD2(t, got)
+
+	if !strings.Contains(got, "style.stroke: \"#e04b4b\"") {
+		t.Error("flow output missing highlight stroke style for on-path edges/nodes")
+	}
+	if !strings.Contains(got, "style.opacity: 0.35") {
+		t.Error("flow output missing muted opacity style for off-path edges/nodes")
+	}
+
+	base := ToD2(d)
+	if got == base {
+		t.Error("flow-highlighted D2 output is identical to the base output")
 	}
 }

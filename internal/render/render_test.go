@@ -35,3 +35,28 @@ func TestSVGBothLayouts(t *testing.T) {
 		})
 	}
 }
+
+func TestSVGFlowHighlight(t *testing.T) {
+	src := filepath.Join("..", "..", "examples", "auth-system.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+	flow := &d.Flows[1] // doesn't touch OAuthProvider, per transpile tests
+
+	base, err := SVG(d, Options{})
+	if err != nil {
+		t.Fatalf("SVG(base) failed: %v", err)
+	}
+	highlighted, err := SVG(d, Options{Flow: flow})
+	if err != nil {
+		t.Fatalf("SVG(flow) failed: %v", err)
+	}
+
+	if bytes.Equal(base, highlighted) {
+		t.Fatal("flow-highlighted SVG is byte-identical to the base SVG")
+	}
+	if !bytes.Contains(highlighted, []byte("e04b4b")) {
+		t.Error("flow-highlighted SVG does not contain the accent stroke color for on-path edges")
+	}
+}

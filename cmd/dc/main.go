@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/oleksii94/diagramcore/internal/context"
+	"github.com/oleksii94/diagramcore/internal/model"
 	"github.com/oleksii94/diagramcore/internal/parser"
 	"github.com/oleksii94/diagramcore/internal/render"
 	"github.com/oleksii94/diagramcore/internal/transpile"
@@ -289,11 +290,11 @@ func runExport(args []string) int {
 // runRender parses its own args for the same reason as runContext/runExport.
 func runRender(args []string) int {
 	usage := func() int {
-		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg] [--layout dagre|elk] <file>")
+		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg] [--layout dagre|elk] [--flow <name>] <file>")
 		return 2
 	}
 
-	var out, layout string
+	var out, layout, flowName string
 	var files []string
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; {
@@ -305,6 +306,14 @@ func runRender(args []string) int {
 			layout = args[i]
 		case strings.HasPrefix(a, "--layout="):
 			layout = strings.TrimPrefix(a, "--layout=")
+		case a == "--flow":
+			i++
+			if i >= len(args) {
+				return usage()
+			}
+			flowName = args[i]
+		case strings.HasPrefix(a, "--flow="):
+			flowName = strings.TrimPrefix(a, "--flow=")
 		case a == "-o" || a == "--o":
 			i++
 			if i >= len(args) {
@@ -346,7 +355,17 @@ func runRender(args []string) int {
 		return 2
 	}
 
-	svg, err := render.SVG(d, render.Options{Layout: layout})
+	renderOpts := render.Options{Layout: layout}
+	if flowName != "" {
+		flow, err := findFlow(d, flowName)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		renderOpts.Flow = flow
+	}
+
+	svg, err := render.SVG(d, renderOpts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: render error: %s\n", file, err)
 		return 2
@@ -357,4 +376,19 @@ func runRender(args []string) int {
 		return 2
 	}
 	return 0
+}
+
+// findFlow looks up a flow by name, returning an error listing the
+// available flow names if it isn't found.
+func findFlow(d *model.Diagram, name string) (*model.Flow, error) {
+	for i := range d.Flows {
+		if d.Flows[i].Name == name {
+			return &d.Flows[i], nil
+		}
+	}
+	names := make([]string, len(d.Flows))
+	for i, f := range d.Flows {
+		names[i] = f.Name
+	}
+	return nil, fmt.Errorf("unknown flow %q; available flows: %s", name, strings.Join(names, ", "))
 }
