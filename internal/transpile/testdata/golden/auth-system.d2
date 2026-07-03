@@ -1,0 +1,16 @@
+User: "Користувач" {
+  shape: person
+}
+Gateway: "API Gateway"
+AuthService: "Auth Service"
+OAuthProvider: "OAuth-провайдер" {
+  style.stroke-dash: 3
+}
+DB: "База даних користувачів" {
+  shape: cylinder
+}
+
+User -> Gateway: "HTTPS запит на вхід"
+Gateway -> AuthService: "Делегує автентифікацію"
+AuthService -> OAuthProvider: "Запит на OAuth-автентифікацію"
+AuthService -> DB: "Перевірка облікових даних"

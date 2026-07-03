@@ -12,6 +12,7 @@ import (
 
 	"github.com/oleksii94/diagramcore/internal/context"
 	"github.com/oleksii94/diagramcore/internal/parser"
+	"github.com/oleksii94/diagramcore/internal/transpile"
 	"github.com/oleksii94/diagramcore/internal/validate"
 )
 
@@ -26,6 +27,8 @@ func main() {
 		os.Exit(runValidate(os.Args[2:]))
 	case "context":
 		os.Exit(runContext(os.Args[2:]))
+	case "export":
+		os.Exit(runExport(os.Args[2:]))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", os.Args[1])
 		os.Exit(2)
@@ -195,6 +198,85 @@ func runContext(args []string) int {
 		return 0
 	}
 	if err := os.WriteFile(out, []byte(md), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "write %s: %s\n", out, err)
+		return 2
+	}
+	return 0
+}
+
+// runExport parses its own args for the same reason as runContext: flags
+// follow the positional <file> in the documented CLI form.
+func runExport(args []string) int {
+	usage := func() int {
+		fmt.Fprintln(os.Stderr, "usage: dc export [-o out.<ext>] --to d2|mermaid <file>")
+		return 2
+	}
+
+	var out, to string
+	var files []string
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--to" || a == "-to":
+			i++
+			if i >= len(args) {
+				return usage()
+			}
+			to = args[i]
+		case strings.HasPrefix(a, "--to="):
+			to = strings.TrimPrefix(a, "--to=")
+		case a == "-o" || a == "--o":
+			i++
+			if i >= len(args) {
+				return usage()
+			}
+			out = args[i]
+		case strings.HasPrefix(a, "-o="):
+			out = strings.TrimPrefix(a, "-o=")
+		case strings.HasPrefix(a, "--o="):
+			out = strings.TrimPrefix(a, "--o=")
+		default:
+			files = append(files, a)
+		}
+	}
+	if len(files) != 1 || to == "" {
+		return usage()
+	}
+	file := files[0]
+
+	errs, err := validate.ValidateFile(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: error: %s\n", file, err)
+		return 2
+	}
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, e.String())
+		}
+		return 1
+	}
+
+	d, err := parser.Parse(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: error: %s\n", file, err)
+		return 2
+	}
+
+	var text string
+	switch to {
+	case "d2":
+		text = transpile.ToD2(d)
+	case "mermaid":
+		text = transpile.ToMermaid(d)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown export target %q (want d2 or mermaid)\n", to)
+		return 2
+	}
+
+	if out == "" {
+		fmt.Print(text)
+		return 0
+	}
+	if err := os.WriteFile(out, []byte(text), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write %s: %s\n", out, err)
 		return 2
 	}

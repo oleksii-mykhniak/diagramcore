@@ -1,0 +1,12 @@
+flowchart TD
+  Customer(["Клієнт"])
+  PaymentGateway["Payment Gateway"]
+  PaymentProcessor["Payment Processor"]
+  FraudCheck["Перевірка на шахрайство"]
+  Ledger[("Леджер транзакцій")]
+  NotificationService["Сервіс сповіщень"]
+  Customer -->|"Запит на оплату"| PaymentGateway
+  PaymentGateway -->|"Передає платіж на обробку"| PaymentProcessor
+  PaymentProcessor -->|"Оцінити ризик транзакції"| FraudCheck
+  PaymentProcessor -->|"Записати транзакцію"| Ledger
+  PaymentProcessor -->|"Сповістити клієнта"| NotificationService

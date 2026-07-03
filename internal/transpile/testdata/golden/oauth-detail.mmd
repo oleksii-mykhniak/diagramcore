@@ -1,0 +1,8 @@
+flowchart TD
+  OAuthGateway["OAuth Gateway"]
+  ConsentScreen["Екран згоди"]
+  TokenIssuer["Видавець токенів"]
+  TokenStore[("Сховище токенів")]
+  OAuthGateway -->|"Показати екран згоди"| ConsentScreen
+  ConsentScreen -->|"Користувач підтвердив доступ"| TokenIssuer
+  TokenIssuer -->|"Зберегти виданий токен"| TokenStore

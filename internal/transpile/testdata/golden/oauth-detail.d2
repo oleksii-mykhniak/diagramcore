@@ -1,0 +1,10 @@
+OAuthGateway: "OAuth Gateway"
+ConsentScreen: "Екран згоди"
+TokenIssuer: "Видавець токенів"
+TokenStore: "Сховище токенів" {
+  shape: cylinder
+}
+
+OAuthGateway -> ConsentScreen: "Показати екран згоди"
+ConsentScreen -> TokenIssuer: "Користувач підтвердив доступ"
+TokenIssuer -> TokenStore: "Зберегти виданий токен"

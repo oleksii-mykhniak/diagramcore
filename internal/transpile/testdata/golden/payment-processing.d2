@@ -1,0 +1,16 @@
+Customer: "Клієнт" {
+  shape: person
+}
+PaymentGateway: "Payment Gateway"
+PaymentProcessor: "Payment Processor"
+FraudCheck: "Перевірка на шахрайство"
+Ledger: "Леджер транзакцій" {
+  shape: cylinder
+}
+NotificationService: "Сервіс сповіщень"
+
+Customer -> PaymentGateway: "Запит на оплату"
+PaymentGateway -> PaymentProcessor: "Передає платіж на обробку"
+PaymentProcessor -> FraudCheck: "Оцінити ризик транзакції"
+PaymentProcessor -> Ledger: "Записати транзакцію"
+PaymentProcessor -> NotificationService: "Сповістити клієнта"
