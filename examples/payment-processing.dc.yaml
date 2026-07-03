@@ -1,0 +1,80 @@
+diagram:
+  title: "Обробка платежу"
+  purpose: "Показати сценарій оплати з перевіркою на шахрайство та умовним розгалуженням"
+  audience: students
+  version: "0.1"
+
+nodes:
+  - id: Customer
+    type: actor
+    label: "Клієнт"
+    description: "Людина, що здійснює оплату"
+  - id: PaymentGateway
+    type: service
+    label: "Payment Gateway"
+    description: "Приймає запити на оплату від клієнтів"
+  - id: PaymentProcessor
+    type: service
+    label: "Payment Processor"
+    description: "Основна логіка обробки платежу"
+    ai_context: "Оркеструє перевірку на шахрайство, запис у леджер і сповіщення"
+  - id: FraudCheck
+    type: component
+    label: "Перевірка на шахрайство"
+    description: "Оцінює ризик транзакції"
+  - id: Ledger
+    type: storage
+    label: "Леджер транзакцій"
+    description: "Незмінний журнал усіх фінансових операцій"
+  - id: NotificationService
+    type: service
+    label: "Сервіс сповіщень"
+    description: "Надсилає клієнту статус оплати"
+
+links:
+  - from: Customer
+    to: PaymentGateway
+    type: request
+    label: "Запит на оплату"
+  - from: PaymentGateway
+    to: PaymentProcessor
+    type: call
+    label: "Передає платіж на обробку"
+  - from: PaymentProcessor
+    to: FraudCheck
+    type: query
+    label: "Оцінити ризик транзакції"
+  - from: PaymentProcessor
+    to: Ledger
+    type: dataflow
+    label: "Записати транзакцію"
+  - from: PaymentProcessor
+    to: NotificationService
+    type: event
+    label: "Сповістити клієнта"
+
+flows:
+  - name: "Оплата з перевіркою на шахрайство"
+    steps:
+      - from: Customer
+        to: PaymentGateway
+        note: "Ініціює оплату"
+      - from: PaymentGateway
+        to: PaymentProcessor
+        note: "Передає деталі платежу"
+      - from: PaymentProcessor
+        to: FraudCheck
+        note: "Запитує оцінку ризику"
+      - branch:
+          condition: "транзакція визнана підозрілою"
+          then:
+            - from: PaymentProcessor
+              to: NotificationService
+              note: "Повідомляє клієнта про блокування транзакції"
+          else:
+            - from: PaymentProcessor
+              to: Ledger
+              note: "Записує успішну транзакцію"
+            - from: PaymentProcessor
+              to: NotificationService
+              note: "Надсилає клієнту підтвердження оплати"

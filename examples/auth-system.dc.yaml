@@ -1,0 +1,85 @@
+diagram:
+  title: "Система авторизації"
+  purpose: "Показати, як користувач автентифікується через власний сервіс та зовнішнього OAuth-провайдера"
+  audience: students
+  version: "0.1"
+
+nodes:
+  - id: User
+    type: actor
+    label: "Користувач"
+    description: "Людина, що намагається увійти в систему"
+  - id: Gateway
+    type: service
+    label: "API Gateway"
+    description: "Єдина вхідна точка для зовнішніх запитів"
+  - id: AuthService
+    type: service
+    label: "Auth Service"
+    description: "Сервіс, що відповідає за автентифікацію та видачу сесій"
+    ai_context: "Не зберігає паролі напряму — делегує перевірку OAuth-провайдеру, або звіряє хеш у DB для прямого входу"
+  - id: OAuthProvider
+    type: external
+    label: "OAuth-провайдер"
+    description: "Зовнішній сервіс автентифікації (напр. Google, GitHub)"
+    tags: [oauth, external]
+    details: ./oauth-detail.dc.yaml
+  - id: DB
+    type: storage
+    label: "База даних користувачів"
+    description: "Зберігає облікові дані та хеші паролів"
+
+links:
+  - from: User
+    to: Gateway
+    type: request
+    label: "HTTPS запит на вхід"
+  - from: Gateway
+    to: AuthService
+    type: call
+    label: "Делегує автентифікацію"
+  - from: AuthService
+    to: OAuthProvider
+    type: request
+    label: "Запит на OAuth-автентифікацію"
+  - from: AuthService
+    to: DB
+    type: query
+    label: "Перевірка облікових даних"
+
+flows:
+  - name: "Успішна авторизація через OAuth"
+    steps:
+      - from: User
+        to: Gateway
+        note: "Надсилає запит на вхід через OAuth"
+      - from: Gateway
+        to: AuthService
+        note: "Перенаправляє запит у Auth Service"
+      - from: AuthService
+        to: OAuthProvider
+        note: "Ініціює OAuth-флоу з зовнішнім провайдером"
+      - from: OAuthProvider
+        to: AuthService
+        note: "Повертає підтверджену особу користувача (response)"
+      - from: AuthService
+        to: DB
+        note: "Знаходить або створює локальний обліковий запис"
+      - from: DB
+        to: AuthService
+        note: "Повертає дані облікового запису (response)"
+
+  - name: "Пряма авторизація логін/пароль"
+    steps:
+      - from: User
+        to: Gateway
+        note: "Надсилає логін і пароль"
+      - from: Gateway
+        to: AuthService
+        note: "Перенаправляє запит у Auth Service"
+      - from: AuthService
+        to: DB
+        note: "Звіряє хеш пароля з базою"
+      - from: DB
+        to: AuthService
+        note: "Повертає результат перевірки (response)"

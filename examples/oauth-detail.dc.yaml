@@ -1,0 +1,53 @@
+diagram:
+  title: "OAuth-провайдер: деталі"
+  purpose: "Деталізувати внутрішній устрій зовнішнього OAuth-провайдера з auth-system.dc.yaml"
+  audience: students
+  version: "0.1"
+
+nodes:
+  - id: OAuthGateway
+    type: service
+    label: "OAuth Gateway"
+    description: "Приймає запити на автентифікацію від сторонніх систем"
+  - id: ConsentScreen
+    type: component
+    label: "Екран згоди"
+    description: "UI, де користувач підтверджує надання доступу"
+  - id: TokenIssuer
+    type: service
+    label: "Видавець токенів"
+    description: "Формує access/refresh токени після згоди користувача"
+  - id: TokenStore
+    type: storage
+    label: "Сховище токенів"
+    description: "Зберігає видані токени для подальшої перевірки"
+
+links:
+  - from: OAuthGateway
+    to: ConsentScreen
+    type: call
+    label: "Показати екран згоди"
+  - from: ConsentScreen
+    to: TokenIssuer
+    type: call
+    label: "Користувач підтвердив доступ"
+  - from: TokenIssuer
+    to: TokenStore
+    type: query
+    label: "Зберегти виданий токен"
+
+flows:
+  - name: "Видача токена"
+    steps:
+      - from: OAuthGateway
+        to: ConsentScreen
+        note: "Запитує згоду користувача"
+      - from: ConsentScreen
+        to: TokenIssuer
+        note: "Передає підтверджену згоду"
+      - from: TokenIssuer
+        to: TokenStore
+        note: "Зберігає новий токен"
+      - from: TokenStore
+        to: TokenIssuer
+        note: "Підтверджує збереження (response)"
