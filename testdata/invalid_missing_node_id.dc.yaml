@@ -1,0 +1,8 @@
+diagram:
+  title: "Broken example — навмисно без id вузла"
+
+nodes:
+  - type: actor
+    label: "No id here"
+
+links: []
