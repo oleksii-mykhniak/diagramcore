@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/oleksii94/diagramcore/schema/layout.schema.json",
+  "title": "DiagramCore layout file (<name>.layout.json) v0",
+  "type": "object",
+  "required": ["views"],
+  "additionalProperties": false,
+  "properties": {
+    "views": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/view" }
+    }
+  },
+  "$defs": {
+    "view": {
+      "type": "object",
+      "required": ["positions"],
+      "additionalProperties": false,
+      "properties": {
+        "positions": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/position" }
+        }
+      }
+    },
+    "position": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    }
+  }
+}
