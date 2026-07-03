@@ -26,6 +26,7 @@ import { applyPatch } from './yamlPatch';
 import type { PatchOp } from './yamlPatch';
 import { findNodeDependents } from './dependents';
 import { isNativeFsSupported, openDiagramFiles, pickSaveHandle, writeTextToHandle } from './nativeFile';
+import { decodeShareState, encodeShareState, SHARE_URL_SIZE_LIMIT } from './shareLink';
 
 interface DiagramLevel {
   fileName: string;
@@ -76,6 +77,8 @@ export default function App() {
   const [focusRequest, setFocusRequest] = useState<
     { kind: 'node'; id: string; nonce: number } | { kind: 'line'; line: number; nonce: number } | null
   >(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const current = stack.length > 0 ? stack[stack.length - 1] : null;
   /** Mirrors the current level synchronously (React state updates are not
@@ -267,6 +270,28 @@ export default function App() {
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  // Restore a share link (PLAN.md step 8.2) on load: the diagram opens as
+  // an unsaved document (no native file handle — Save falls back to
+  // download, same as any level without one). The fragment never leaves
+  // the browser (it's after `#`, so it isn't part of any HTTP request).
+  useEffect(() => {
+    const shared = decodeShareState(window.location.hash);
+    if (!shared) return;
+    void (async () => {
+      const level = await buildLevel(shared.fileName, shared.yaml);
+      if (shared.layout) {
+        const importedPositions = shared.layout.views.default?.positions ?? {};
+        level.positions = { ...level.positions, ...importedPositions };
+        level.manualPositionIds = new Set(Object.keys(importedPositions));
+      }
+      levelRef.current = level;
+      resetHistory();
+      setStack([level]);
+    })();
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Applies structured YAML patches (PLAN.md step 7.1) to the current
@@ -698,6 +723,23 @@ export default function App() {
     downloadBlob(`${baseName(current.fileName)}.md`, new Blob([md], { type: 'text/markdown' }));
   }, [current]);
 
+  const onShare = useCallback(() => {
+    if (!current) return;
+    const layout = current.manualPositionIds.size > 0 ? buildLayoutFile(current.positions) : null;
+    const { fragment, size } = encodeShareState({ fileName: current.fileName, yaml: current.rawText, layout });
+    if (size > SHARE_URL_SIZE_LIMIT) {
+      setShareError(
+        `This diagram is too large to share as a link (${size} bytes, limit ${SHARE_URL_SIZE_LIMIT}). ` +
+          'Try removing unused nodes/links, or share the file directly.',
+      );
+      setShareUrl(null);
+      return;
+    }
+    setShareError(null);
+    const url = `${window.location.origin}${window.location.pathname}${fragment}`;
+    setShareUrl(url);
+  }, [current]);
+
   const openDetails = useCallback(
     async (node: DiagramNode) => {
       setDrillError(null);
@@ -787,6 +829,17 @@ export default function App() {
             <button type="button" data-testid="export-context" onClick={() => void onExportContext()}>
               Export AI context (markdown)
             </button>{' '}
+            <button type="button" data-testid="share" onClick={onShare}>
+              Share
+            </button>{' '}
+            {shareUrl && (
+              <input data-testid="share-url" readOnly value={shareUrl} style={{ width: 320 }} onFocus={(e) => e.currentTarget.select()} />
+            )}
+            {shareError && (
+              <span role="alert" data-testid="share-error">
+                {shareError}
+              </span>
+            )}
             <button type="button" data-testid="relayout" onClick={() => void onRelayout()}>
               Re-layout
             </button>{' '}

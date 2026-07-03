@@ -807,3 +807,29 @@
   `preventDefault` ✅. Повна регресія: `npm test` (34), `npm run build`,
   `npx playwright test` (32) зелені; go-регресія зелена ✅.
 
+### Крок 8.2 — Share-лінки
+- Дата: 2026-07-03
+- Виконано: `shareLink.ts` — `encodeShareState`/`decodeShareState`:
+  `{fileName, yaml, layout}` → JSON → deflate (`fflate.zlibSync`) →
+  base64url (без padding, `+/` → `-_`) у фрагмент `#s=...`. `App.tsx`:
+  кнопка "Share" (layout включається, лише якщо є ручні позиції) —
+  показує URL у полі `share-url`, або `share-error` з розміром і
+  лімітом (`SHARE_URL_SIZE_LIMIT = 8KB`), якщо перевищено. Ефект на
+  маунті перевіряє `location.hash` — якщо це share-фрагмент, діаграма
+  відкривається як рівень без `mainHandle` (тобто "незбережений
+  документ" у тому ж сенсі, що й рівень без нативного handle з кроку
+  8.1 — Save деградує до download).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/share-link.spec.ts` (2 тести) — створити діаграму,
+  перетягнути вузол, Share → відкрити URL у новому `context.newPage()`
+  (без спільного стану) → ті самі 5 вузлів і та сама позиція
+  перетягнутого вузла (порівняно через експортований layout) ✅;
+  фрагмент ніколи не йде на сервер (перевірено переліком усіх
+  зроблених HTTP-запитів після навігації на share-URL — жоден не
+  містить фрагмент, що й очікувано, бо браузери принципово не
+  відправляють `#...` у запитах) і URL для `auth-system` ≤ 8KB ✅.
+  Unit-тести `shareLink.test.ts` (3) — round-trip, невалідний
+  фрагмент → null, розмір у межах ліміту. Повна регресія: `npm test`
+  (37), `npm run build`, `npx playwright test` (34) зелені; go-регресія
+  зелена ✅.
+
