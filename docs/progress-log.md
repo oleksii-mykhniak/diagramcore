@@ -860,3 +860,33 @@
   `npm test` (37), `npm run build` (з prebuild), `npx playwright test`
   (36) зелені; go-регресія зелена ✅.
 
+### Крок 8.4 — Деплой і CI
+- Дата: 2026-07-03
+- Виконано: `.github/workflows/deploy-web.yml` — build dc + `make wasm`
+  → `npm ci` → `npm run build` (з prebuild-генерацією превью) →
+  `npx playwright test` проти прод-білда → `actions/upload-pages-
+  artifact` + `actions/deploy-pages` (push на `main`);
+  `.github/workflows/ci.yml` отримав job `web` (той самий шлях без
+  деплою, для PR і push). `vite.config.ts`: `base: './'` — потрібно
+  для GitHub Pages project-сайту (`user.github.io/repo/`, не корінь
+  домену); знайдені й виправлені 2 місця з абсолютними шляхами, які
+  зламались би під підшляхом: `wasmValidate.ts` (`fetch('/dc.wasm')` →
+  відносно `import.meta.env.BASE_URL`) і `examples.ts` (URL превью
+  аналогічно). `web/README.md` переписано під проєкт (заміна Vite-
+  шаблону) — dev/build/test/deploy інструкції, плейсхолдер для
+  публічного URL.
+- Коміт: (цей крок)
+- AC: workflow-файл існує, локальна симуляція тих самих команд
+  (`go build -o dc`, `make wasm`, `npm ci`, `npm test`, `npm run build`,
+  `npx playwright install`, `npx playwright test`) пройдена ✅;
+  прод-білд, відкритий через `vite preview` (файл-сервер), працює з
+  WASM-валідацією — весь `npx playwright test` (36 тестів, включно з
+  `problems-panel.spec.ts`, який напряму залежить від WASM-валідатора)
+  зелений проти прод-білда ✅. Публічний URL — **не зафіксовано**: у
+  репозиторію ще немає GitHub remote, тож push і увімкнення Pages —
+  дія власника (див. `docs/deviations.md`, крок 8.4); після push і
+  enable Pages лишається вписати URL у `web/README.md`.
+
+**Фаза 8 завершена (крім ручного кроку "додати remote і увімкнути
+GitHub Pages" — власника репозиторію).**
+

@@ -138,3 +138,27 @@
   для самого вмісту, лише для довжини стеку), тож коректність більше не
   залежить від того, коли React вирішить обробити батч.
 - Дата: 2026-07-03, коміт: (див. `phase7-step7` у progress-log.md)
+
+## Крок 8.4 — Деплой і CI
+- Причина: план вимагає "Сайт доступний за публічним URL... URL
+  зафіксувати в README" — у цього репозиторію ще немає GitHub-remote
+  (`git remote -v` порожній), тож push і увімкнення GitHub Pages
+  (Settings → Pages → Source: GitHub Actions) — дії, які має виконати
+  власник репозиторію, не агент (додавання remote і push — це дії, що
+  впливають на спільний/публічний стан).
+- Рішення: обрано GitHub Pages (не Cloudflare Pages) — найпростіший
+  варіант без додаткового акаунта, вже передбачений у плані як опція
+  "вирішити при виконанні". Все, що можна перевірити локально,
+  перевірено: `.github/workflows/deploy-web.yml` (build dc + wasm →
+  `npm run build` → `npx playwright test` проти прод-білда →
+  `actions/deploy-pages`) і `.github/workflows/ci.yml` (той самий шлях
+  без деплою, для PR/push); `vite.config.ts` — `base: './'` +
+  виправлені абсолютні шляхи (`wasmValidate.ts` fetch, `examples.ts`
+  превью-URL) на відносні до `import.meta.env.BASE_URL`, щоб працювало
+  з підшляху GitHub Pages (`user.github.io/repo/`), а не лише з кореня
+  домену; вручну прогнано повний `npx playwright test` проти
+  `vite preview` прод-білда — 36/36 зелені, WASM-валідація працює.
+  Публічний URL і фактичний деплой — залишається власнику: додати
+  remote, `git push`, увімкнути Pages, вписати URL у `web/README.md`
+  (розділ "Site URL") замість плейсхолдера.
+- Дата: 2026-07-03, коміт: (див. `phase8-step4` у progress-log.md)

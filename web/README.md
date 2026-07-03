@@ -1,32 +1,60 @@
-# React + TypeScript + Vite
+# DiagramCore — web editor
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Browser editor for `*.dc.yaml` diagrams (see `../docs/format.md` and
+`../docs/concept.md` for the format itself). React + TypeScript + Vite,
+canvas on `@xyflow/react`, YAML editing via CodeMirror 6 + `yaml`
+(eemeli/yaml), semantic validation via the Go validator compiled to WASM
+(`public/dc.wasm`).
 
-Currently, two official plugins are available:
+No server required: validation runs client-side, files are opened via the
+File System Access API (with a plain file-input fallback), and diagrams
+can be shared as a compressed URL fragment.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Local development
 
-## React Compiler
+From the repo root:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+make wasm                # builds public/dc.wasm + public/wasm_exec.js
+cd web
+npm install
+npm run dev              # http://localhost:5173
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+`npm run dev` does not run `scripts/generate-example-previews.mjs`
+(that's a `prebuild` step, see below), so the example gallery's preview
+images won't exist yet on a first checkout — run `npm run build` once,
+or `npm run generate-previews` directly (requires the `dc` binary built
+at the repo root: `go build -o dc ./cmd/dc`).
+
+## Build
+
+```
+npm run build             # tsc -b && vite build; prebuild regenerates
+                           # example-preview SVGs via the real `dc` binary
+npm run preview           # serve dist/ locally to sanity-check the build
+```
+
+## Tests
+
+```
+npm test                  # vitest (unit)
+npm run test:e2e          # playwright (e2e, against the production build —
+                           # playwright.config.ts's webServer runs
+                           # `npm run build && npm run preview`)
+```
+
+## Deployment
+
+Deployed to GitHub Pages on every push to `main` via
+`.github/workflows/deploy-web.yml`: builds the `dc` CLI and WASM
+validator, builds the web app (including preview generation), runs the
+full Playwright suite against the production build, and publishes
+`web/dist`. See that workflow for the exact steps.
+
+`vite.config.ts` uses a relative `base: './'` so the build works from any
+path, including a GitHub Pages *project* site
+(`https://<user>.github.io/<repo>/`) rather than a domain root.
+
+**Site URL**: to be filled in once the repository has a GitHub remote and
+Pages is enabled (Settings → Pages → Source: GitHub Actions).

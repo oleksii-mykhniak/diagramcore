@@ -28,7 +28,10 @@ function init(): Promise<void> {
   if (!ready) {
     ready = (async () => {
       const go = new window.Go();
-      const resp = await fetch('/dc.wasm');
+      // Relative to BASE_URL (not the origin root) so this resolves
+      // correctly when the app is served from a subpath, e.g. a GitHub
+      // Pages project site (PLAN.md step 8.4).
+      const resp = await fetch(`${import.meta.env.BASE_URL}dc.wasm`);
       const bytes = await resp.arrayBuffer();
       const { instance } = await WebAssembly.instantiate(bytes, go.importObject);
       // main() registers window.validate synchronously before parking on

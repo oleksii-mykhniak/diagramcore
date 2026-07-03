@@ -14,6 +14,6 @@ export const examples: ExampleEntry[] = Object.entries(modules)
   .map(([filePath, text]) => {
     const fileName = filePath.split('/').pop() as string;
     const base = fileName.replace(/\.dc\.yaml$/, '');
-    return { fileName, text: text as string, previewUrl: `/example-previews/${base}.svg` };
+    return { fileName, text: text as string, previewUrl: `${import.meta.env.BASE_URL}example-previews/${base}.svg` };
   })
   .sort((a, b) => a.fileName.localeCompare(b.fileName));

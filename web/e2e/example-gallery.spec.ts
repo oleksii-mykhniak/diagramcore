@@ -17,9 +17,9 @@ test('example previews are build-generated SVGs, not hand-drawn images', async (
   await page.goto('/');
   const img = page.getByTestId('example-auth-system.dc.yaml').locator('img');
   const src = await img.getAttribute('src');
-  expect(src).toBe('/example-previews/auth-system.svg');
+  expect(src).toMatch(/example-previews\/auth-system\.svg$/);
 
-  const response = await request.get(src as string);
+  const response = await request.get(new URL(src as string, page.url()).toString());
   expect(response.ok()).toBe(true);
   const body = await response.text();
   expect(body).toContain('<svg');
