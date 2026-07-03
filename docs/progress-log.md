@@ -491,3 +491,24 @@
   React Flow-канві теж відтворює позицію точно ✅; `npm test` (19),
   `npm run build`, повний `npx playwright test` (16) зелені ✅.
 
+### Крок 6.3 — Flow-плеєр на React Flow
+- Дата: 2026-07-03
+- Виконано: перенесення виявилось здебільшого "безкоштовним" — `FlowCanvas`
+  вже з кроку 6.1 приймає ті самі `activeStep`/`visitedStepKeys`, що і
+  старий SVG-в'ювер, і прокидує їх у `data-active`/`data-visited`
+  ребер/вузлів; сам плеєр (`FlowPlayer.tsx`, `flowPlayer.ts`) — спільний
+  компонент, не прив'язаний до конкретної канви. Додано лише
+  анімований маркер: `DcEdge` рендерить `<circle><animateMotion
+  path={path} .../></circle>` поверх активного ребра (аналог
+  `<animateMotion>` у старому в'ювері); реверс шляху для "response"-кроків
+  (як у SVG-в'ювері) свідомо не перенесено в цьому кроці — маркер завжди
+  йде від source до target ребра, незалежно від напрямку кроку
+  (зафіксовано нижче в `docs/deviations.md`).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/react-flow-flow-player.spec.ts` — вибір flow і 3×
+  "next" → перші 2 ребра `data-visited`, 3-тє `data-active`, панель
+  показує note 3-го кроку, `rf-flow-marker-*` присутній ✅; autoplay
+  проходить 6-кроковий flow до кінця, "Next" стає disabled ✅;
+  `npm test` (19), `npm run build`, повний `npx playwright test` (18)
+  зелені ✅.
+

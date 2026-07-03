@@ -44,6 +44,11 @@ export function DcEdge({
         data-visited={isVisited || undefined}
         style={{ stroke, strokeWidth: isActive ? 3 : isVisited ? 2 : 1.5 }}
       />
+      {isActive && (
+        <circle r={5} fill="#e04b4b" data-testid={`rf-flow-marker-${id}`}>
+          <animateMotion dur="1.2s" repeatCount="indefinite" path={path} />
+        </circle>
+      )}
       {edgeData?.label && (
         <EdgeLabelRenderer>
           <div
