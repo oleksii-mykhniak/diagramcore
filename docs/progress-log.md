@@ -349,3 +349,23 @@
   мусив використати `http://localhost:4173`, а не `127.0.0.1:4173` — `vite
   preview` на цій машині слухає лише IPv6-loopback для "localhost", тож
   IPv4-літерал не з'єднувався і `webServer` очікування зависало.
+
+### Крок 5.3 — Drag & drop → layout.json
+- Дата: 2026-07-03
+- Виконано: `src/layoutFile.ts` дзеркалить `internal/layout` (Go):
+  `buildLayoutFile`/`parseLayoutFile`/`layoutFileName`/
+  `downloadLayoutFile`. `DiagramView` тепер бере окрему мапу `positions`
+  (замість координат прямо з elk-layout) + опційний `onNodeDrag`
+  (pointerdown/move/up, координати через `getScreenCTM().inverse()`);
+  ребра не перемаршрутизуються після перетягування — той самий
+  спрощення, що й у CLI (deviations.md, крок 4.2). `App.tsx` володіє
+  станом `positions`, кнопки "Export layout" / "Import layout".
+  Застосунок ніколи не переписує відкритий `*.dc.yaml`.
+- Коміт: `450fc1d`
+- AC: Playwright — перетягнути `Gateway` → експортований JSON відрізняється
+  від pre-drag експорту, вихідний YAML побайтово незмінний ✅; експорт →
+  reload → import відновлює ту саму позицію ✅; вручну крос-перевірено з
+  CLI: перетягнуто в браузері, експортовано layout, підкладено в `dc
+  render --layout-file` — позиція в SVG збігається з точністю до
+  субпікселя (257.92,301.25 у браузері проти 257,301 у CLI SVG, набагато
+  точніше за допуск ±5px) ✅.
