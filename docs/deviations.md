@@ -141,24 +141,29 @@
 
 ## Крок 8.4 — Деплой і CI
 - Причина: план вимагає "Сайт доступний за публічним URL... URL
-  зафіксувати в README" — у цього репозиторію ще немає GitHub-remote
-  (`git remote -v` порожній), тож push і увімкнення GitHub Pages
-  (Settings → Pages → Source: GitHub Actions) — дії, які має виконати
-  власник репозиторію, не агент (додавання remote і push — це дії, що
-  впливають на спільний/публічний стан).
+  зафіксувати в README" — репозиторій спершу не мав GitHub-remote.
+  Власник підтвердив (в чаті) створення репозиторію й увімкнення Pages
+  через `gh`, тож ці дії виконано з його прямого дозволу, а не
+  самовільно.
 - Рішення: обрано GitHub Pages (не Cloudflare Pages) — найпростіший
   варіант без додаткового акаунта, вже передбачений у плані як опція
-  "вирішити при виконанні". Все, що можна перевірити локально,
-  перевірено: `.github/workflows/deploy-web.yml` (build dc + wasm →
-  `npm run build` → `npx playwright test` проти прод-білда →
-  `actions/deploy-pages`) і `.github/workflows/ci.yml` (той самий шлях
-  без деплою, для PR/push); `vite.config.ts` — `base: './'` +
+  "вирішити при виконанні". `gh repo create oleksii-mykhniak/diagramcore`
+  (спершу приватний — власник обрав це в AskUserQuestion), `git push -u
+  origin main`, `gh api -X POST repos/.../pages -f build_type=workflow`
+  → GitHub відхилив Pages для приватного репо (план акаунту не
+  підтримує); за підтвердженням власника репозиторій переведено в
+  public (`gh repo edit --visibility public`), після чого Pages
+  увімкнувся. Перший `Deploy web` run впав на кроці
+  `actions/deploy-pages@v4` з "Deployment failed, try again later" —
+  типова тимчасова затримка провіжинінгу Pages одразу після першого
+  увімкнення; `gh run rerun --failed` пройшов успішно з другої спроби.
+  `.github/workflows/deploy-web.yml` (build dc + wasm → `npm run build`
+  → `npx playwright test` проти прод-білда → `actions/deploy-pages`) і
+  `.github/workflows/ci.yml` (той самий шлях без деплою, для PR/push)
+  обидва зелені на GitHub Actions; `vite.config.ts` — `base: './'` +
   виправлені абсолютні шляхи (`wasmValidate.ts` fetch, `examples.ts`
-  превью-URL) на відносні до `import.meta.env.BASE_URL`, щоб працювало
-  з підшляху GitHub Pages (`user.github.io/repo/`), а не лише з кореня
-  домену; вручну прогнано повний `npx playwright test` проти
-  `vite preview` прод-білда — 36/36 зелені, WASM-валідація працює.
-  Публічний URL і фактичний деплой — залишається власнику: додати
-  remote, `git push`, увімкнути Pages, вписати URL у `web/README.md`
-  (розділ "Site URL") замість плейсхолдера.
+  превью-URL) на відносні до `import.meta.env.BASE_URL` — перевірено
+  вручну на живому сайті (`curl` на `/`, `/dc.wasm`,
+  `/example-previews/auth-system.svg` — усі 200).
+  Сайт: https://oleksii-mykhniak.github.io/diagramcore/
 - Дата: 2026-07-03, коміт: (див. `phase8-step4` у progress-log.md)

@@ -882,11 +882,14 @@
   прод-білд, відкритий через `vite preview` (файл-сервер), працює з
   WASM-валідацією — весь `npx playwright test` (36 тестів, включно з
   `problems-panel.spec.ts`, який напряму залежить від WASM-валідатора)
-  зелений проти прод-білда ✅. Публічний URL — **не зафіксовано**: у
-  репозиторію ще немає GitHub remote, тож push і увімкнення Pages —
-  дія власника (див. `docs/deviations.md`, крок 8.4); після push і
-  enable Pages лишається вписати URL у `web/README.md`.
+  зелений проти прод-білда ✅. Сайт доступний за публічним URL
+  (з прямого дозволу власника: `gh repo create`, push, `gh api ...
+  pages`, репозиторій переведено в public для увімкнення Pages на
+  безкоштовному плані — деталі в `docs/deviations.md`, крок 8.4):
+  https://oleksii-mykhniak.github.io/diagramcore/ — відкриває галерею
+  прикладів (перевірено `curl` на `/`, `/dc.wasm`,
+  `/example-previews/auth-system.svg`, усі 200) ✅; URL вписано в
+  `web/README.md`.
 
-**Фаза 8 завершена (крім ручного кроку "додати remote і увімкнути
-GitHub Pages" — власника репозиторію).**
+**Фаза 8 завершена.**
 

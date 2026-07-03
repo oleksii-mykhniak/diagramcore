@@ -56,5 +56,4 @@ full Playwright suite against the production build, and publishes
 path, including a GitHub Pages *project* site
 (`https://<user>.github.io/<repo>/`) rather than a domain root.
 
-**Site URL**: to be filled in once the repository has a GitHub remote and
-Pages is enabled (Settings → Pages → Source: GitHub Actions).
+**Site URL**: https://oleksii-mykhniak.github.io/diagramcore/
