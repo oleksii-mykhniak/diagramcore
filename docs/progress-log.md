@@ -110,3 +110,36 @@
   `go test`, `go vet`, збірка `dc`, `./dc validate examples/*.dc.yaml`.
 - Коміт: `1baf1c3`
 - AC: локальна симуляція тих самих команд у shell пройшла зелено ✅.
+
+## Фаза 2 — Генератор AI-контексту
+
+### Крок 2.1 — Генератор
+- Дата: 2026-07-03
+- Виконано: `internal/context.Generate(d, deep)` — markdown: заголовок +
+  purpose/audience → Components (тип, label, description, ai_context,
+  згадка `details`) → Links (людською мовою `from -> to (type): label`)
+  → секція на кожен Flow (нумеровані кроки, branch — відступні
+  Then/Else). `deep=true` рекурсивно інлайнить `details` з множиною
+  відвіданих файлів (канонічний абсолютний шлях) — кожна під-діаграма
+  інлайниться один раз навіть при циклі/повторі.
+- Коміт: `3f097d6`
+- AC: golden-тести для всіх 3 examples (`internal/context/testdata/golden/`,
+  оновлення через `go test -update`) ✅; вивід auth-system містить усі
+  5 вузлів, усі links (перевірені мітки), обидва flows, і не містить
+  стороннього вузла (`Ghost`) ✅; невалідний файл — перевіряється на
+  рівні CLI (крок 2.2).
+
+### Крок 2.2 — CLI-інтеграція
+- Дата: 2026-07-03
+- Виконано: `dc context <file> [-o out.md] [--deep]` у `cmd/dc/main.go`.
+  Спершу `validate.ValidateFile`; якщо є помилки валідації — вони
+  друкуються, exit 1, генерація не відбувається. Прапорці парсяться
+  вручну (не через `flag.FlagSet`), бо документована форма CLI ставить
+  прапорці після позиційного `<file>`, що стандартний `flag` не підтримує.
+- Коміт: `3f097d6`
+- AC (перевірено вручну): `./dc context examples/auth-system.dc.yaml
+  -o /tmp/ctx.md` → файл створено, exit 0 ✅; `./dc context
+  examples/auth-system.dc.yaml --deep` містить вузли з `oauth-detail`
+  (`OAuthGateway` та ін.) ✅; `./dc context
+  internal/validate/testdata/dc004_flow_no_link.dc.yaml` → exit 1,
+  друкує помилку валідації, файл не створюється ✅.
