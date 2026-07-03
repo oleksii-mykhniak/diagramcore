@@ -21,13 +21,13 @@ async function exportLayout(page: import('@playwright/test').Page) {
 test('a node with details is marked, nodes without details are not', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles([authSystemPath, oauthDetailPath]);
-  await expect(page.getByTestId('diagram-svg')).toBeVisible();
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await expect(page.getByTestId('node-OAuthProvider')).toHaveAttribute('data-has-details', 'true');
-  await expect(page.getByTestId('details-marker-OAuthProvider')).toBeVisible();
+  await expect(page.getByTestId('rf-node-OAuthProvider')).toHaveAttribute('data-has-details', 'true');
+  await expect(page.getByTestId('rf-details-marker-OAuthProvider')).toBeVisible();
 
   for (const id of ['User', 'Gateway', 'AuthService', 'DB']) {
-    await expect(page.getByTestId(`node-${id}`)).not.toHaveAttribute('data-has-details', 'true');
+    await expect(page.getByTestId(`rf-node-${id}`)).not.toHaveAttribute('data-has-details', 'true');
   }
 });
 
@@ -36,12 +36,12 @@ test('double-clicking a details node drills down, breadcrumbs track both levels,
 }) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles([authSystemPath, oauthDetailPath]);
-  await expect(page.getByTestId('diagram-svg')).toBeVisible();
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
   // Drag Gateway away from its auto-layout position and pick a flow, so
   // returning via the breadcrumb has actual state to preserve (rather than
   // trivially matching because auto-layout is deterministic).
-  const box = await page.getByTestId('node-Gateway').boundingBox();
+  const box = await page.getByTestId('rf-node-Gateway').boundingBox();
   if (!box) throw new Error('Gateway has no bounding box');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
@@ -52,24 +52,24 @@ test('double-clicking a details node drills down, breadcrumbs track both levels,
   await page.getByTestId('flow-next').click();
   await page.getByTestId('flow-next').click();
 
-  // Exported (SVG-space) position is immune to page-layout shifts caused
+  // Exported (canvas-space) position is immune to page-layout shifts caused
   // by the flow-player panel changing height, unlike a screen bounding box.
   const draggedLayout = await exportLayout(page);
   const draggedGatewayPos = draggedLayout.views.default.positions.Gateway;
 
-  await page.getByTestId('node-OAuthProvider').dblclick();
+  await page.getByTestId('rf-node-OAuthProvider').dblclick();
 
-  await expect(page.getByTestId('node-OAuthGateway')).toBeVisible();
-  await expect(page.getByTestId('node-ConsentScreen')).toBeVisible();
-  await expect(page.getByTestId('node-TokenIssuer')).toBeVisible();
-  await expect(page.getByTestId('node-TokenStore')).toBeVisible();
+  await expect(page.getByTestId('rf-node-OAuthGateway')).toBeVisible();
+  await expect(page.getByTestId('rf-node-ConsentScreen')).toBeVisible();
+  await expect(page.getByTestId('rf-node-TokenIssuer')).toBeVisible();
+  await expect(page.getByTestId('rf-node-TokenStore')).toBeVisible();
 
   await expect(page.getByTestId('breadcrumb-0')).toHaveText('Система авторизації');
   await expect(page.getByTestId('breadcrumb-1')).toHaveText('OAuth-провайдер: деталі');
 
   await page.getByTestId('breadcrumb-0').click();
 
-  await expect(page.getByTestId('node-Gateway')).toBeVisible();
+  await expect(page.getByTestId('rf-node-Gateway')).toBeVisible();
   const restoredLayout = await exportLayout(page);
   expect(restoredLayout.views.default.positions.Gateway).toEqual(draggedGatewayPos);
 
@@ -81,19 +81,19 @@ test('a broken details path shows a non-fatal error and keeps the current diagra
   // Open only auth-system, without oauth-detail.dc.yaml alongside it, so
   // the details reference cannot be resolved.
   await page.getByTestId('file-input').setInputFiles([authSystemPath]);
-  await expect(page.getByTestId('diagram-svg')).toBeVisible();
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await page.getByTestId('node-OAuthProvider').dblclick();
+  await page.getByTestId('rf-node-OAuthProvider').dblclick();
 
   await expect(page.getByTestId('drill-error')).toBeVisible();
   // Still on the original diagram.
-  await expect(page.getByTestId('node-Gateway')).toBeVisible();
-  await expect(page.getByTestId('node-OAuthProvider')).toBeVisible();
+  await expect(page.getByTestId('rf-node-Gateway')).toBeVisible();
+  await expect(page.getByTestId('rf-node-OAuthProvider')).toBeVisible();
 });
 
 test('a details-free diagram has no markers at all', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles([paymentPath]);
-  await expect(page.getByTestId('diagram-svg')).toBeVisible();
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
   await expect(page.locator('[data-has-details]')).toHaveCount(0);
 });

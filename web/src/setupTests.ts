@@ -1,5 +1,15 @@
 import '@testing-library/jest-dom/vitest';
 
+// jsdom has no ResizeObserver; @xyflow/react observes the canvas container
+// to size itself, so polyfill a no-op for tests.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 // jsdom's File/Blob implementation doesn't provide .text() in this
 // environment; App.tsx relies on it (the real browser File API always
 // has it), so polyfill it for tests via FileReader.

@@ -75,7 +75,7 @@ export interface FlowHighlight {
   visitedStepKeys: Set<string>;
 }
 
-/** Derives the DiagramView highlight (active/visited edges) from a
+/** Derives the canvas highlight (active/visited edges) from a
  * FlowPlayerState; pure so it can be recomputed on every render/level
  * switch without any component owning derived state. */
 export function computeFlowHighlight(diagram: Diagram, state: FlowPlayerState): FlowHighlight {

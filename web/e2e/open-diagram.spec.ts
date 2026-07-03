@@ -10,10 +10,10 @@ test('opening auth-system.dc.yaml shows all 5 nodes and 4 edges', async ({ page 
 
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
 
-  await expect(page.getByTestId('diagram-svg')).toBeVisible();
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
   for (const id of ['User', 'Gateway', 'AuthService', 'OAuthProvider', 'DB']) {
-    await expect(page.getByTestId(`node-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`rf-node-${id}`)).toBeVisible();
   }
 
   const edges = [
@@ -23,6 +23,6 @@ test('opening auth-system.dc.yaml shows all 5 nodes and 4 edges', async ({ page 
     ['AuthService', 'DB'],
   ];
   for (const [from, to] of edges) {
-    await expect(page.getByTestId(`edge-${from}-${to}`)).toBeAttached();
+    await expect(page.locator(`[data-testid^="rf-edge-link-"][id*="${from}-${to}"]`)).toHaveCount(1);
   }
 });

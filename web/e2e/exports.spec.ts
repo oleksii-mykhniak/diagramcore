@@ -13,7 +13,7 @@ const dcBinary = path.join(repoRoot, 'dc');
 test('exporting PNG downloads a non-empty file', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
-  await expect(page.getByTestId('diagram-svg')).toBeVisible();
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-png').click();
@@ -32,7 +32,7 @@ test('exporting PNG downloads a non-empty file', async ({ page }) => {
 test('exporting the AI context markdown matches `dc context` for the same file', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
-  await expect(page.getByTestId('diagram-svg')).toBeVisible();
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-context').click();
@@ -50,7 +50,7 @@ test('exporting the AI context markdown matches `dc context` for the same file',
 test('exporting flow steps as a zip contains one PNG per step', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
-  await expect(page.getByTestId('diagram-svg')).toBeVisible();
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
   await expect(page.getByTestId('export-flow-steps-zip')).toBeDisabled();
   await page.getByTestId('flow-select').selectOption({ label: 'Успішна авторизація через OAuth' });

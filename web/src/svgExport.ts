@@ -24,7 +24,7 @@ function edgeForStep(edges: LayoutEdge[], step: { from: string; to: string }): L
 }
 
 /** Renders diagram + layout + positions to a standalone SVG string, with
- * the same visual rules as components/DiagramView (active/visited flow
+ * the same visual rules as the on-screen canvas (active/visited flow
  * steps, details markers) — used for PNG export, where we need a
  * self-contained SVG document rather than a live DOM node. */
 export function renderDiagramSVGString(

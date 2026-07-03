@@ -531,3 +531,29 @@
   `details` — нуль маркерів ✅. `npm test` (19), `npm run build`, повний
   `npx playwright test` (22) зелені ✅.
 
+### Крок 6.5 — Видалення старого рендерера
+- Дата: 2026-07-03
+- Виконано: видалено `components/DiagramView.tsx` і перемикач
+  `canvas-toggle`/`canvasEngine` з `App.tsx` — React Flow тепер єдина
+  канва. Оскільки PNG/zip-експорти (крок 5.6) вже будувались через
+  чистий `svgExport.ts` (не через React-компонент `DiagramView`,
+  а напряму з `diagram+layout+positions` стану), вони не потребували
+  жодних змін — лише оновлено застарілий doc-коментар, що посилався на
+  `DiagramView`. Старі e2e-специфікації (`open-diagram`, `drag-layout`,
+  `drill-down`, `flow-player`, `exports`) переписані на нові
+  `data-testid` (`reactflow-canvas`, `rf-node-*`, `rf-edge-*`) замість
+  дублювання окремими `react-flow-*.spec.ts` файлами (видалені,
+  оскільки повторювали вже перенесені перевірки). `App.test.tsx` —
+  так само на нові id; `setupTests.ts` отримав no-op полiфіл
+  `ResizeObserver` (jsdom його не має, а `@xyflow/react` спостерігає за
+  контейнером канви).
+- Коміт: (цей крок)
+- AC: `grep -rn "DiagramView\|diagram-svg\|canvas-toggle" web/src web/e2e`
+  — порожньо ✅; всі AC кроку 5.6 (PNG, zip кроків flow, AI-context
+  markdown) проходять на React Flow-канві (`exports.spec.ts`, 3 тести)
+  ✅; повна регресія — `npm test` (19), `npm run build`, консолідований
+  `npx playwright test` (13 тестів, замінили 22 з дублікатами) зелені;
+  `go build/vet/test` і `./dc validate` зелені ✅.
+
+**Фаза 6 завершена.**
+

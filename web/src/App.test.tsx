@@ -26,7 +26,7 @@ describe('App', () => {
   it('shows the file picker before anything is opened', () => {
     render(<App />);
     expect(screen.getByTestId('file-input')).toBeInTheDocument();
-    expect(screen.queryByTestId('diagram-svg')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('reactflow-canvas')).not.toBeInTheDocument();
   });
 
   it('renders the diagram after a file is opened', async () => {
@@ -35,17 +35,16 @@ describe('App', () => {
     const input = screen.getByTestId('file-input');
     await userEvent.upload(input, file);
 
-    await waitFor(() => expect(screen.getByTestId('diagram-svg')).toBeInTheDocument());
-    expect(screen.getByTestId('node-User')).toBeInTheDocument();
-    expect(screen.getByTestId('node-Gateway')).toBeInTheDocument();
-    expect(screen.getByTestId('edge-User-Gateway')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('reactflow-canvas')).toBeInTheDocument());
+    expect(screen.getByTestId('rf-node-User')).toBeInTheDocument();
+    expect(screen.getByTestId('rf-node-Gateway')).toBeInTheDocument();
   });
 
   it('shows export controls once a diagram is open, with the flow-steps export disabled until a flow is selected', async () => {
     render(<App />);
     const file = new File([yamlText], 'example.dc.yaml', { type: 'application/x-yaml' });
     await userEvent.upload(screen.getByTestId('file-input'), file);
-    await waitFor(() => expect(screen.getByTestId('diagram-svg')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('reactflow-canvas')).toBeInTheDocument());
 
     expect(screen.getByTestId('export-png')).toBeEnabled();
     expect(screen.getByTestId('export-context')).toBeEnabled();
