@@ -56,7 +56,7 @@ test('recording a flow by clicking edges produces a flow with correctly-ordered 
   expect(gatewayIdx).toBeLessThan(authIdx);
 
   // 0 validation errors (DC004 or otherwise) after recording.
-  await expect(page.getByTestId('validation-errors')).toHaveCount(0);
+  await expect(page.getByTestId('problems-ok')).toBeVisible();
 
   // Immediately playable by the flow player.
   await page.getByTestId('flow-select').selectOption({ label: 'Recorded scenario' });

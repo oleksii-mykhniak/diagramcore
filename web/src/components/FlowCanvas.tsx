@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { DragEvent } from 'react';
 import {
   Background,
@@ -44,6 +44,11 @@ interface Props {
   hoveredLinkIndex?: number | null;
   onEdgeHover?: (index: number | null) => void;
   onEdgeClick?: (index: number) => void;
+  /** Bump `focusNonce` (any change) alongside `focusNodeId` to re-trigger
+   * the pan/zoom even if the same node is focused twice in a row
+   * (PLAN.md step 7.6, Problems panel "click to focus"). */
+  focusNodeId?: string | null;
+  focusNonce?: number;
 }
 
 function FlowCanvasInner({
@@ -61,8 +66,18 @@ function FlowCanvasInner({
   hoveredLinkIndex,
   onEdgeHover,
   onEdgeClick,
+  focusNodeId,
+  focusNonce,
 }: Props) {
   const nodeById = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram.nodes]);
+  const { fitView, screenToFlowPosition } = useReactFlow();
+
+  useEffect(() => {
+    if (!focusNodeId) return;
+    void fitView({ nodes: [{ id: focusNodeId }], duration: 300, maxZoom: 1.5 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNodeId, focusNonce]);
+
   // A single click commits a state update (selection) that recomputes the
   // `nodes` array passed into <ReactFlow>, which can churn the underlying
   // DOM node — if that happens between the two physical clicks of a
@@ -72,7 +87,6 @@ function FlowCanvasInner({
   // arrives first) keeps both gestures working (PLAN.md step 7.2).
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeKey = activeStep ? pairKey(activeStep.from, activeStep.to) : null;
-  const { screenToFlowPosition } = useReactFlow();
 
   const rfNodes: Node<DcNodeData>[] = useMemo(
     () =>

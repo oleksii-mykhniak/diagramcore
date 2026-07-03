@@ -14,6 +14,7 @@ import { LinksPanel } from './components/LinksPanel';
 import { FlowEditorPanel } from './components/FlowEditorPanel';
 import type { BranchTarget } from './components/FlowEditorPanel';
 import { YamlPanel } from './components/YamlPanel';
+import { ProblemsPanel } from './components/ProblemsPanel';
 import type { DiagramLink } from './types';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
@@ -62,6 +63,9 @@ export default function App() {
   const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
   const [recording, setRecording] = useState(false);
   const [branchTarget, setBranchTarget] = useState<BranchTarget | null>(null);
+  const [focusRequest, setFocusRequest] = useState<
+    { kind: 'node'; id: string; nonce: number } | { kind: 'line'; line: number; nonce: number } | null
+  >(null);
 
   const current = stack.length > 0 ? stack[stack.length - 1] : null;
   /** Mirrors the current level synchronously (React state updates are not
@@ -388,6 +392,25 @@ export default function App() {
     [recordingFlow, applyOps],
   );
 
+  const onSelectProblem = useCallback(
+    (error: ValidationError) => {
+      if (!current) return;
+      const nodeId = current.diagram.nodes.find((n) => error.message.includes(n.id))?.id;
+      if (nodeId) {
+        setSelectedNodeId(nodeId);
+        setFocusRequest((prev) => ({ kind: 'node', id: nodeId, nonce: (prev?.nonce ?? 0) + 1 }));
+        return;
+      }
+      const flowIndex = current.diagram.flows?.findIndex((f) => error.message.includes(f.name));
+      if (flowIndex !== undefined && flowIndex >= 0) {
+        updateCurrentLevel({ flowPlayerState: { flowIndex, currentIndex: -1, choices: {} } });
+        return;
+      }
+      setFocusRequest((prev) => ({ kind: 'line', line: error.line, nonce: (prev?.nonce ?? 0) + 1 }));
+    },
+    [current, updateCurrentLevel],
+  );
+
   const onRelayout = useCallback(async () => {
     if (!current) return;
     const recomputed = await computeLayout(current.diagram);
@@ -581,15 +604,7 @@ export default function App() {
             {drillError}
           </p>
         )}
-        {current && current.errors.length > 0 && (
-          <ul data-testid="validation-errors">
-            {current.errors.map((e) => (
-              <li key={`${e.file}:${e.line}:${e.code}`}>
-                {e.file}:{e.line} [{e.code}] {e.message}
-              </li>
-            ))}
-          </ul>
-        )}
+        {current && <ProblemsPanel errors={current.errors} onSelectError={onSelectProblem} />}
         {current && (
           <FlowPlayer diagram={current.diagram} state={current.flowPlayerState} onChange={onFlowPlayerChange} />
         )}
@@ -624,6 +639,8 @@ export default function App() {
                 hoveredLinkIndex={hoveredLinkIndex}
                 onEdgeHover={setHoveredLinkIndex}
                 onEdgeClick={onEdgeClickRecord}
+                focusNodeId={focusRequest?.kind === 'node' ? focusRequest.id : null}
+                focusNonce={focusRequest?.nonce}
                 activeStep={highlight?.activeStep ?? undefined}
                 visitedStepKeys={highlight?.visitedStepKeys}
               />
@@ -649,7 +666,12 @@ export default function App() {
         {current && (
           <div style={{ marginTop: 16, borderTop: '1px solid #ccc', paddingTop: 8 }}>
             <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>YAML</h3>
-            <YamlPanel text={current.rawText} onCommit={(text) => void applyTextReplace(text)} />
+            <YamlPanel
+              text={current.rawText}
+              onCommit={(text) => void applyTextReplace(text)}
+              focusLine={focusRequest?.kind === 'line' ? focusRequest.line : null}
+              focusNonce={focusRequest?.nonce}
+            />
           </div>
         )}
         {current && (

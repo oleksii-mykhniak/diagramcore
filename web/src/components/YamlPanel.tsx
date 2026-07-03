@@ -47,6 +47,11 @@ function diffRange(oldText: string, newText: string): { from: number; to: number
 interface Props {
   text: string;
   onCommit: (text: string) => void;
+  /** Bump `focusNonce` alongside `focusLine` to move the cursor there and
+   * scroll it into view even if the same line is focused twice in a row
+   * (PLAN.md step 7.6, Problems panel "click to focus"). */
+  focusLine?: number | null;
+  focusNonce?: number;
 }
 
 const DEBOUNCE_MS = 300;
@@ -57,7 +62,7 @@ const DEBOUNCE_MS = 300;
  * back in as minimal, cursor-preserving CodeMirror changes. Invalid input
  * simply isn't committed — the canvas keeps showing the last valid
  * state, and the panel shows an inline error instead. */
-export function YamlPanel({ text, onCommit }: Props) {
+export function YamlPanel({ text, onCommit, focusLine, focusNonce }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const lastCommittedRef = useRef(text);
@@ -88,6 +93,11 @@ export function YamlPanel({ text, onCommit }: Props) {
       parent: containerRef.current,
     });
     viewRef.current = view;
+    // Test-only hook: lets e2e specs dispatch precise transactions
+    // (CodeMirror virtualizes offscreen lines, so simulating clicks/
+    // keystrokes on arbitrary far-down lines is unreliable) without
+    // reaching into CodeMirror's private DOM internals.
+    (containerRef.current as unknown as { __cmView?: EditorView }).__cmView = view;
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       view.destroy();
@@ -111,6 +121,16 @@ export function YamlPanel({ text, onCommit }: Props) {
     view.dispatch({ changes: change });
     lastCommittedRef.current = text;
   }, [text]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || focusLine === undefined || focusLine === null) return;
+    const lineNumber = Math.min(Math.max(1, focusLine), view.state.doc.lines);
+    const line = view.state.doc.line(lineNumber);
+    view.dispatch({ selection: { anchor: line.from, head: line.to }, scrollIntoView: true });
+    view.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusLine, focusNonce]);
 
   return (
     <div>
