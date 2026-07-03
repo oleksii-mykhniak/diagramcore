@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { parseDiagram } from './parseDiagram';
 import { generateContext, validateDiagram } from './wasmValidate';
@@ -76,6 +76,32 @@ export default function App() {
    * each one builds on the previous one's result. */
   const levelRef = useRef<DiagramLevel | null>(null);
   const applyChainRef = useRef<Promise<void>>(Promise.resolve());
+  /** Undo/redo history (PLAN.md step 7.7): a single stack of previous
+   * `rawText` snapshots per level, covering every YAML-document mutation
+   * regardless of whether it came from the canvas (`applyOps`) or the
+   * YAML panel (`applyTextReplace`) — node drag/layout-only changes don't
+   * touch `rawText`, so they're outside undo's scope, matching the plan's
+   * "history at the YAML document level". Capped at 50 entries. */
+  const HISTORY_LIMIT = 50;
+  const historyRef = useRef<{ past: string[]; future: string[] }>({ past: [], future: [] });
+  const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
+  const syncHistoryCounts = useCallback(() => {
+    setHistoryCounts({ past: historyRef.current.past.length, future: historyRef.current.future.length });
+  }, []);
+  const resetHistory = useCallback(() => {
+    historyRef.current = { past: [], future: [] };
+    syncHistoryCounts();
+  }, [syncHistoryCounts]);
+  const pushHistory = useCallback(
+    (previousText: string) => {
+      const h = historyRef.current;
+      h.past.push(previousText);
+      if (h.past.length > HISTORY_LIMIT) h.past.shift();
+      h.future = [];
+      syncHistoryCounts();
+    },
+    [syncHistoryCounts],
+  );
 
   const buildLevel = useCallback(async (fileName: string, text: string): Promise<DiagramLevel> => {
     const parsed = parseDiagram(text);
@@ -104,14 +130,16 @@ export default function App() {
         const [primaryName, primaryText] = contents[0];
         const level = await buildLevel(primaryName, primaryText);
         levelRef.current = level;
+        resetHistory();
         setStack([level]);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : String(err));
         levelRef.current = null;
+        resetHistory();
         setStack([]);
       }
     },
-    [buildLevel],
+    [buildLevel, resetHistory],
   );
 
   const onFileInput = useCallback(
@@ -134,12 +162,21 @@ export default function App() {
   }, []);
 
   const updateCurrentLevel = useCallback((patch: Partial<DiagramLevel>) => {
+    if (!levelRef.current) return;
+    // Compute and assign the merged level to `levelRef` right here,
+    // synchronously — NOT inside the `setStack` updater. React 18 batches
+    // state updates and does not guarantee updater functions run
+    // synchronously at call time (they may run later, when the batch is
+    // flushed), so mirroring into `levelRef` from inside the updater let
+    // a second `applyOps`/`applyTextReplace` call — fired immediately
+    // after, before the batch flushed — read a stale `levelRef.current`
+    // and race the first one (see docs/deviations.md, step 7.7).
+    const merged = { ...levelRef.current, ...patch };
+    levelRef.current = merged;
     setStack((prev) => {
       if (prev.length === 0) return prev;
       const next = [...prev];
-      const merged = { ...next[next.length - 1], ...patch };
       next[next.length - 1] = merged;
-      levelRef.current = merged;
       return next;
     });
   }, []);
@@ -170,6 +207,7 @@ export default function App() {
           positions[opts.manualPosition.id] = opts.manualPosition.pos;
           manualPositionIds.add(opts.manualPosition.id);
         }
+        if (newText !== level.rawText) pushHistory(level.rawText);
         updateCurrentLevel({
           rawText: newText,
           diagram: newDiagram,
@@ -187,7 +225,7 @@ export default function App() {
       applyChainRef.current = next;
       return next;
     },
-    [updateCurrentLevel],
+    [updateCurrentLevel, pushHistory],
   );
 
   /** Commits arbitrary already-valid YAML text (from the YAML panel,
@@ -213,6 +251,7 @@ export default function App() {
           positions[n.id] =
             manualPositionIds.has(n.id) && level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
         }
+        if (text !== level.rawText) pushHistory(level.rawText);
         updateCurrentLevel({
           rawText: text,
           diagram: newDiagram,
@@ -226,8 +265,88 @@ export default function App() {
       applyChainRef.current = next;
       return next;
     },
-    [updateCurrentLevel],
+    [updateCurrentLevel, pushHistory],
   );
+
+  /** Undo/redo (PLAN.md step 7.7): moves a snapshot between the past/
+   * future stacks and re-derives the level from it exactly like
+   * `applyTextReplace`, but without touching history itself. Serialized
+   * through the same queue as every other mutation. */
+  const onUndo = useCallback(() => {
+    const run = async () => {
+      const level = levelRef.current;
+      const h = historyRef.current;
+      if (!level || h.past.length === 0) return;
+      const text = h.past.pop() as string;
+      h.future.push(level.rawText);
+      syncHistoryCounts();
+      let newDiagram;
+      try {
+        newDiagram = parseDiagram(text);
+      } catch {
+        return;
+      }
+      const newErrors = await validateDiagram(text);
+      const recomputed = await computeLayout(newDiagram);
+      const manualPositionIds = new Set(level.manualPositionIds);
+      const positions: Record<string, LayoutPosition> = {};
+      for (const n of recomputed.nodes) {
+        positions[n.id] =
+          manualPositionIds.has(n.id) && level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
+      }
+      updateCurrentLevel({ rawText: text, diagram: newDiagram, errors: newErrors, layout: recomputed, positions, manualPositionIds });
+    };
+    const next = applyChainRef.current.then(run, run);
+    applyChainRef.current = next;
+    return next;
+  }, [updateCurrentLevel, syncHistoryCounts]);
+
+  const onRedo = useCallback(() => {
+    const run = async () => {
+      const level = levelRef.current;
+      const h = historyRef.current;
+      if (!level || h.future.length === 0) return;
+      const text = h.future.pop() as string;
+      h.past.push(level.rawText);
+      if (h.past.length > HISTORY_LIMIT) h.past.shift();
+      syncHistoryCounts();
+      let newDiagram;
+      try {
+        newDiagram = parseDiagram(text);
+      } catch {
+        return;
+      }
+      const newErrors = await validateDiagram(text);
+      const recomputed = await computeLayout(newDiagram);
+      const manualPositionIds = new Set(level.manualPositionIds);
+      const positions: Record<string, LayoutPosition> = {};
+      for (const n of recomputed.nodes) {
+        positions[n.id] =
+          manualPositionIds.has(n.id) && level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
+      }
+      updateCurrentLevel({ rawText: text, diagram: newDiagram, errors: newErrors, layout: recomputed, positions, manualPositionIds });
+    };
+    const next = applyChainRef.current.then(run, run);
+    applyChainRef.current = next;
+    return next;
+  }, [updateCurrentLevel, syncHistoryCounts]);
+
+  // Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z anywhere in the app trigger the single
+  // shared history, including while focus is inside the CodeMirror YAML
+  // panel — captured on `window` in the capture phase and stopped there,
+  // so CodeMirror's own (per-keystroke, YAML-panel-only) undo never sees
+  // the event and the two histories can't diverge (PLAN.md step 7.7).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) void onRedo();
+      else void onUndo();
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [onUndo, onRedo]);
 
   const onDropNodeType = useCallback(
     (type: string, pos: LayoutPosition) => {
@@ -507,12 +626,13 @@ export default function App() {
       try {
         const level = await buildLevel(basename, text);
         levelRef.current = level;
+        resetHistory();
         setStack((prev) => [...prev, level]);
       } catch (err) {
         setDrillError(err instanceof Error ? err.message : String(err));
       }
     },
-    [virtualFS, buildLevel],
+    [virtualFS, buildLevel, resetHistory],
   );
 
   const goToLevel = useCallback((index: number) => {
@@ -520,9 +640,10 @@ export default function App() {
     setStack((prev) => {
       const next = prev.slice(0, index + 1);
       levelRef.current = next[next.length - 1] ?? null;
+      resetHistory();
       return next;
     });
-  }, []);
+  }, [resetHistory]);
 
   const highlight = current ? computeFlowHighlight(current.diagram, current.flowPlayerState) : null;
   const selectedNode = current?.diagram.nodes.find((n) => n.id === selectedNodeId) ?? null;
@@ -568,6 +689,12 @@ export default function App() {
             </button>{' '}
             <button type="button" data-testid="relayout" onClick={() => void onRelayout()}>
               Re-layout
+            </button>{' '}
+            <button type="button" data-testid="undo" onClick={() => void onUndo()} disabled={historyCounts.past === 0}>
+              Undo
+            </button>{' '}
+            <button type="button" data-testid="redo" onClick={() => void onRedo()} disabled={historyCounts.future === 0}>
+              Redo
             </button>
           </>
         )}
