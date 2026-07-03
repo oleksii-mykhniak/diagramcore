@@ -415,3 +415,25 @@
   bounding box "плавав" через зміну висоти flow-player панелі), і
   вибраний flow з прогресом ✅; битий `details`-шлях (файл не відкритий
   разом) → помилка, поточна діаграма лишається ✅.
+
+### Крок 5.6 — Експорти
+- Дата: 2026-07-03
+- Виконано: `cmd/wasm` отримав другий глобал — `context(yamlString) ->
+  string`, `internal/context.Generate(d, false)` на діаграмі, розпарсеній
+  через `ParseString` (завжди non-deep — deep-режим потребує файлової
+  системи, якої тут нема). `svgExport.ts` — чистий (не React)
+  SVG-string-білдер `renderDiagramSVGString` (дзеркалить вигляд
+  `DiagramView`: flow-підсвітку, маркер `details`, `animateMotion`) +
+  `svgStringToPngBlob` (offscreen `<canvas>`) + `downloadBlob`.
+  `flowPlayer.ts` отримав `flowStepFrames` — веб-еквівалент Go
+  `transpile.FlowStepFrames`, але на вже розв'язаному (обраними гілками)
+  списку кроків. `App.tsx` — кнопки "Export PNG", "Export flow steps
+  (zip)" (fflate `zipSync`), "Export AI context (markdown)".
+- Коміт: `06f097f`
+- AC: PNG-експорт непорожній з коректними PNG-магічними байтами ✅;
+  markdown-експорт побайтово ідентичний `dc context
+  auth-system.dc.yaml` (виклик реального бінарника `dc` з Playwright-тесту)
+  ✅; zip з кроками flow (fflate `unzipSync`) містить рівно
+  `step-01..06.png` для 6-крокового OAuth flow, кожен непорожній ✅.
+
+**Фаза 5 завершена. Весь PLAN.md виконано.**
