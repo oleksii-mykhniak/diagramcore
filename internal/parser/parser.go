@@ -38,3 +38,16 @@ func Parse(path string) (*model.Diagram, error) {
 
 	return &d, nil
 }
+
+// ParseString decodes yaml data into a model.Diagram without touching the
+// filesystem. Diagram.Path is left empty, so features that resolve paths
+// relative to it (details sub-diagram traversal) cannot be used on the
+// result — this is meant for contexts with no real filesystem, such as the
+// WASM validator (cmd/wasm).
+func ParseString(data []byte) (*model.Diagram, error) {
+	var d model.Diagram
+	if err := yaml.Unmarshal(data, &d); err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+	return &d, nil
+}

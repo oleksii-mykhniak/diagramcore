@@ -8,6 +8,8 @@
 node_modules/
 web/dist/
 web/build/
+web/public/dc.wasm
+web/public/wasm_exec.js
 
 # OS
 .DS_Store

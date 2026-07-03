@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -104,5 +105,39 @@ func TestCyclicDetailsTerminatesAndReportsOnce(t *testing.T) {
 	}
 	if dc002Count != 1 {
 		t.Errorf("expected the DC002 error inside cyclic_b to be reported exactly once, got %d: %v", dc002Count, errs)
+	}
+}
+
+func TestValidateStringValidDiagram(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "examples", "payment-processing.dc.yaml"))
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	errs, err := ValidateString(string(data))
+	if err != nil {
+		t.Fatalf("ValidateString failed: %v", err)
+	}
+	if len(errs) != 0 {
+		t.Errorf("expected no errors, got: %v", errs)
+	}
+}
+
+func TestValidateStringBrokenDiagram(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "dc004_flow_no_link.dc.yaml"))
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	errs, err := ValidateString(string(data))
+	if err != nil {
+		t.Fatalf("ValidateString failed: %v", err)
+	}
+	var found bool
+	for _, e := range errs {
+		if e.Code == "DC004" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a DC004 error, got: %v", errs)
 	}
 }

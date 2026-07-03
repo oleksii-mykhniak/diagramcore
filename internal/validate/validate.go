@@ -62,6 +62,24 @@ func ValidateFile(path string) ([]Error, error) {
 	return validateDiagram(d, visited), nil
 }
 
+// ValidateString validates a single diagram given as raw yaml text, with
+// no filesystem access: `details` sub-diagram references are not followed
+// (there is no file to follow them to), so only structural/semantic rules
+// scoped to this one diagram are checked. Meant for contexts without a
+// real filesystem, such as the WASM validator (cmd/wasm).
+func ValidateString(yamlText string) ([]Error, error) {
+	d, err := parser.ParseString([]byte(yamlText))
+	if err != nil {
+		return nil, err
+	}
+	var errs []Error
+	errs = append(errs, checkDuplicateNodeIDs(d)...)
+	errs = append(errs, checkLinkNodesExist(d)...)
+	errs = append(errs, checkUnknownTypes(d)...)
+	errs = append(errs, checkFlows(d)...)
+	return errs, nil
+}
+
 func validateDiagram(d *model.Diagram, visited map[string]bool) []Error {
 	var errs []Error
 	errs = append(errs, checkDuplicateNodeIDs(d)...)
