@@ -10,6 +10,7 @@ import (
 	"oss.terrastruct.com/d2/d2graph"
 	"oss.terrastruct.com/d2/d2layouts/d2dagrelayout"
 	"oss.terrastruct.com/d2/d2lib"
+	"oss.terrastruct.com/d2/lib/log"
 	"oss.terrastruct.com/d2/lib/textmeasure"
 	"oss.terrastruct.com/util-go/go2"
 
@@ -31,7 +32,8 @@ func compilesAsD2(t *testing.T, src string) {
 		},
 		Ruler: ruler,
 	}
-	if _, _, err := d2lib.Compile(context.Background(), src, opts, nil); err != nil {
+	ctx := log.WithDefault(context.Background())
+	if _, _, err := d2lib.Compile(ctx, src, opts, nil); err != nil {
 		t.Fatalf("d2lib.Compile failed: %v\n--- source ---\n%s", err, src)
 	}
 }

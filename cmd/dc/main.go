@@ -12,6 +12,7 @@ import (
 
 	"github.com/oleksii94/diagramcore/internal/context"
 	"github.com/oleksii94/diagramcore/internal/parser"
+	"github.com/oleksii94/diagramcore/internal/render"
 	"github.com/oleksii94/diagramcore/internal/transpile"
 	"github.com/oleksii94/diagramcore/internal/validate"
 )
@@ -29,6 +30,8 @@ func main() {
 		os.Exit(runContext(os.Args[2:]))
 	case "export":
 		os.Exit(runExport(os.Args[2:]))
+	case "render":
+		os.Exit(runRender(os.Args[2:]))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", os.Args[1])
 		os.Exit(2)
@@ -277,6 +280,79 @@ func runExport(args []string) int {
 		return 0
 	}
 	if err := os.WriteFile(out, []byte(text), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "write %s: %s\n", out, err)
+		return 2
+	}
+	return 0
+}
+
+// runRender parses its own args for the same reason as runContext/runExport.
+func runRender(args []string) int {
+	usage := func() int {
+		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg] [--layout dagre|elk] <file>")
+		return 2
+	}
+
+	var out, layout string
+	var files []string
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--layout":
+			i++
+			if i >= len(args) {
+				return usage()
+			}
+			layout = args[i]
+		case strings.HasPrefix(a, "--layout="):
+			layout = strings.TrimPrefix(a, "--layout=")
+		case a == "-o" || a == "--o":
+			i++
+			if i >= len(args) {
+				return usage()
+			}
+			out = args[i]
+		case strings.HasPrefix(a, "-o="):
+			out = strings.TrimPrefix(a, "-o=")
+		case strings.HasPrefix(a, "--o="):
+			out = strings.TrimPrefix(a, "--o=")
+		default:
+			files = append(files, a)
+		}
+	}
+	if len(files) != 1 {
+		return usage()
+	}
+	file := files[0]
+	if out == "" {
+		fmt.Fprintln(os.Stderr, "dc render requires -o <out.svg>")
+		return 2
+	}
+
+	errs, err := validate.ValidateFile(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: error: %s\n", file, err)
+		return 2
+	}
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, e.String())
+		}
+		return 1
+	}
+
+	d, err := parser.Parse(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: error: %s\n", file, err)
+		return 2
+	}
+
+	svg, err := render.SVG(d, render.Options{Layout: layout})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: render error: %s\n", file, err)
+		return 2
+	}
+
+	if err := os.WriteFile(out, svg, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write %s: %s\n", out, err)
 		return 2
 	}
