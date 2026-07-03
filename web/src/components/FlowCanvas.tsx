@@ -40,6 +40,9 @@ interface Props {
   onNodeClick?: (node: DiagramNode) => void;
   selectedNodeId?: string | null;
   onDropNodeType?: (type: string, position: LayoutPosition) => void;
+  onConnectNodes?: (source: string, target: string) => void;
+  hoveredLinkIndex?: number | null;
+  onEdgeHover?: (index: number | null) => void;
 }
 
 function FlowCanvasInner({
@@ -53,6 +56,9 @@ function FlowCanvasInner({
   onNodeClick,
   selectedNodeId,
   onDropNodeType,
+  onConnectNodes,
+  hoveredLinkIndex,
+  onEdgeHover,
 }: Props) {
   const nodeById = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram.nodes]);
   // A single click commits a state update (selection) that recomputes the
@@ -93,7 +99,13 @@ function FlowCanvasInner({
         const key = pairKey(l.from, l.to);
         const isActive = key === activeKey;
         const isVisited = !isActive && (visitedStepKeys?.has(key) ?? false);
-        const data: DcEdgeData = { label: l.label, linkType: l.type, isActive, isVisited };
+        const data: DcEdgeData = {
+          label: l.label,
+          linkType: l.type,
+          isActive,
+          isVisited,
+          isHovered: hoveredLinkIndex === i,
+        };
         return {
           id: `link-${i}-${l.from}-${l.to}`,
           source: l.from,
@@ -103,7 +115,7 @@ function FlowCanvasInner({
           data,
         };
       }),
-    [diagram.links, activeKey, visitedStepKeys],
+    [diagram.links, activeKey, visitedStepKeys, hoveredLinkIndex],
   );
 
   const handleNodesChange = (changes: NodeChange<Node<DcNodeData>>[]) => {
@@ -161,6 +173,16 @@ function FlowCanvasInner({
             if (dcNode && onNodeClick) onNodeClick(dcNode);
           }, 250);
         }}
+        onConnect={(connection) => {
+          if (onConnectNodes && connection.source && connection.target) {
+            onConnectNodes(connection.source, connection.target);
+          }
+        }}
+        onEdgeMouseEnter={(_, edge) => {
+          const index = Number(edge.id.split('-')[1]);
+          onEdgeHover?.(Number.isNaN(index) ? null : index);
+        }}
+        onEdgeMouseLeave={() => onEdgeHover?.(null)}
         fitView
       >
         <Background />

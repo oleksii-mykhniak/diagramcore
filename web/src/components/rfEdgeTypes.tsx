@@ -6,6 +6,7 @@ export interface DcEdgeData extends Record<string, unknown> {
   linkType: string;
   isActive: boolean;
   isVisited: boolean;
+  isHovered?: boolean;
 }
 
 export function DcEdge({
@@ -30,7 +31,8 @@ export function DcEdge({
   });
   const isActive = edgeData?.isActive ?? false;
   const isVisited = edgeData?.isVisited ?? false;
-  const stroke = isActive ? '#e04b4b' : isVisited ? '#e08a4b' : '#333';
+  const isHovered = edgeData?.isHovered ?? false;
+  const stroke = isActive ? '#e04b4b' : isVisited ? '#e08a4b' : isHovered ? '#0066cc' : '#333';
 
   return (
     <>
@@ -42,7 +44,8 @@ export function DcEdge({
         data-link-type={edgeData?.linkType}
         data-active={isActive || undefined}
         data-visited={isVisited || undefined}
-        style={{ stroke, strokeWidth: isActive ? 3 : isVisited ? 2 : 1.5 }}
+        data-hovered={isHovered || undefined}
+        style={{ stroke, strokeWidth: isActive ? 3 : isVisited || isHovered ? 2.5 : 1.5 }}
       />
       {isActive && (
         <circle r={5} fill="#e04b4b" data-testid={`rf-flow-marker-${id}`}>

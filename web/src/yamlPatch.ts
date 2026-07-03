@@ -12,6 +12,7 @@ export type PatchOp =
   | { op: 'updateNode'; id: string; patch: Partial<DiagramNode> }
   | { op: 'removeNode'; id: string }
   | { op: 'addLink'; link: DiagramLink }
+  | { op: 'updateLink'; index: number; patch: Partial<DiagramLink> }
   | { op: 'removeLink'; from: string; to: string; type?: string }
   | { op: 'addFlowStep'; flowName: string; step: FlowStep; atIndex?: number }
   | { op: 'removeFlowStep'; flowName: string; atIndex: number }
@@ -68,6 +69,16 @@ function applyOp(doc: Document, op: PatchOp): void {
     }
     case 'addLink': {
       linksSeq(doc).add(doc.createNode(op.link));
+      break;
+    }
+    case 'updateLink': {
+      const seq = linksSeq(doc);
+      const link = seq.items[op.index] as YAMLMap | undefined;
+      if (!link) throw new Error(`no link at index ${op.index}`);
+      for (const [key, value] of Object.entries(op.patch)) {
+        if (value === undefined) link.delete(key);
+        else link.set(key, value);
+      }
       break;
     }
     case 'removeLink': {

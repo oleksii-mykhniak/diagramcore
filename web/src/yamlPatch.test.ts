@@ -36,6 +36,13 @@ describe('applyPatch', () => {
     expect(doc.links.some((l: { from: string; to: string }) => l.from === 'User' && l.to === 'DB')).toBe(true);
   });
 
+  it('updateLink: patches fields on the link at the given index', () => {
+    const out = applyPatch(authSystemYAML, [{ op: 'updateLink', index: 0, patch: { type: 'event' } }]);
+    const doc = parse(out);
+    expect(doc.links[0].type).toBe('event');
+    expect(doc.links[0].from).toBe('User');
+  });
+
   it('removeLink: removes the matching link', () => {
     const out = applyPatch(authSystemYAML, [{ op: 'removeLink', from: 'AuthService', to: 'DB' }]);
     const doc = parse(out);

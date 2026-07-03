@@ -10,6 +10,8 @@ import { FlowCanvas } from './components/FlowCanvas';
 import { FlowPlayer } from './components/FlowPlayer';
 import { Palette } from './components/Palette';
 import { PropertiesPanel } from './components/PropertiesPanel';
+import { LinksPanel } from './components/LinksPanel';
+import type { DiagramLink } from './types';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
 import { computeFlowHighlight, flowStepFrames, initialFlowPlayerState, resolveFlowSteps } from './flowPlayer';
@@ -54,6 +56,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drillError, setDrillError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
 
   const current = stack.length > 0 ? stack[stack.length - 1] : null;
 
@@ -214,6 +217,30 @@ export default function App() {
     void applyOps(ops);
     setSelectedNodeId(null);
   }, [current, selectedNodeId, applyOps]);
+
+  const onConnectNodes = useCallback(
+    (source: string, target: string) => {
+      void applyOps([{ op: 'addLink', link: { from: source, to: target, type: 'request' } }]);
+    },
+    [applyOps],
+  );
+
+  const onUpdateLink = useCallback(
+    (index: number, patch: Partial<DiagramLink>) => {
+      void applyOps([{ op: 'updateLink', index, patch }]);
+    },
+    [applyOps],
+  );
+
+  const onDeleteLink = useCallback(
+    (index: number) => {
+      if (!current) return;
+      const link = current.diagram.links[index];
+      if (!link) return;
+      void applyOps([{ op: 'removeLink', from: link.from, to: link.to, type: link.type }]);
+    },
+    [current, applyOps],
+  );
 
   const onNodeDrag = useCallback(
     (id: string, pos: LayoutPosition) => {
@@ -428,24 +455,40 @@ export default function App() {
         )}
         {current && <Palette />}
         {current && (
-          <div style={{ position: 'relative' }}>
-            <FlowCanvas
-              diagram={current.diagram}
-              layout={current.layout}
-              positions={current.positions}
-              onNodeDrag={onNodeDrag}
-              onNodeDoubleClick={(node) => void openDetails(node)}
-              onNodeClick={onNodeClick}
-              selectedNodeId={selectedNodeId}
-              onDropNodeType={onDropNodeType}
-              activeStep={highlight?.activeStep ?? undefined}
-              visitedStepKeys={highlight?.visitedStepKeys}
+          <div style={{ display: 'flex' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+              <FlowCanvas
+                diagram={current.diagram}
+                layout={current.layout}
+                positions={current.positions}
+                onNodeDrag={onNodeDrag}
+                onNodeDoubleClick={(node) => void openDetails(node)}
+                onNodeClick={onNodeClick}
+                selectedNodeId={selectedNodeId}
+                onDropNodeType={onDropNodeType}
+                onConnectNodes={onConnectNodes}
+                hoveredLinkIndex={hoveredLinkIndex}
+                onEdgeHover={setHoveredLinkIndex}
+                activeStep={highlight?.activeStep ?? undefined}
+                visitedStepKeys={highlight?.visitedStepKeys}
+              />
+              {selectedNode && (
+                <div style={{ position: 'absolute', top: 0, right: 0, background: '#fff' }}>
+                  <PropertiesPanel
+                    node={selectedNode}
+                    onUpdate={onUpdateSelectedNode}
+                    onDelete={onDeleteSelectedNode}
+                  />
+                </div>
+              )}
+            </div>
+            <LinksPanel
+              links={current.diagram.links}
+              hoveredLinkIndex={hoveredLinkIndex}
+              onHoverLink={setHoveredLinkIndex}
+              onUpdateLink={onUpdateLink}
+              onDeleteLink={onDeleteLink}
             />
-            {selectedNode && (
-              <div style={{ position: 'absolute', top: 0, right: 0, background: '#fff' }}>
-                <PropertiesPanel node={selectedNode} onUpdate={onUpdateSelectedNode} onDelete={onDeleteSelectedNode} />
-              </div>
-            )}
           </div>
         )}
         {current && (
