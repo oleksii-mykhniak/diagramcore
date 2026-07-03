@@ -5,11 +5,14 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"math"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/oleksii94/diagramcore/internal/layout"
 	"github.com/oleksii94/diagramcore/internal/parser"
 )
 
@@ -209,4 +212,72 @@ func TestSVGNoDetailsIsUnaffected(t *testing.T) {
 	if strings.Contains(s, "<a href") {
 		t.Error("output contains a link but no node has a details reference")
 	}
+}
+
+func TestSVGPinnedPositionWithinTolerance(t *testing.T) {
+	src := filepath.Join("..", "..", "examples", "auth-system.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+
+	want := layout.Position{X: 500, Y: 700}
+	svg, err := SVG(d, Options{Positions: map[string]layout.Position{"Gateway": want}})
+	if err != nil {
+		t.Fatalf("SVG failed: %v", err)
+	}
+
+	gotX, gotY := gatewayXY(t, svg)
+	const tolerance = 5.0
+	if diff := math.Abs(gotX - want.X); diff > tolerance {
+		t.Errorf("Gateway x = %v, want %v (±%v)", gotX, want.X, tolerance)
+	}
+	if diff := math.Abs(gotY - want.Y); diff > tolerance {
+		t.Errorf("Gateway y = %v, want %v (±%v)", gotY, want.Y, tolerance)
+	}
+}
+
+func TestSVGWriteLayoutIsDeterministic(t *testing.T) {
+	src := filepath.Join("..", "..", "examples", "auth-system.dc.yaml")
+	d, err := parser.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse(%s) failed: %v", src, err)
+	}
+
+	positions, err := ComputedPositions(d, Options{})
+	if err != nil {
+		t.Fatalf("ComputedPositions failed: %v", err)
+	}
+	if len(positions) != len(d.Nodes) {
+		t.Fatalf("got %d computed positions, want %d (one per node)", len(positions), len(d.Nodes))
+	}
+
+	first, err := SVG(d, Options{Positions: positions})
+	if err != nil {
+		t.Fatalf("first SVG(positions) failed: %v", err)
+	}
+	second, err := SVG(d, Options{Positions: positions})
+	if err != nil {
+		t.Fatalf("second SVG(positions) failed: %v", err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Error("re-rendering with the same pinned positions is not byte-identical")
+	}
+}
+
+func gatewayXY(t *testing.T, svg []byte) (float64, float64) {
+	t.Helper()
+	m := gatewayGroupRe.FindSubmatch(svg)
+	if m == nil {
+		t.Fatalf("could not find Gateway shape position in SVG")
+	}
+	x, err := strconv.ParseFloat(string(m[1]), 64)
+	if err != nil {
+		t.Fatalf("parse x: %v", err)
+	}
+	y, err := strconv.ParseFloat(string(m[2]), 64)
+	if err != nil {
+		t.Fatalf("parse y: %v", err)
+	}
+	return x, y
 }

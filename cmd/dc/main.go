@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/oleksii94/diagramcore/internal/context"
+	"github.com/oleksii94/diagramcore/internal/layout"
 	"github.com/oleksii94/diagramcore/internal/model"
 	"github.com/oleksii94/diagramcore/internal/parser"
 	"github.com/oleksii94/diagramcore/internal/render"
@@ -290,12 +291,12 @@ func runExport(args []string) int {
 // runRender parses its own args for the same reason as runContext/runExport.
 func runRender(args []string) int {
 	usage := func() int {
-		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg|dir/] [--layout dagre|elk] [--flow <name>] [--steps|--animate] <file>")
+		fmt.Fprintln(os.Stderr, "usage: dc render [-o out.svg|dir/] [--layout dagre|elk] [--layout-file <path>] [--write-layout] [--flow <name>] [--steps|--animate] <file>")
 		return 2
 	}
 
-	var out, layout, flowName string
-	var steps, animate bool
+	var out, layoutEngine, layoutFile, flowName string
+	var steps, animate, writeLayout bool
 	var files []string
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; {
@@ -304,9 +305,19 @@ func runRender(args []string) int {
 			if i >= len(args) {
 				return usage()
 			}
-			layout = args[i]
+			layoutEngine = args[i]
 		case strings.HasPrefix(a, "--layout="):
-			layout = strings.TrimPrefix(a, "--layout=")
+			layoutEngine = strings.TrimPrefix(a, "--layout=")
+		case a == "--layout-file":
+			i++
+			if i >= len(args) {
+				return usage()
+			}
+			layoutFile = args[i]
+		case strings.HasPrefix(a, "--layout-file="):
+			layoutFile = strings.TrimPrefix(a, "--layout-file=")
+		case a == "--write-layout":
+			writeLayout = true
 		case a == "--flow":
 			i++
 			if i >= len(args) {
@@ -368,7 +379,7 @@ func runRender(args []string) int {
 		return 2
 	}
 
-	renderOpts := render.Options{Layout: layout}
+	renderOpts := render.Options{Layout: layoutEngine}
 	var flow *model.Flow
 	if flowName != "" {
 		flow, err = findFlow(d, flowName)
@@ -377,6 +388,35 @@ func runRender(args []string) int {
 			return 1
 		}
 		renderOpts.Flow = flow
+	}
+
+	layoutPath := layoutFile
+	if layoutPath == "" {
+		layoutPath = layout.PathFor(file)
+	}
+	if writeLayout {
+		positions, err := render.ComputedPositions(d, render.Options{Layout: layoutEngine})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: compute layout error: %s\n", file, err)
+			return 2
+		}
+		if err := layout.Save(layoutPath, positions); err != nil {
+			fmt.Fprintf(os.Stderr, "write layout %s: %s\n", layoutPath, err)
+			return 2
+		}
+		renderOpts.Positions = positions
+	} else if lf, err := layout.Load(layoutPath); err != nil {
+		fmt.Fprintf(os.Stderr, "load layout %s: %s\n", layoutPath, err)
+		return 2
+	} else if lf != nil {
+		knownIDs := make(map[string]bool, len(d.Nodes))
+		for _, n := range d.Nodes {
+			knownIDs[n.ID] = true
+		}
+		for _, w := range lf.UnknownNodeWarnings(layout.DefaultView, knownIDs) {
+			fmt.Fprintf(os.Stderr, "warning: %s\n", w)
+		}
+		renderOpts.Positions = lf.Positions(layout.DefaultView)
 	}
 
 	if steps {
