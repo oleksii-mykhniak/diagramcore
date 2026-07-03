@@ -512,3 +512,22 @@
   `npm test` (19), `npm run build`, повний `npx playwright test` (18)
   зелені ✅.
 
+### Крок 6.4 — Drill-down по `details` на React Flow
+- Дата: 2026-07-03
+- Виконано: також здебільшого "безкоштовно" — `App.tsx` вже з кроку 6.1
+  передає `onNodeDoubleClick={(node) => void openDetails(node)}` у
+  `FlowCanvas` так само, як у `DiagramView`; `openDetails`,
+  `virtualFS`-резолюція, стек рівнів і breadcrumbs — спільний код,
+  незалежний від `canvasEngine`. `rf-details-marker-<id>` (з кроку 6.1)
+  і `data-has-details` на `rf-node-<id>` покрили індикатор ⊞. Змін коду
+  не знадобилось — лише тести.
+- Коміт: (цей крок)
+- AC: ті самі три AC кроку 5.5, підтверджені Playwright
+  (`e2e/react-flow-drill-down.spec.ts`, 4 тести) на React Flow-канві:
+  маркер лише на вузлі з `details` ✅; подвійний клік відкриває
+  `oauth-detail`, breadcrumbs, повернення відновлює позицію (через
+  export layout, не bounding box) і прогрес flow-плеєра ✅; битий шлях →
+  нефатальна помилка, поточна діаграма лишається ✅; діаграма без
+  `details` — нуль маркерів ✅. `npm test` (19), `npm run build`, повний
+  `npx playwright test` (22) зелені ✅.
+
