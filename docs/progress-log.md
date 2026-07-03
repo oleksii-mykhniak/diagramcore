@@ -271,3 +271,40 @@
   усі 6 вихідних файлів (3 SVG + 3 markdown) успішно згенеровані ✅.
 
 **Фаза 3 завершена.**
+
+## Фаза 4 — Layout-файл і стабільні позиції
+
+### Крок 4.1 — Формат layout
+- Дата: 2026-07-03
+- Виконано: `docs/format.md` доповнено секцією про
+  `<name>.layout.json` — `{ views: { <view>: { positions: { <nodeId>:
+  {x,y} } } } }`, поруч із ядром діаграми, не частина `*.dc.yaml`.
+  Відсутній у layout id → автолейаут; зайвий id у layout → warning, не
+  помилка. `schema/layout.schema.json` (draft 2020-12).
+- Коміт: `478099d`
+- AC: формат задокументовано ✅; JSON Schema додано, перевірено вручну
+  через `ajv-cli` (валідний приклад проходить, зіпсований — падає з
+  очікуваною `required` помилкою на `y`) ✅.
+
+### Крок 4.2 — Рендер з урахуванням layout
+- Дата: 2026-07-03
+- Виконано: `internal/layout` (Load/Save/PathFor/Positions/
+  UnknownNodeWarnings). **Відхилення від плану** — D2 `top`/`left` не
+  консумуються жодним OSS layout-движком у бібліотеці, лише
+  пропрієтарними plugin'ами Terrastruct (див. `docs/deviations.md`,
+  крок 4.2); замість цього `render.compileD2Positioned` вручну
+  відтворює internal pipeline `d2lib.Compile` і перезаписує
+  `obj.TopLeft` між layout та export. `render.ComputedPositions` читає
+  позиції з `d2target.Diagram.Shapes` після звичайного автолейауту (для
+  `--write-layout`). CLI: `dc render` автопідхоплює
+  `<name>.layout.json` (або `--layout-file`), `--write-layout` рахує й
+  зберігає позиції.
+- Коміт: `54ab06f`
+- AC: тест — вузол, зафіксований у layout (Gateway → x:500,y:700),
+  опиняється в SVG у межах ±5px ✅; `--write-layout` → повторний рендер
+  (з тими самими обчисленими позиціями) дає побайтово ідентичний SVG
+  (тест + вручну: `--write-layout` створює sidecar, наступний звичайний
+  рендер підхоплює його автоматично і дає identical SVG; зайвий id у
+  layout друкує warning, exit 0) ✅.
+
+**Фаза 4 завершена.**
