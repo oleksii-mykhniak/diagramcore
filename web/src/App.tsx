@@ -13,6 +13,7 @@ import { PropertiesPanel } from './components/PropertiesPanel';
 import { LinksPanel } from './components/LinksPanel';
 import { FlowEditorPanel } from './components/FlowEditorPanel';
 import type { BranchTarget } from './components/FlowEditorPanel';
+import { YamlPanel } from './components/YamlPanel';
 import type { DiagramLink } from './types';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from './layoutFile';
 import type { LayoutPosition } from './layoutFile';
@@ -178,6 +179,45 @@ export default function App() {
       // succession while recording a flow) so each one patches the text
       // left behind by the previous one, instead of racing on stale
       // `levelRef.current.rawText` (docs/deviations.md, step 7.4).
+      const next = applyChainRef.current.then(run, run);
+      applyChainRef.current = next;
+      return next;
+    },
+    [updateCurrentLevel],
+  );
+
+  /** Commits arbitrary already-valid YAML text (from the YAML panel,
+   * PLAN.md step 7.5) the same way `applyOps` commits a patch result —
+   * through the same ref/queue so text-panel edits and visual edits
+   * never race each other. */
+  const applyTextReplace = useCallback(
+    (text: string) => {
+      const run = async () => {
+        const level = levelRef.current;
+        if (!level) return;
+        let newDiagram;
+        try {
+          newDiagram = parseDiagram(text);
+        } catch {
+          return;
+        }
+        const newErrors = await validateDiagram(text);
+        const recomputed = await computeLayout(newDiagram);
+        const manualPositionIds = new Set(level.manualPositionIds);
+        const positions: Record<string, LayoutPosition> = {};
+        for (const n of recomputed.nodes) {
+          positions[n.id] =
+            manualPositionIds.has(n.id) && level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
+        }
+        updateCurrentLevel({
+          rawText: text,
+          diagram: newDiagram,
+          errors: newErrors,
+          layout: recomputed,
+          positions,
+          manualPositionIds,
+        });
+      };
       const next = applyChainRef.current.then(run, run);
       applyChainRef.current = next;
       return next;
@@ -604,6 +644,12 @@ export default function App() {
               onUpdateLink={onUpdateLink}
               onDeleteLink={onDeleteLink}
             />
+          </div>
+        )}
+        {current && (
+          <div style={{ marginTop: 16, borderTop: '1px solid #ccc', paddingTop: 8 }}>
+            <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>YAML</h3>
+            <YamlPanel text={current.rawText} onCommit={(text) => void applyTextReplace(text)} />
           </div>
         )}
         {current && (
