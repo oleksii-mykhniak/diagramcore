@@ -238,3 +238,19 @@
   парситься `encoding/xml.Decoder` (тест) ✅; вручну згенеровано
   анімований SVG для flow `auth-system` — 6 keyframe-блоків, валідний
   XML (перевірено `python3 -c "import xml.etree..."`) ✅.
+
+### Крок 3.7 — Позначка вузлів із під-діаграмою (`details`)
+- Дата: 2026-07-03
+- Виконано: вузли з `details` отримують суфікс `" ⊞"` у D2/SVG/Mermaid.
+  У D2/SVG додатково `style.double-border: true` + нативний D2-атрибут
+  `link:` на шлях SVG під-діаграми (`DetailsSVGPath` замінює
+  `*.dc.yaml` → `*.svg`, відносно файлу, де оголошено `details`) — D2
+  сам обгортає такий shape у `<a href>` в SVG-виводі. У Mermaid —
+  директива `click <id> "<path>.svg"` поряд із суфіксом у label.
+- Коміт: `f22e261`
+- AC: golden D2/Mermaid оновлено — змінився лише `auth-system.*`
+  (єдиний приклад з `details`); `oauth-detail`/`payment-processing`
+  (без `details`) побайтово незмінні — регресії нема ✅; SVG
+  `auth-system` містить рівно один маркер `⊞` і обгортає `OAuthProvider`
+  у `<a href="./oauth-detail.svg"` ✅; SVG `payment-processing` (без
+  `details`) не містить ні маркера, ні `<a href` ✅.
