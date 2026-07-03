@@ -922,3 +922,36 @@
   `go build/test/vet ./...` і `./dc validate examples/*.dc.yaml`
   зелені ✅.
 
+### Крок 9.2 — Структуровані операції редагування
+- Дата: 2026-07-03
+- Виконано: `internal/edit/edit.go` — Go-аналог `web/src/yamlPatch.ts`:
+  `Apply(text, ops)` парсить у `yaml.Node`-дерево (не в
+  `model.Diagram`-структуру — це і зберігає коментарі) і мутує його
+  напряму; `Operation` — один плаский struct (Go не має тегованих
+  об'єднань) з полями під усі операції: `add_node, update_node,
+  remove_node, add_link, remove_link, add_flow_step, remove_flow_step,
+  rename_node_id` плюс `set_position` (розпізнається, але свідомо
+  відхиляється в `Apply` — про нього дбає інструмент MCP окремо, бо
+  він не чіпає YAML). `rename_node_id` рекурсивно оновлює `links[]` і
+  `flows[].steps` (включно з `branch.then`/`else`). Кодування назад —
+  через `yaml.NewEncoder` з `SetIndent(2)` (не пакетний `yaml.Marshal`,
+  який форматує з відступом 4 і зламав би кожен існуючий `*.dc.yaml`).
+  `internal/mcpserver/edit_diagram.go` — інструмент `edit_diagram`:
+  розділяє `set_position`-операції від решти, застосовує YAML-операції,
+  валідує РЕЗУЛЬТАТ (`validate.ValidateString`) — якщо є помилки, файл
+  НЕ записується (атомарність), повертаються структуровані помилки;
+  інакше пише файл, потім мерджить `set_position`-и в
+  `<name>.layout.json` (через `layout.Load`/`layout.Save` — існуючі
+  позиції інших вузлів зберігаються).
+- Коміт: (цей крок)
+- AC: unit-тести `internal/edit/edit_test.go` (9 тестів, включно з
+  golden-тестом на побайтову ідентичність коментарів/форматування) ✅;
+  інтеграційні тести `internal/mcpserver/edit_diagram_test.go` (3,
+  через `mcp.NewInMemoryTransports`) — `add_node`+`add_link` через MCP
+  → файл на диску змінений, коментар (`# keep me`) на місці ✅; лінк на
+  неіснуючий вузол → файл НЕ змінився (побайтове порівняння до/після),
+  повернено структуровану помилку DC002 ✅; `set_position` змінює лише
+  `*.layout.json`, core YAML побайтово незмінний ✅. `docs/mcp.md`
+  доповнено описом інструменту. `go build/test/vet ./...` і
+  `./dc validate examples/*.dc.yaml` зелені ✅.
+

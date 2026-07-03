@@ -39,6 +39,13 @@ func NewServer() *mcp.Server {
 		Name:        "list_diagrams",
 		Description: "List *.dc.yaml files under a directory (recursively).",
 	}, listDiagrams)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "edit_diagram",
+		Description: "Apply structured edit operations (add_node, update_node, remove_node, add_link, " +
+			"remove_link, add_flow_step, remove_flow_step, rename_node_id, set_position) to a *.dc.yaml " +
+			"file on disk, preserving comments and formatting. Atomic: validates the result before " +
+			"writing, and writes nothing at all if that fails.",
+	}, editDiagram)
 	return server
 }
 

@@ -52,12 +52,47 @@ optional) — the same output as `dc context <file>` /
 
 Lists `*.dc.yaml` files under a directory, recursively.
 
+### `edit_diagram`
+
+Applies structured edit operations to a `*.dc.yaml` file on disk,
+preserving comments and formatting (the Go counterpart of
+`web/src/yamlPatch.ts`). Atomic: the whole batch is applied in memory,
+validated, and only written to disk if validation passes — an operation
+that would break validity (e.g. a link to a nonexistent node) leaves the
+file untouched and returns the structured error(s) instead.
+
+```json
+{
+  "path": "examples/auth-system.dc.yaml",
+  "operations": [
+    { "op": "add_node", "node": { "id": "Cache", "type": "storage" } },
+    { "op": "add_link", "link": { "from": "AuthService", "to": "Cache", "type": "dataflow" } }
+  ]
+}
+```
+
+Supported `op` values: `add_node`, `update_node` (`id` + `patch`),
+`remove_node` (`id`), `add_link`, `remove_link` (`from`+`to`[+`type`]),
+`add_flow_step` (`flow_name`+`step`[+`target` for a branch's then/else
+arm]), `remove_flow_step` (`flow_name`+`at_index`), `rename_node_id`
+(`old_id`+`new_id`), and `set_position` (`id`+`position: {x,y}`) — the
+only op that never touches the YAML: it writes the diagram's
+`<name>.layout.json` sidecar instead, merged with whatever positions are
+already there.
+
+Returns `{ "ok": bool, "errors": [...] }` — same shape as
+`validate_diagram`.
+
 ## Full-cycle example
 
-1. Write a new `*.dc.yaml` file (structured edits: see the `edit_diagram`
-   tool, PLAN.md step 9.2, once implemented) or an existing one.
-2. `validate_diagram` — fix any reported errors before proceeding.
-3. `get_context` — confirm the diagram reads as intended for an
+1. Write a new `*.dc.yaml` file (structured edits: `edit_diagram`) or
+   pick an existing one (`list_diagrams`).
+2. `edit_diagram` — add/update/remove nodes, links, and flow steps.
+   Rejected (invalid) edits leave the file untouched, so it's safe to
+   retry with a fix.
+3. `validate_diagram` — double-check after edits that didn't go through
+   `edit_diagram` (e.g. manual file writes).
+4. `get_context` — confirm the diagram reads as intended for an
    unfamiliar audience.
-4. `render_diagram` (PLAN.md step 9.4, once implemented) — see the
+5. `render_diagram` (PLAN.md step 9.4, once implemented) — see the
    rendered result without a browser.
