@@ -32,6 +32,19 @@ type Style struct {
 	Rounded     bool    `json:"rounded,omitempty"`
 }
 
+// EdgeStyle is a link's instance-level style override (phase 11, step
+// 11.9): all fields optional, only the ones the user actually changed
+// are set. Keyed by an edge link-key (web-side `edgeStyle.ts`'s
+// `edgeLinkKey`, e.g. "A->B:request") in View.EdgeStyles/
+// EdgeLabelOffsets, since links have no explicit id in the format.
+type EdgeStyle struct {
+	MarkerStart string  `json:"markerStart,omitempty"`
+	MarkerEnd   string  `json:"markerEnd,omitempty"`
+	LineStyle   string  `json:"lineStyle,omitempty"`
+	StrokeWidth float64 `json:"strokeWidth,omitempty"`
+	Color       string  `json:"color,omitempty"`
+}
+
 // View holds the positions for one named view. v0 only uses "default".
 type View struct {
 	Positions map[string]Position `json:"positions"`
@@ -45,6 +58,19 @@ type View struct {
 	// Styles holds instance-level style overrides (phase 11, step 11.8)
 	// — same round-tripping rule as NotePositions above.
 	Styles map[string]Style `json:"styles,omitempty"`
+	// EdgeStyles holds instance-level edge style overrides (phase 11,
+	// step 11.9) — same round-tripping rule as NotePositions above.
+	EdgeStyles map[string]EdgeStyle `json:"edgeStyles,omitempty"`
+	// EdgeLabelOffsets holds edge label drag offsets, relative to the
+	// edge's own midpoint (phase 11, step 11.9) — same round-tripping
+	// rule as NotePositions above.
+	EdgeLabelOffsets map[string]Position `json:"edgeLabelOffsets,omitempty"`
+	// HiddenEdgeLabels holds the link-keys whose label is individually
+	// hidden (phase 11, step 11.9), independent of any global show/
+	// hide-all view setting — same round-tripping rule as NotePositions
+	// above. Never consulted by `dc context`/AI export: those always
+	// include every label regardless of this web-only display setting.
+	HiddenEdgeLabels []string `json:"hiddenEdgeLabels,omitempty"`
 }
 
 // File is the decoded contents of a <name>.layout.json file.
@@ -121,7 +147,15 @@ func Save(path string, positions map[string]Position) error {
 	} else if existing != nil {
 		f.RenderStyle = existing.RenderStyle
 		if v, ok := existing.Views[DefaultView]; ok {
-			f.Views[DefaultView] = View{Positions: positions, NotePositions: v.NotePositions, Sizes: v.Sizes, Styles: v.Styles}
+			f.Views[DefaultView] = View{
+				Positions:        positions,
+				NotePositions:    v.NotePositions,
+				Sizes:            v.Sizes,
+				Styles:           v.Styles,
+				EdgeStyles:       v.EdgeStyles,
+				EdgeLabelOffsets: v.EdgeLabelOffsets,
+				HiddenEdgeLabels: v.HiddenEdgeLabels,
+			}
 		}
 	}
 	data, err := json.MarshalIndent(f, "", "  ")

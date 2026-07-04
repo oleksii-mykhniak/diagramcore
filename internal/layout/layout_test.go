@@ -60,8 +60,11 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 	seed := File{
 		Views: map[string]View{
 			DefaultView: {
-				Positions:     map[string]Position{"User": {X: 0, Y: 0}},
-				NotePositions: map[string]Position{"note1": {X: 40, Y: 40}},
+				Positions:        map[string]Position{"User": {X: 0, Y: 0}},
+				NotePositions:    map[string]Position{"note1": {X: 40, Y: 40}},
+				EdgeStyles:       map[string]EdgeStyle{"User->Gateway:request": {MarkerEnd: "open-arrow", Color: "#123456"}},
+				EdgeLabelOffsets: map[string]Position{"User->Gateway:request": {X: 10, Y: -5}},
+				HiddenEdgeLabels: []string{"User->Gateway:request"},
 			},
 		},
 		RenderStyle: "sketch",
@@ -90,6 +93,16 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 	}
 	if got := f.Positions(DefaultView)["User"]; got != (Position{X: 200, Y: 50}) {
 		t.Errorf("Positions[User] = %+v, want the newly-saved {200 50}", got)
+	}
+	view := f.Views[DefaultView]
+	if got := view.EdgeStyles["User->Gateway:request"]; got != (EdgeStyle{MarkerEnd: "open-arrow", Color: "#123456"}) {
+		t.Errorf("EdgeStyles[User->Gateway:request] = %+v, want preserved {open-arrow  0 #123456}", got)
+	}
+	if got := view.EdgeLabelOffsets["User->Gateway:request"]; got != (Position{X: 10, Y: -5}) {
+		t.Errorf("EdgeLabelOffsets[User->Gateway:request] = %+v, want preserved {10 -5}", got)
+	}
+	if len(view.HiddenEdgeLabels) != 1 || view.HiddenEdgeLabels[0] != "User->Gateway:request" {
+		t.Errorf("HiddenEdgeLabels = %v, want preserved [User->Gateway:request]", view.HiddenEdgeLabels)
 	}
 }
 

@@ -19,6 +19,7 @@ import { computeFlowHighlight } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
 import type { DiagramLevel } from '../hooks/useDiagramStack';
 import type { StyleOverride } from '../shapes';
+import type { EdgeStyleOverride } from '../edgeStyle';
 
 interface EditorWorkspaceProps {
   loadError: string | null;
@@ -60,6 +61,14 @@ interface EditorWorkspaceProps {
   hoveredLinkIndex: number | null;
   onEdgeHover: (index: number | null) => void;
   onEdgeClick: (index: number) => void;
+  selectedLinkIndex: number | null;
+  onSelectLinkIndex: (index: number | null) => void;
+  onUpdateEdgeStyle: (patch: Partial<EdgeStyleOverride>) => void;
+  onResetEdgeStyle: () => void;
+  onEdgeLabelDragStop: (linkIndex: number, offset: LayoutPosition) => void;
+  onEdgeLabelDoubleClick: (linkIndex: number) => void;
+  onToggleEdgeLabelHidden: (linkIndex: number) => void;
+  showEdgeLabels: boolean;
   focusRequest: { kind: 'node'; id: string; nonce: number } | { kind: 'line'; line: number; nonce: number } | null;
   onUpdateSelectedNode: (patch: Partial<DiagramNode>) => void;
   onDeleteSelectedNode: () => void;
@@ -127,6 +136,14 @@ export function EditorWorkspace({
   hoveredLinkIndex,
   onEdgeHover,
   onEdgeClick,
+  selectedLinkIndex,
+  onSelectLinkIndex,
+  onUpdateEdgeStyle,
+  onResetEdgeStyle,
+  onEdgeLabelDragStop,
+  onEdgeLabelDoubleClick,
+  onToggleEdgeLabelHidden,
+  showEdgeLabels,
   focusRequest,
   onUpdateSelectedNode,
   onDeleteSelectedNode,
@@ -153,6 +170,15 @@ export function EditorWorkspace({
     setRightDockTab('properties');
     setRightDockCollapsed(false);
   }, [selectedNodeId]);
+
+  /** Clicking an edge on the canvas (outside flow recording) opens its
+   * properties in the Links tab (PLAN3.md step 11.9) — mirrors the
+   * `selectedNodeId` effect above. */
+  useEffect(() => {
+    if (selectedLinkIndex === null) return;
+    setRightDockTab('links');
+    setRightDockCollapsed(false);
+  }, [selectedLinkIndex]);
 
   return (
     <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -204,6 +230,12 @@ export function EditorWorkspace({
                 hoveredLinkIndex={hoveredLinkIndex}
                 onEdgeHover={onEdgeHover}
                 onEdgeClick={onEdgeClick}
+                edgeStyles={current.edgeStyles}
+                edgeLabelOffsets={current.edgeLabelOffsets}
+                hiddenEdgeLabels={current.hiddenEdgeLabels}
+                showEdgeLabels={showEdgeLabels}
+                onEdgeLabelDragStop={onEdgeLabelDragStop}
+                onEdgeLabelDoubleClick={onEdgeLabelDoubleClick}
                 focusNodeId={focusRequest?.kind === 'node' ? focusRequest.id : null}
                 focusNonce={focusRequest?.nonce}
                 activeStep={highlight?.activeStep ?? undefined}
@@ -248,6 +280,13 @@ export function EditorWorkspace({
                   onHoverLink={onEdgeHover}
                   onUpdateLink={onUpdateLink}
                   onDeleteLink={onDeleteLink}
+                  selectedIndex={selectedLinkIndex}
+                  onSelectIndex={onSelectLinkIndex}
+                  edgeStyles={current.edgeStyles}
+                  onUpdateEdgeStyle={onUpdateEdgeStyle}
+                  onResetEdgeStyle={onResetEdgeStyle}
+                  hiddenEdgeLabels={current.hiddenEdgeLabels}
+                  onToggleEdgeLabelHidden={onToggleEdgeLabelHidden}
                 />
               }
               flowsContent={

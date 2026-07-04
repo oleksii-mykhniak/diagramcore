@@ -6,8 +6,8 @@ import type { ValidationError } from '../wasmValidate';
 import { computeLayout } from '../layout';
 import type { DiagramLayout } from '../layout';
 import type { Diagram, DiagramNode } from '../types';
-import { buildLayoutFile, downloadLayoutFile, fromLayoutSizes, layoutFileName, parseLayoutFile, toLayoutSizes } from '../layoutFile';
-import type { LayoutPosition, LayoutStyle, RenderStyle } from '../layoutFile';
+import { buildLayoutFileFromLevel, downloadLayoutFile, fromLayoutSizes, layoutFileName, parseLayoutFile } from '../layoutFile';
+import type { LayoutEdgeStyle, LayoutPosition, LayoutStyle, RenderStyle } from '../layoutFile';
 import { initialFlowPlayerState } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
 import { isNativeFsSupported, openDiagramFiles, pickSaveHandle, writeTextToHandle } from '../nativeFile';
@@ -39,6 +39,18 @@ export interface DiagramLevel {
   /** Instance-level style overrides (PLAN3.md step 11.8) — like `sizes`,
    * only nodes the user actually styled get an entry. */
   styles: Record<string, LayoutStyle>;
+  /** Instance-level edge style overrides (PLAN3.md step 11.9), keyed by
+   * `edgeStyle.ts`'s `edgeLinkKey` — like `styles`, only edges the user
+   * actually styled get an entry. */
+  edgeStyles: Record<string, LayoutEdgeStyle>;
+  /** Edge label drag offsets relative to the edge's own midpoint
+   * (PLAN3.md step 11.9), keyed by link-key — only labels the user
+   * actually dragged get an entry. */
+  edgeLabelOffsets: Record<string, LayoutPosition>;
+  /** Link-keys whose label is individually hidden (PLAN3.md step 11.9),
+   * independent of the global "Connection labels" show/hide-all view
+   * setting. */
+  hiddenEdgeLabels: Set<string>;
   /** Diagram style preset (PLAN.md step 10.12), persisted in the layout
    * file/share link — see `layoutFile.ts`'s `RenderStyle`. */
   renderStyle: RenderStyle;
@@ -190,6 +202,9 @@ export function useDiagramStack() {
       ),
       sizes: {},
       styles: {},
+      edgeStyles: {},
+      edgeLabelOffsets: {},
+      hiddenEdgeLabels: new Set<string>(),
       renderStyle: 'clean',
       savedRawText: text,
     };
@@ -396,6 +411,12 @@ export function useDiagramStack() {
           level.notePositions = { ...level.notePositions, ...(imported.views.default?.notePositions ?? {}) };
           level.sizes = { ...level.sizes, ...fromLayoutSizes(imported.views.default?.sizes) };
           level.styles = { ...level.styles, ...(imported.views.default?.styles ?? {}) };
+          level.edgeStyles = { ...level.edgeStyles, ...(imported.views.default?.edgeStyles ?? {}) };
+          level.edgeLabelOffsets = { ...level.edgeLabelOffsets, ...(imported.views.default?.edgeLabelOffsets ?? {}) };
+          level.hiddenEdgeLabels = new Set([
+            ...level.hiddenEdgeLabels,
+            ...(imported.views.default?.hiddenEdgeLabels ?? []),
+          ]);
           if (imported.renderStyle) level.renderStyle = imported.renderStyle;
         }
         await openTree(level, { [opened.mainName]: opened.mainText });
@@ -421,7 +442,10 @@ export function useDiagramStack() {
       Boolean(current.diagram.notes?.length) ||
       current.renderStyle !== 'clean' ||
       Object.keys(current.sizes).length > 0 ||
-      Object.keys(current.styles).length > 0;
+      Object.keys(current.styles).length > 0 ||
+      Object.keys(current.edgeStyles).length > 0 ||
+      Object.keys(current.edgeLabelOffsets).length > 0 ||
+      current.hiddenEdgeLabels.size > 0;
     // A real Save makes any pending/stored local autosave draft moot
     // (PLAN3.md step 11.3) — cancel the debounced write and clear
     // whatever's already in IndexedDB for this file.
@@ -432,7 +456,7 @@ export function useDiagramStack() {
       if (hasLayoutToSave) {
         downloadLayoutFile(
           layoutFileName(current.fileName),
-          buildLayoutFile(current.positions, current.notePositions, current.renderStyle, toLayoutSizes(current.sizes), current.styles),
+          buildLayoutFileFromLevel(current),
         );
       }
       updateCurrentLevel({ savedRawText: current.rawText });
@@ -447,17 +471,7 @@ export function useDiagramStack() {
       if (layoutHandle) {
         await writeTextToHandle(
           layoutHandle,
-          JSON.stringify(
-            buildLayoutFile(
-              current.positions,
-              current.notePositions,
-              current.renderStyle,
-              toLayoutSizes(current.sizes),
-              current.styles,
-            ),
-            null,
-            2,
-          ),
+          JSON.stringify(buildLayoutFileFromLevel(current), null, 2),
         );
       }
     }
@@ -492,6 +506,9 @@ export function useDiagramStack() {
       renderStyle: current.renderStyle,
       sizes: current.sizes,
       styles: current.styles,
+      edgeStyles: current.edgeStyles,
+      edgeLabelOffsets: current.edgeLabelOffsets,
+      hiddenEdgeLabels: Array.from(current.hiddenEdgeLabels),
     });
   }, [current]);
 
@@ -508,6 +525,9 @@ export function useDiagramStack() {
     level.notePositions = { ...level.notePositions, ...record.notePositions };
     level.sizes = { ...level.sizes, ...record.sizes };
     level.styles = { ...level.styles, ...record.styles };
+    level.edgeStyles = { ...level.edgeStyles, ...record.edgeStyles };
+    level.edgeLabelOffsets = { ...level.edgeLabelOffsets, ...record.edgeLabelOffsets };
+    level.hiddenEdgeLabels = new Set([...level.hiddenEdgeLabels, ...(record.hiddenEdgeLabels ?? [])]);
     level.renderStyle = record.renderStyle;
     await openTree(level, { [record.fileName]: record.rawText });
   }, [restorePrompt, buildLevel, openTree]);
@@ -536,6 +556,12 @@ export function useDiagramStack() {
         level.notePositions = { ...level.notePositions, ...(shared.layout.views.default?.notePositions ?? {}) };
         level.sizes = { ...level.sizes, ...fromLayoutSizes(shared.layout.views.default?.sizes) };
         level.styles = { ...level.styles, ...(shared.layout.views.default?.styles ?? {}) };
+        level.edgeStyles = { ...level.edgeStyles, ...(shared.layout.views.default?.edgeStyles ?? {}) };
+        level.edgeLabelOffsets = { ...level.edgeLabelOffsets, ...(shared.layout.views.default?.edgeLabelOffsets ?? {}) };
+        level.hiddenEdgeLabels = new Set([
+          ...level.hiddenEdgeLabels,
+          ...(shared.layout.views.default?.hiddenEdgeLabels ?? []),
+        ]);
         if (shared.layout.renderStyle) level.renderStyle = shared.layout.renderStyle;
       }
       await openTree(level, { [shared.fileName]: shared.yaml });

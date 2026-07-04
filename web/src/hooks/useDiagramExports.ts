@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { generateContext } from '../wasmValidate';
-import { buildLayoutFile, downloadLayoutFile, layoutFileName, toLayoutSizes } from '../layoutFile';
+import { buildLayoutFileFromLevel, downloadLayoutFile, layoutFileName } from '../layoutFile';
 import { applyNodeSizes } from '../layout';
 import { computeFlowHighlight, flowStepFrames, resolveFlowSteps } from '../flowPlayer';
 import { downloadBlob, renderDiagramSVGString, svgStringToRasterBlob } from '../svgExport';
@@ -26,22 +26,13 @@ function extensionFor(format: ExportSettings['format']): string {
  * export, flow-steps zip, AI-context markdown, layout export, and the
  * share-link. All read-only over `current` — none of them mutate the
  * document, so unlike the editing hook they need no queueing. */
-export function useDiagramExports(current: DiagramLevel | null) {
+export function useDiagramExports(current: DiagramLevel | null, showEdgeLabels = true) {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
 
   const onExportLayout = useCallback(() => {
     if (!current) return;
-    downloadLayoutFile(
-      layoutFileName(current.fileName),
-      buildLayoutFile(
-        current.positions,
-        current.notePositions,
-        current.renderStyle,
-        toLayoutSizes(current.sizes),
-        current.styles,
-      ),
-    );
+    downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFileFromLevel(current));
   }, [current]);
 
   /** File → Export image… (PLAN.md step 10.9): PNG/JPG rasterize the SVG
@@ -59,7 +50,15 @@ export function useDiagramExports(current: DiagramLevel | null) {
         layout,
         current.positions,
         { activeStep: highlight.activeStep ?? undefined, visitedStepKeys: highlight.visitedStepKeys },
-        { includeGrid: settings.includeGrid, includeDescriptions: settings.includeDescriptions, renderStyle: current.renderStyle },
+        {
+          includeGrid: settings.includeGrid,
+          includeDescriptions: settings.includeDescriptions,
+          renderStyle: current.renderStyle,
+          edgeStyles: current.edgeStyles,
+          edgeLabelOffsets: current.edgeLabelOffsets,
+          hiddenEdgeLabels: current.hiddenEdgeLabels,
+          showEdgeLabels,
+        },
         current.diagram.notes,
         current.notePositions,
         current.styles,
@@ -76,7 +75,7 @@ export function useDiagramExports(current: DiagramLevel | null) {
       });
       downloadBlob(`${base}.${extensionFor(settings.format)}`, blob);
     },
-    [current],
+    [current, showEdgeLabels],
   );
 
   const onExportFlowStepsZip = useCallback(
@@ -95,7 +94,15 @@ export function useDiagramExports(current: DiagramLevel | null) {
           layout,
           current.positions,
           { activeStep: frame.activeStep, visitedStepKeys: frame.visitedStepKeys },
-          { includeGrid: settings.includeGrid, includeDescriptions: settings.includeDescriptions, renderStyle: current.renderStyle },
+          {
+            includeGrid: settings.includeGrid,
+            includeDescriptions: settings.includeDescriptions,
+            renderStyle: current.renderStyle,
+            edgeStyles: current.edgeStyles,
+            edgeLabelOffsets: current.edgeLabelOffsets,
+            hiddenEdgeLabels: current.hiddenEdgeLabels,
+            showEdgeLabels,
+          },
           current.diagram.notes,
           current.notePositions,
           current.styles,
@@ -114,7 +121,7 @@ export function useDiagramExports(current: DiagramLevel | null) {
       const zipped = zipSync(zipInput);
       downloadBlob(`${baseName(current.fileName)}-${flow.name}-steps.zip`, new Blob([zipped as BlobPart]));
     },
-    [current],
+    [current, showEdgeLabels],
   );
 
   const onExportContext = useCallback(async () => {
@@ -130,14 +137,11 @@ export function useDiagramExports(current: DiagramLevel | null) {
       (current.diagram.notes?.length ?? 0) > 0 ||
       current.renderStyle !== 'clean' ||
       Object.keys(current.sizes).length > 0 ||
-      Object.keys(current.styles).length > 0
-        ? buildLayoutFile(
-            current.positions,
-            current.notePositions,
-            current.renderStyle,
-            toLayoutSizes(current.sizes),
-            current.styles,
-          )
+      Object.keys(current.styles).length > 0 ||
+      Object.keys(current.edgeStyles).length > 0 ||
+      Object.keys(current.edgeLabelOffsets).length > 0 ||
+      current.hiddenEdgeLabels.size > 0
+        ? buildLayoutFileFromLevel(current)
         : null;
     const { fragment, size } = encodeShareState({ fileName: current.fileName, yaml: current.rawText, layout });
     if (size > SHARE_URL_SIZE_LIMIT) {

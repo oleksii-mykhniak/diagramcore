@@ -1,8 +1,9 @@
-import type { Diagram, DiagramNoteDef } from './types';
+import type { Diagram, DiagramLink, DiagramNoteDef } from './types';
 import { nodeLabel } from './types';
 import type { DiagramLayout, LayoutEdge, LayoutPoint } from './layout';
-import type { LayoutPosition, LayoutStyle } from './layoutFile';
+import type { LayoutEdgeStyle, LayoutPosition, LayoutStyle } from './layoutFile';
 import { pairKey } from './flowPlayer';
+import { edgeLinkKey, resolveEdgeStyle } from './edgeStyle';
 import { renderContainerSvgInner, resolveNodeStyle } from './shapes';
 import type { RenderStyle } from './shapes';
 import { sketchLineD } from './sketch';
@@ -24,6 +25,19 @@ export interface RenderOptions {
    * whichever preset the canvas currently shows, via the same shape
    * registry/roughjs wrapper (`./shapes.ts`, `./sketch.ts`). */
   renderStyle?: RenderStyle;
+  /** Instance-level edge style overrides (PLAN3.md step 11.9), keyed by
+   * `edgeStyle.ts`'s `edgeLinkKey`. */
+  edgeStyles?: Record<string, LayoutEdgeStyle>;
+  /** Edge label drag offsets relative to the edge's own midpoint
+   * (PLAN3.md step 11.9), keyed by link-key. */
+  edgeLabelOffsets?: Record<string, LayoutPosition>;
+  /** Link-keys whose label is individually hidden (PLAN3.md step 11.9). */
+  hiddenEdgeLabels?: Set<string>;
+  /** View → "Connection labels" show/hide-all (PLAN3.md step 11.9) —
+   * defaults to showing every label with a non-empty `label`, same as
+   * before this step. `dc context`/AI export never see this: they read
+   * only `model.Diagram` (Go) / `Diagram` (web), never the layout file. */
+  showEdgeLabels?: boolean;
 }
 
 export interface ThemeColors {
@@ -79,6 +93,37 @@ function edgeForStep(edges: LayoutEdge[], step: { from: string; to: string }): L
   return edges.find((e) => pairKey(e.from, e.to) === key);
 }
 
+/** SVG `<marker>` def for one end of one edge (PLAN3.md step 11.9) — a
+ * closed/filled triangle for `'arrow'` (the pre-11.9 default look,
+ * preserved exactly), an open unfilled chevron for `'open-arrow'`.
+ * `'none'` never calls this (callers skip both the def and the
+ * `marker-start`/`marker-end` attribute entirely). */
+function markerDef(id: string, kind: 'arrow' | 'open-arrow', color: string): string {
+  if (kind === 'arrow') {
+    return `<marker id="${id}" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="${color}" /></marker>`;
+  }
+  return `<marker id="${id}" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10" fill="none" stroke="${color}" stroke-width="1.5" /></marker>`;
+}
+
+/** The point exactly (or, for an even count, midway between the two
+ * points) at the middle of an edge's routed polyline — the export
+ * equivalent of the canvas's `getSmoothStepPath` midpoint, used as the
+ * label's un-dragged anchor. */
+function edgeMidpoint(points: LayoutPoint[]): LayoutPoint {
+  if (points.length === 0) return { x: 0, y: 0 };
+  const mid = (points.length - 1) / 2;
+  const lo = points[Math.floor(mid)];
+  const hi = points[Math.ceil(mid)];
+  return { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 };
+}
+
+function renderEdgeLabelSvg(points: LayoutPoint[], offset: LayoutPosition | undefined, label: string, color: string): string {
+  const mid = edgeMidpoint(points);
+  const x = mid.x + (offset?.x ?? 0);
+  const y = mid.y + (offset?.y ?? 0);
+  return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="12" font-family="system-ui, sans-serif" fill="${color}">${esc(label)}</text>`;
+}
+
 /** Renders diagram + layout + positions to a standalone SVG string, with
  * the same visual rules as the on-screen canvas (active/visited flow
  * steps, details markers) — used for PNG export, where we need a
@@ -105,19 +150,48 @@ export function renderDiagramSVGString(
     ? `<rect width="${layout.width}" height="${layout.height}" fill="url(#dc-grid)" />`
     : '';
 
+  const hiddenEdgeLabels = options.hiddenEdgeLabels ?? new Set<string>();
+  const showEdgeLabels = options.showEdgeLabels ?? true;
+
+  let markerDefsSvg = '';
   const edgesSvg = layout.edges
-    .map((e) => {
+    .map((e, edgeSlot) => {
       const key = pairKey(e.from, e.to);
       const isActive = key === activeKey;
       const isVisited = !isActive && (highlight.visitedStepKeys?.has(key) ?? false);
-      const stroke = isActive ? theme.flowActive : isVisited ? theme.flowVisited : theme.nodeBorder;
-      const width = isActive ? 3 : isVisited ? 2 : 1.5;
+      const link: DiagramLink | undefined = diagram.links[Number((e.id ?? '').slice(1))];
+      const override = link ? options.edgeStyles?.[edgeLinkKey(link)] : undefined;
+      const resolved = resolveEdgeStyle(override);
+
+      const stroke = isActive ? theme.flowActive : isVisited ? theme.flowVisited : (resolved.color ?? theme.nodeBorder);
+      const width = isActive ? 3 : isVisited ? 2 : (resolved.strokeWidth ?? 1.5);
+      const dash = resolved.lineStyle === 'dashed' ? '6,4' : resolved.lineStyle === 'dotted' ? '2,3' : undefined;
+      const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
+
+      const markerEndId = `dc-marker-end-${edgeSlot}`;
+      const markerStartId = `dc-marker-start-${edgeSlot}`;
+      if (resolved.markerEnd !== 'none') markerDefsSvg += markerDef(markerEndId, resolved.markerEnd, stroke);
+      if (resolved.markerStart !== 'none') markerDefsSvg += markerDef(markerStartId, resolved.markerStart, stroke);
+      const markerEndAttr = resolved.markerEnd !== 'none' ? ` marker-end="url(#${markerEndId})"` : '';
+      const markerStartAttr = resolved.markerStart !== 'none' ? ` marker-start="url(#${markerStartId})"` : '';
+
+      let pathSvg: string;
       if (options.renderStyle === 'sketch') {
         const d = sketchLineD(e.points.map((p) => [p.x, p.y]));
-        return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${width}" marker-end="url(#arrow)" />`;
+        pathSvg = `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${width}"${dashAttr}${markerEndAttr}${markerStartAttr} />`;
+      } else {
+        const points = e.points.map((p) => `${p.x},${p.y}`).join(' ');
+        pathSvg = `<polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="${width}"${dashAttr}${markerEndAttr}${markerStartAttr} />`;
       }
-      const points = e.points.map((p) => `${p.x},${p.y}`).join(' ');
-      return `<polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="${width}" marker-end="url(#arrow)" />`;
+
+      const label = link?.label;
+      const labelKey = link ? edgeLinkKey(link) : null;
+      const labelSvg =
+        label && showEdgeLabels && (!labelKey || !hiddenEdgeLabels.has(labelKey))
+          ? renderEdgeLabelSvg(e.points, labelKey ? options.edgeLabelOffsets?.[labelKey] : undefined, label, theme.text)
+          : '';
+
+      return pathSvg + labelSvg;
     })
     .join('');
 
@@ -191,7 +265,7 @@ export function renderDiagramSVGString(
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}">` +
-    `<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="${theme.nodeBorder}" /></marker>${gridPatternDef}</defs>` +
+    `<defs>${markerDefsSvg}${gridPatternDef}</defs>` +
     gridRect +
     edgesSvg +
     markerSvg +

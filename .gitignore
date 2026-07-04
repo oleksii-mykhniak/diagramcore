@@ -11,6 +11,9 @@ web/build/
 web/public/dc.wasm
 web/public/wasm_exec.js
 
+# Playwright
+/test-results/
+
 # OS
 .DS_Store
 

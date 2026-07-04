@@ -40,6 +40,21 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/style" },
           "description": "Instance-level style overrides (phase 11, step 11.8) — only nodes the user actually styled get an entry."
+        },
+        "edgeStyles": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/edgeStyle" },
+          "description": "Instance-level edge style overrides (phase 11, step 11.9), keyed by link-key (e.g. \"A->B:request\") — only edges the user actually styled get an entry."
+        },
+        "edgeLabelOffsets": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/position" },
+          "description": "Edge label drag offsets relative to the edge's own midpoint (phase 11, step 11.9), keyed by link-key — only labels the user actually dragged get an entry."
+        },
+        "hiddenEdgeLabels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Link-keys whose label is individually hidden (phase 11, step 11.9), independent of any global show/hide-all view setting. Never consulted by `dc context`/AI export."
         }
       }
     },
@@ -70,6 +85,17 @@
         "strokeWidth": { "type": "number" },
         "lineStyle": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
         "rounded": { "type": "boolean" }
+      }
+    },
+    "edgeStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "markerStart": { "type": "string", "enum": ["none", "arrow", "open-arrow"] },
+        "markerEnd": { "type": "string", "enum": ["none", "arrow", "open-arrow"] },
+        "lineStyle": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
+        "strokeWidth": { "type": "number" },
+        "color": { "type": "string" }
       }
     }
   }

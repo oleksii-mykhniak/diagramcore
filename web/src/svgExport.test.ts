@@ -125,4 +125,38 @@ describe('renderDiagramSVGString', () => {
     const bIndex = svg.indexOf('Beta');
     expect(svg.slice(bIndex - 300, bIndex)).not.toContain('#ff00ff');
   });
+
+  it('applies an edge style override (PLAN3.md step 11.9): marker kind/line style/width/color', () => {
+    const svg = renderDiagramSVGString(diagram, layout, positions, {}, {
+      edgeStyles: { 'A->B:request': { markerStart: 'open-arrow', markerEnd: 'none', lineStyle: 'dotted', strokeWidth: 4, color: '#123456' } },
+    });
+    expect(svg).not.toContain('marker-end="url(#dc-marker-end-0)"');
+    expect(svg).toContain('marker-start="url(#dc-marker-start-0)"');
+    expect(svg).toContain('stroke-dasharray="2,3"');
+    expect(svg).toContain('stroke="#123456"');
+    expect(svg).toContain('stroke-width="4"');
+    // Open-arrow marker def is an unfilled chevron, not the closed triangle.
+    expect(svg).toContain('fill="none" stroke="#123456"');
+  });
+
+  it('draws the edge label at its offset, respecting global and per-edge visibility (PLAN3.md step 11.9)', () => {
+    const labeledDiagram: Diagram = { ...diagram, links: [{ from: 'A', to: 'B', type: 'request', label: 'fetches' }] };
+
+    const shown = renderDiagramSVGString(labeledDiagram, layout, positions);
+    expect(shown).toContain('fetches');
+
+    const hiddenGlobally = renderDiagramSVGString(labeledDiagram, layout, positions, {}, { showEdgeLabels: false });
+    expect(hiddenGlobally).not.toContain('fetches');
+
+    const hiddenIndividually = renderDiagramSVGString(labeledDiagram, layout, positions, {}, {
+      hiddenEdgeLabels: new Set(['A->B:request']),
+    });
+    expect(hiddenIndividually).not.toContain('fetches');
+
+    const offset = renderDiagramSVGString(labeledDiagram, layout, positions, {}, {
+      edgeLabelOffsets: { 'A->B:request': { x: 30, y: 5 } },
+    });
+    // Edge midpoint is (80,90); with the +30/+5 offset the label lands at (110,95).
+    expect(offset).toContain('x="110" y="95"');
+  });
 });

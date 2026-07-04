@@ -61,6 +61,8 @@ export default function App() {
     selectedNodeId,
     hoveredLinkIndex,
     setHoveredLinkIndex,
+    selectedLinkIndex,
+    setSelectedLinkIndex,
     recording,
     branchTarget,
     focusRequest,
@@ -80,6 +82,11 @@ export default function App() {
     onNodeResizeStop,
     onUpdateNodeStyle,
     onResetNodeStyle,
+    onUpdateEdgeStyle,
+    onResetEdgeStyle,
+    onEdgeLabelDragStop,
+    onEdgeLabelDoubleClick,
+    onToggleEdgeLabelHidden,
     onNewFlow,
     onToggleRecording,
     onAddBranch,
@@ -96,7 +103,7 @@ export default function App() {
   } = useDiagramEditing(current, levelRef, runMutation, updateCurrentLevel, pushHistory, setLoadError);
 
   const { shareUrl, shareError, onExportLayout, onExportImage, onExportFlowStepsZip, onExportContext, onShare } =
-    useDiagramExports(current);
+    useDiagramExports(current, view.showEdgeLabels);
 
   const [importNotice, setImportNotice] = useState<string | null>(null);
 
@@ -160,6 +167,8 @@ export default function App() {
         onToggleSnap={view.toggleSnap}
         showDescriptions={view.showDescriptions}
         onToggleShowDescriptions={view.toggleShowDescriptions}
+        showEdgeLabels={view.showEdgeLabels}
+        onToggleShowEdgeLabels={view.toggleShowEdgeLabels}
         renderStyle={current?.renderStyle ?? 'clean'}
         onToggleRenderStyle={() => setRenderStyle(current?.renderStyle === 'sketch' ? 'clean' : 'sketch')}
         onImportDrawio={(file) => void onImportDrawio(file)}
@@ -228,6 +237,14 @@ export default function App() {
         hoveredLinkIndex={hoveredLinkIndex}
         onEdgeHover={setHoveredLinkIndex}
         onEdgeClick={onEdgeClickRecord}
+        selectedLinkIndex={selectedLinkIndex}
+        onSelectLinkIndex={setSelectedLinkIndex}
+        onUpdateEdgeStyle={onUpdateEdgeStyle}
+        onResetEdgeStyle={onResetEdgeStyle}
+        onEdgeLabelDragStop={onEdgeLabelDragStop}
+        onEdgeLabelDoubleClick={onEdgeLabelDoubleClick}
+        onToggleEdgeLabelHidden={onToggleEdgeLabelHidden}
+        showEdgeLabels={view.showEdgeLabels}
         focusRequest={focusRequest}
         onUpdateSelectedNode={onUpdateSelectedNode}
         onDeleteSelectedNode={onDeleteSelectedNode}

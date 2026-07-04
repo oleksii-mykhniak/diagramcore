@@ -15,10 +15,15 @@ export function useViewSettings() {
   const [grid, setGrid] = useState(() => readBool('dc.ui.grid', true));
   const [snap, setSnap] = useState(() => readBool('dc.ui.snap', false));
   const [showDescriptions, setShowDescriptions] = useState(() => readBool('dc.ui.showDescriptions', false));
+  /** View → "Connection labels" show/hide-all (PLAN3.md step 11.9) — a
+   * pure UI preference (unlike per-edge hide, which is per-diagram
+   * layout-file state), so it lives here alongside grid/snap. */
+  const [showEdgeLabels, setShowEdgeLabels] = useState(() => readBool('dc.ui.showEdgeLabels', true));
 
   useEffect(() => localStorage.setItem('dc.ui.grid', String(grid)), [grid]);
   useEffect(() => localStorage.setItem('dc.ui.snap', String(snap)), [snap]);
   useEffect(() => localStorage.setItem('dc.ui.showDescriptions', String(showDescriptions)), [showDescriptions]);
+  useEffect(() => localStorage.setItem('dc.ui.showEdgeLabels', String(showEdgeLabels)), [showEdgeLabels]);
 
   return {
     grid,
@@ -27,5 +32,7 @@ export function useViewSettings() {
     toggleSnap: () => setSnap((s) => !s),
     showDescriptions,
     toggleShowDescriptions: () => setShowDescriptions((d) => !d),
+    showEdgeLabels,
+    toggleShowEdgeLabels: () => setShowEdgeLabels((s) => !s),
   };
 }

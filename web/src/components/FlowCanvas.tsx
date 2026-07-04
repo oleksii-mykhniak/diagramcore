@@ -3,6 +3,7 @@ import type { DragEvent } from 'react';
 import {
   Background,
   Controls,
+  MarkerType,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -21,8 +22,21 @@ import { nodeTypes, resolveNodeType } from './rfNodeTypes';
 import type { ContainerNodeData, DcNodeData, NoteNodeData } from './rfNodeTypes';
 import { resolveNodeStyle } from '../shapes';
 import type { RenderStyle, StyleOverride } from '../shapes';
+import { edgeLinkKey, resolveEdgeStyle } from '../edgeStyle';
+import type { EdgeMarker, EdgeStyleOverride } from '../edgeStyle';
 import { edgeTypes } from './rfEdgeTypes';
 import type { DcEdgeData } from './rfEdgeTypes';
+
+function toRfMarker(kind: EdgeMarker): MarkerType | undefined {
+  switch (kind) {
+    case 'none':
+      return undefined;
+    case 'arrow':
+      return MarkerType.ArrowClosed;
+    case 'open-arrow':
+      return MarkerType.Arrow;
+  }
+}
 
 export interface ActiveStep {
   from: string;
@@ -71,6 +85,19 @@ interface Props {
   hoveredLinkIndex?: number | null;
   onEdgeHover?: (index: number | null) => void;
   onEdgeClick?: (index: number) => void;
+  /** Instance-level edge style overrides (PLAN3.md step 11.9), keyed by
+   * `edgeStyle.ts`'s `edgeLinkKey`. */
+  edgeStyles?: Record<string, EdgeStyleOverride>;
+  /** Edge label drag offsets relative to the edge's own midpoint
+   * (PLAN3.md step 11.9), keyed by link-key. */
+  edgeLabelOffsets?: Record<string, LayoutPosition>;
+  /** Link-keys whose label is individually hidden (PLAN3.md step 11.9). */
+  hiddenEdgeLabels?: Set<string>;
+  /** View → "Connection labels" show/hide-all (PLAN3.md step 11.9). */
+  showEdgeLabels?: boolean;
+  /** Committed once per label-drag gesture, on release. */
+  onEdgeLabelDragStop?: (linkIndex: number, offset: LayoutPosition) => void;
+  onEdgeLabelDoubleClick?: (linkIndex: number) => void;
   /** Bump `focusNonce` (any change) alongside `focusNodeId` to re-trigger
    * the pan/zoom even if the same node is focused twice in a row
    * (PLAN.md step 7.6, Problems panel "click to focus"). */
@@ -114,6 +141,12 @@ function FlowCanvasInner({
   hoveredLinkIndex,
   onEdgeHover,
   onEdgeClick,
+  edgeStyles,
+  edgeLabelOffsets,
+  hiddenEdgeLabels,
+  showEdgeLabels = true,
+  onEdgeLabelDragStop,
+  onEdgeLabelDoubleClick,
   focusNodeId,
   focusNonce,
   showGrid = true,
@@ -266,6 +299,9 @@ function FlowCanvasInner({
         const key = pairKey(l.from, l.to);
         const isActive = key === activeKey;
         const isVisited = !isActive && (visitedStepKeys?.has(key) ?? false);
+        const linkKey = edgeLinkKey(l);
+        const resolved = resolveEdgeStyle(edgeStyles?.[linkKey]);
+        const hidden = hiddenEdgeLabels?.has(linkKey) ?? false;
         const data: DcEdgeData = {
           label: l.label,
           linkType: l.type,
@@ -273,17 +309,37 @@ function FlowCanvasInner({
           isVisited,
           isHovered: hoveredLinkIndex === i,
           renderStyle,
+          color: resolved.color,
+          strokeWidthOverride: resolved.strokeWidth,
+          lineStyle: resolved.lineStyle,
+          labelOffset: edgeLabelOffsets?.[linkKey],
+          showLabel: showEdgeLabels && !hidden,
+          onLabelDragStop: (offset) => onEdgeLabelDragStop?.(i, offset),
+          onLabelDoubleClick: () => onEdgeLabelDoubleClick?.(i),
         };
         return {
           id: `link-${i}-${l.from}-${l.to}`,
           source: l.from,
           target: l.to,
           type: 'dc-edge',
-          markerEnd: 'arrow',
+          markerEnd: toRfMarker(resolved.markerEnd),
+          markerStart: toRfMarker(resolved.markerStart),
           data,
         };
       }),
-    [diagram.links, activeKey, visitedStepKeys, hoveredLinkIndex, renderStyle],
+    [
+      diagram.links,
+      activeKey,
+      visitedStepKeys,
+      hoveredLinkIndex,
+      renderStyle,
+      edgeStyles,
+      edgeLabelOffsets,
+      hiddenEdgeLabels,
+      showEdgeLabels,
+      onEdgeLabelDragStop,
+      onEdgeLabelDoubleClick,
+    ],
   );
 
   const noteIds = useMemo(() => new Set((notes ?? []).map((n) => n.id)), [notes]);

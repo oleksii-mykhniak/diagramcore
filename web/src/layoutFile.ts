@@ -28,6 +28,18 @@ export interface LayoutStyle {
   rounded?: boolean;
 }
 
+/** An instance-level edge style override (PLAN3.md step 11.9) — mirrors
+ * `edgeStyle.ts`'s `EdgeStyleOverride`. Keyed by `edgeLinkKey` in the
+ * `edgeStyles`/`edgeLabelOffsets` maps below, since links have no
+ * explicit id in the format. */
+export interface LayoutEdgeStyle {
+  markerStart?: 'none' | 'arrow' | 'open-arrow';
+  markerEnd?: 'none' | 'arrow' | 'open-arrow';
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+  strokeWidth?: number;
+  color?: string;
+}
+
 export interface LayoutFile {
   views: {
     [view: string]: {
@@ -39,9 +51,20 @@ export interface LayoutFile {
        * nodes the user actually resized get an entry; everything else
        * keeps the auto-layout default size. */
       sizes?: Record<string, LayoutSize>;
-      /** Instance-level style overrides (PLAN3.md step 11.8) — only
+      /** Instance-level node style overrides (PLAN3.md step 11.8) — only
        * nodes the user actually styled get an entry. */
       styles?: Record<string, LayoutStyle>;
+      /** Instance-level edge style overrides (PLAN3.md step 11.9) — only
+       * edges the user actually styled get an entry. */
+      edgeStyles?: Record<string, LayoutEdgeStyle>;
+      /** Edge label drag offsets, relative to the edge's own midpoint
+       * (PLAN3.md step 11.9) — only labels the user actually dragged
+       * get an entry. */
+      edgeLabelOffsets?: Record<string, LayoutPosition>;
+      /** Edge link-keys whose label is individually hidden (PLAN3.md
+       * step 11.9), independent of the global "Connection labels"
+       * show/hide-all view setting. */
+      hiddenEdgeLabels?: string[];
     };
   };
   /** Diagram style preset (PLAN.md step 10.12) — top-level, not per-view,
@@ -52,13 +75,19 @@ export interface LayoutFile {
 
 export const DEFAULT_VIEW = 'default';
 
-export function buildLayoutFile(
-  positions: Record<string, LayoutPosition>,
-  notePositions?: Record<string, LayoutPosition>,
-  renderStyle?: RenderStyle,
-  sizes?: Record<string, LayoutSize>,
-  styles?: Record<string, LayoutStyle>,
-): LayoutFile {
+export interface BuildLayoutFileInput {
+  positions: Record<string, LayoutPosition>;
+  notePositions?: Record<string, LayoutPosition>;
+  renderStyle?: RenderStyle;
+  sizes?: Record<string, LayoutSize>;
+  styles?: Record<string, LayoutStyle>;
+  edgeStyles?: Record<string, LayoutEdgeStyle>;
+  edgeLabelOffsets?: Record<string, LayoutPosition>;
+  hiddenEdgeLabels?: string[];
+}
+
+export function buildLayoutFile(input: BuildLayoutFileInput): LayoutFile {
+  const { positions, notePositions, renderStyle, sizes, styles, edgeStyles, edgeLabelOffsets, hiddenEdgeLabels } = input;
   return {
     views: {
       [DEFAULT_VIEW]: {
@@ -66,10 +95,43 @@ export function buildLayoutFile(
         ...(notePositions ? { notePositions } : {}),
         ...(sizes && Object.keys(sizes).length > 0 ? { sizes } : {}),
         ...(styles && Object.keys(styles).length > 0 ? { styles } : {}),
+        ...(edgeStyles && Object.keys(edgeStyles).length > 0 ? { edgeStyles } : {}),
+        ...(edgeLabelOffsets && Object.keys(edgeLabelOffsets).length > 0 ? { edgeLabelOffsets } : {}),
+        ...(hiddenEdgeLabels && hiddenEdgeLabels.length > 0 ? { hiddenEdgeLabels } : {}),
       },
     },
     ...(renderStyle && renderStyle !== 'clean' ? { renderStyle } : {}),
   };
+}
+
+/** The subset of `DiagramLevel` (`hooks/useDiagramStack.ts`) needed to
+ * build a `LayoutFile` — a structural (not imported) type, since
+ * `layoutFile.ts` shouldn't depend on the hooks layer. Every "produce a
+ * layout file from the current level" call site (`onSave`,
+ * `onExportLayout`, `onShare`) goes through `buildLayoutFileFromLevel`
+ * instead of repeating this field-by-field mapping. */
+export interface LayoutFileSource {
+  positions: Record<string, LayoutPosition>;
+  notePositions: Record<string, LayoutPosition>;
+  renderStyle: RenderStyle;
+  sizes: Record<string, { width: number; height: number }>;
+  styles: Record<string, LayoutStyle>;
+  edgeStyles: Record<string, LayoutEdgeStyle>;
+  edgeLabelOffsets: Record<string, LayoutPosition>;
+  hiddenEdgeLabels: Set<string>;
+}
+
+export function buildLayoutFileFromLevel(level: LayoutFileSource): LayoutFile {
+  return buildLayoutFile({
+    positions: level.positions,
+    notePositions: level.notePositions,
+    renderStyle: level.renderStyle,
+    sizes: toLayoutSizes(level.sizes),
+    styles: level.styles,
+    edgeStyles: level.edgeStyles,
+    edgeLabelOffsets: level.edgeLabelOffsets,
+    hiddenEdgeLabels: Array.from(level.hiddenEdgeLabels),
+  });
 }
 
 /** `DiagramLevel.sizes` (`{width,height}`) <-> `LayoutFile`'s `{w,h}` —

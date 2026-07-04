@@ -358,3 +358,90 @@
   повний `npx playwright test` (78 passed + 3 skipped — прихований
   draw.io).
 - Commit: `phase11-step8: інстанс-стилі вузлів + Properties UI Style-секція`.
+
+## Крок 11.9 — Ребра: стрілки/стиль/рухомі лейбли/видимість
+- `web/src/edgeStyle.ts` (новий): `edgeLinkKey(link)` — стабільний
+  ключ ребра (`from->to:type`, формат не має id для links) для всіх
+  per-instance edge-мап; `EdgeMarker = 'none'|'arrow'|'open-arrow'`,
+  `EdgeStyleOverride{markerStart?,markerEnd?,lineStyle?,strokeWidth?,
+  color?}`, `resolveEdgeStyle(override)` — дефолт markerStart='none',
+  markerEnd='arrow' (те саме, що й раніше без оверрайду).
+- Go `internal/layout.go`: `EdgeStyle{MarkerStart,MarkerEnd,LineStyle,
+  StrokeWidth,Color}`, `View.EdgeStyles map[key]EdgeStyle`,
+  `View.EdgeLabelOffsets map[key]Position`, `View.HiddenEdgeLabels
+  []string` — round-trip у `Save()` поряд із `Sizes`/`Styles`.
+  `schema/layout.schema.json` розширено відповідно.
+- `layoutFile.ts`: дзеркальні типи + `LayoutFile.views[].edgeStyles/
+  edgeLabelOffsets/hiddenEdgeLabels`. `buildLayoutFile` рефакторено з
+  8 позиційних параметрів на один options-об'єкт
+  (`BuildLayoutFileInput`) — далі додавати поля безпечно. Новий
+  `buildLayoutFileFromLevel(level)` — єдина точка "level → layout
+  file", використовується в `onSave`/`onExportLayout`/`onShare`
+  замість дублювання маппінгу по трьох місцях.
+  `DiagramLevel` (`useDiagramStack.ts`) отримав `edgeStyles`,
+  `edgeLabelOffsets: Record<key, LayoutPosition>`,
+  `hiddenEdgeLabels: Set<key>` — проведено по всіх тих самих точках,
+  що й `sizes`/`styles` у кроці 11.8 (`buildLevel`, `onOpenNative`,
+  share-link ефект, autosave restore/schedule, `onSave`'s
+  `hasLayoutToSave`, `onImportLayout`, `localAutosave.ts`'s
+  `AutosaveData`).
+- Канва: `FlowCanvas.tsx` рахує `resolveEdgeStyle(edgeStyles?.[key])`
+  на кожне ребро, мапить `EdgeMarker` → React Flow `MarkerType` через
+  `toRfMarker` (`'arrow'`→`ArrowClosed` залитий, `'open-arrow'`→
+  `Arrow` незалитий — навмисно НЕ 1:1 з рядковими значеннями RF-енуму,
+  див. `docs/deviations.md` крок 11.9) і виставляє їх як
+  `markerStart`/`markerEnd` на RF edge-об'єкті (звідки їх бере
+  вбудований механізм генерації `<marker>` defs). `rfEdgeTypes.tsx`
+  (`DcEdge`): резолвлений color/strokeWidth/lineStyle застосовується,
+  коли ребро не active/visited/hovered (той самий пріоритет, що й для
+  вузлів); лейбл — реалізовано drag через pointerdown/move/up з
+  діленням дельти на `getZoom()` (портал `EdgeLabelRenderer` живе в
+  тому самому трансформованому просторі, що й канва), коміт офсету
+  лише на pointerup; подвійний клік на лейблі → `window.prompt` →
+  патч `link.label` через `applyOps`; видимість — `data.showLabel`
+  (глобальний View-тумблер AND не в `hiddenEdgeLabels`).
+- `svgExport.ts`: `RenderOptions` отримав `edgeStyles`/
+  `edgeLabelOffsets`/`hiddenEdgeLabels`/`showEdgeLabels`. Раніше
+  ребра завжди малювались з ОДНИМ статичним `<marker id="arrow">`
+  (насправді залитий трикутник) і БЕЗ лейблів взагалі (пропуск,
+  виявлений під час цього кроку) — тепер на кожне ребро генеруються
+  власні marker-defs через резолвлений стиль, і лейбл малюється як
+  `<text>` у midpoint ребра + офсет. Дефолтний (без оверрайду) вигляд
+  залишено як був (canvas/export і до цього кроку малювали дефолтну
+  стрілку по-різному — не виправлялось, деталі в deviations.md).
+- `LinksPanel.tsx`: розгорнутий рядок лінку контролюється зверху
+  (`selectedIndex`/`onSelectIndex` замість локального `useState`) —
+  так клік по ребру на канві й клік у списку відкривають той самий
+  рядок. Додано select для start/end marker, line style, stroke
+  width, color-picker, checkbox "Hide this label", кнопка "Reset
+  style". Клік по ребру поза flow-recording (`onEdgeClickRecord` у
+  `useDiagramEditing.ts`) тепер виставляє `selectedLinkIndex` замість
+  нічого не робити — `EditorWorkspace` перемикає правий док на
+  Links-таб тим самим ефектом, що й для `selectedNodeId`/Properties.
+- View-меню: новий тумблер "Connection labels" (show/hide all) —
+  `useViewSettings.ts`'s `showEdgeLabels` (localStorage-персистентний
+  UI-preference, як grid/snap; на відміну від per-edge hide, який
+  живе в layout-файлі/share-link). `dc context`/AI-експорт (Go
+  `internal/context`) взагалі не імпортує `internal/layout` — тому
+  структурно не бачить hidden-label стан; підтверджено раундтрип-
+  тестом у `layout_test.go`.
+- Тести: `edgeStyle.test.ts` (стабільність ключа, дефолт-резолюція),
+  `svgExport.test.ts` +2 (marker/line-style/color оверрайд; лейбл на
+  офсеті + глобальна/індивідуальна видимість), `internal/layout`
+  `TestSavePreservesWebEditorOnlyFields` розширено на нові поля.
+  Новий e2e `edge-style.spec.ts` (7 сценаріїв: клік по ребру відкриває
+  Links-док; зміна маркера/стилю/товщини/кольору видима на канві і
+  YAML незмінний; виживає Export→Import layout однаково на канві;
+  Reset style; drag лейблу незалежно від ребра, офсет виживає
+  Export→Import; подвійний клік редагує текст лейблу; View → Connection
+  labels ховає всі, individual checkbox ховає один).
+- Знайдено під час написання e2e: реальний `.dblclick()` на лейблі
+  ламається через `setPointerCapture` у моєму ж pointerdown-обробнику
+  drag'у (той самий клас багів, що й node dblclick у кроці 7.2) —
+  тест перейшов на `dispatchEvent('dblclick')`, як уже робили
+  `flow-editor.spec.ts` для кліків по ребрах.
+- Регресія: `go build/vet/test ./...`, `./dc validate
+  examples/*.dc.yaml` (4/4), `npm test` (91/91), `npm run build`,
+  повний `npx playwright test` (85 passed + 3 skipped — прихований
+  draw.io).
+- Commit: `phase11-step9: ребра — стрілки/стиль/рухомі лейбли/видимість`.

@@ -1,4 +1,4 @@
-import type { LayoutPosition, LayoutStyle, RenderStyle } from './layoutFile';
+import type { LayoutEdgeStyle, LayoutPosition, LayoutStyle, RenderStyle } from './layoutFile';
 
 /** Local (per-browser) autosave (PLAN3.md step 11.3): a debounced
  * IndexedDB snapshot of the current level's editable state, keyed by
@@ -16,6 +16,15 @@ export interface AutosaveData {
   /** Instance-level style overrides (PLAN3.md step 11.8). Optional so
    * records written before this field existed still decode. */
   styles?: Record<string, LayoutStyle>;
+  /** Instance-level edge style overrides (PLAN3.md step 11.9). Optional
+   * so records written before this field existed still decode. */
+  edgeStyles?: Record<string, LayoutEdgeStyle>;
+  /** Edge label drag offsets (PLAN3.md step 11.9). Optional so records
+   * written before this field existed still decode. */
+  edgeLabelOffsets?: Record<string, LayoutPosition>;
+  /** Individually-hidden edge label link-keys (PLAN3.md step 11.9).
+   * Optional so records written before this field existed still decode. */
+  hiddenEdgeLabels?: string[];
 }
 
 export interface AutosaveRecord extends AutosaveData {

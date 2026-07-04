@@ -9,6 +9,8 @@ import type { Diagram, DiagramNode, DiagramLink, DiagramNoteDef } from '../types
 import { fromLayoutSizes, parseLayoutFile } from '../layoutFile';
 import type { LayoutPosition } from '../layoutFile';
 import type { StyleOverride } from '../shapes';
+import { edgeLinkKey } from '../edgeStyle';
+import type { EdgeStyleOverride } from '../edgeStyle';
 import type { FlowPlayerState } from '../flowPlayer';
 import { applyPatch } from '../yamlPatch';
 import type { PatchOp } from '../yamlPatch';
@@ -32,6 +34,10 @@ export function useDiagramEditing(
 ) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
+  /** Selected link (PLAN3.md step 11.9) — set when clicking an edge on
+   * the canvas outside of flow recording, so its properties can open in
+   * the right dock's Links tab (mirrors `selectedNodeId`/Properties). */
+  const [selectedLinkIndex, setSelectedLinkIndex] = useState<number | null>(null);
   const [recording, setRecording] = useState(false);
   const [branchTarget, setBranchTarget] = useState<BranchTarget | null>(null);
   const [focusRequest, setFocusRequest] = useState<
@@ -304,6 +310,77 @@ export function useDiagramEditing(
     updateCurrentLevel({ styles });
   }, [current, selectedNodeId, updateCurrentLevel]);
 
+  /** Links panel/edge Style section (PLAN3.md step 11.9): patches an
+   * instance style override for the selected link — layout-file state,
+   * like node styles, never the YAML. */
+  const onUpdateEdgeStyle = useCallback(
+    (patch: Partial<EdgeStyleOverride>) => {
+      if (!current || selectedLinkIndex === null) return;
+      const link = current.diagram.links[selectedLinkIndex];
+      if (!link) return;
+      const key = edgeLinkKey(link);
+      const existing = current.edgeStyles[key] ?? {};
+      updateCurrentLevel({ edgeStyles: { ...current.edgeStyles, [key]: { ...existing, ...patch } } });
+    },
+    [current, selectedLinkIndex, updateCurrentLevel],
+  );
+
+  /** "Reset style" for the selected link. */
+  const onResetEdgeStyle = useCallback(() => {
+    if (!current || selectedLinkIndex === null) return;
+    const link = current.diagram.links[selectedLinkIndex];
+    if (!link) return;
+    const key = edgeLinkKey(link);
+    if (!(key in current.edgeStyles)) return;
+    const edgeStyles = { ...current.edgeStyles };
+    delete edgeStyles[key];
+    updateCurrentLevel({ edgeStyles });
+  }, [current, selectedLinkIndex, updateCurrentLevel]);
+
+  /** Edge label drag (PLAN3.md step 11.9): committed once, on release —
+   * same single-commit-per-gesture pattern as node drag/resize. */
+  const onEdgeLabelDragStop = useCallback(
+    (linkIndex: number, offset: LayoutPosition) => {
+      if (!current) return;
+      const link = current.diagram.links[linkIndex];
+      if (!link) return;
+      const key = edgeLinkKey(link);
+      updateCurrentLevel({ edgeLabelOffsets: { ...current.edgeLabelOffsets, [key]: offset } });
+    },
+    [current, updateCurrentLevel],
+  );
+
+  /** Double-click an edge label (PLAN3.md step 11.9): prompts for new
+   * text and patches the link's `label` in the YAML — mirrors
+   * `onNoteDoubleClick`. */
+  const onEdgeLabelDoubleClick = useCallback(
+    (linkIndex: number) => {
+      if (!current) return;
+      const link = current.diagram.links[linkIndex];
+      if (!link) return;
+      const next = window.prompt('Link label', link.label ?? '');
+      if (next === null) return;
+      void applyOps([{ op: 'updateLink', index: linkIndex, patch: { label: next } }]);
+    },
+    [current, applyOps],
+  );
+
+  /** Individual label show/hide (PLAN3.md step 11.9) — independent of
+   * the global "Connection labels" view setting. */
+  const onToggleEdgeLabelHidden = useCallback(
+    (linkIndex: number) => {
+      if (!current) return;
+      const link = current.diagram.links[linkIndex];
+      if (!link) return;
+      const key = edgeLinkKey(link);
+      const hiddenEdgeLabels = new Set(current.hiddenEdgeLabels);
+      if (hiddenEdgeLabels.has(key)) hiddenEdgeLabels.delete(key);
+      else hiddenEdgeLabels.add(key);
+      updateCurrentLevel({ hiddenEdgeLabels });
+    },
+    [current, updateCurrentLevel],
+  );
+
   const recordingFlow =
     current?.flowPlayerState.flowIndex != null ? current.diagram.flows?.[current.flowPlayerState.flowIndex] ?? null : null;
 
@@ -341,7 +418,13 @@ export function useDiagramEditing(
 
   const onEdgeClickRecord = useCallback(
     (index: number) => {
-      if (!recording || !recordingFlow || !current) return;
+      if (!recording || !recordingFlow || !current) {
+        // Not recording a flow: a click on an edge selects it instead,
+        // so its properties can open in the right dock's Links tab
+        // (PLAN3.md step 11.9).
+        setSelectedLinkIndex(index);
+        return;
+      }
       const link = current.diagram.links[index];
       if (!link) return;
       const note = window.prompt('Step note (optional)') ?? undefined;
@@ -434,6 +517,12 @@ export function useDiagramEditing(
             notePositions: { ...current.notePositions, ...(imported.views.default?.notePositions ?? {}) },
             sizes: { ...current.sizes, ...fromLayoutSizes(imported.views.default?.sizes) },
             styles: { ...current.styles, ...(imported.views.default?.styles ?? {}) },
+            edgeStyles: { ...current.edgeStyles, ...(imported.views.default?.edgeStyles ?? {}) },
+            edgeLabelOffsets: { ...current.edgeLabelOffsets, ...(imported.views.default?.edgeLabelOffsets ?? {}) },
+            hiddenEdgeLabels: new Set([
+              ...current.hiddenEdgeLabels,
+              ...(imported.views.default?.hiddenEdgeLabels ?? []),
+            ]),
             ...(imported.renderStyle ? { renderStyle: imported.renderStyle } : {}),
           });
         } catch (err) {
@@ -454,6 +543,8 @@ export function useDiagramEditing(
     setSelectedNodeId,
     hoveredLinkIndex,
     setHoveredLinkIndex,
+    selectedLinkIndex,
+    setSelectedLinkIndex,
     recording,
     branchTarget,
     focusRequest,
@@ -474,6 +565,11 @@ export function useDiagramEditing(
     onNodeResizeStop,
     onUpdateNodeStyle,
     onResetNodeStyle,
+    onUpdateEdgeStyle,
+    onResetEdgeStyle,
+    onEdgeLabelDragStop,
+    onEdgeLabelDoubleClick,
+    onToggleEdgeLabelHidden,
     onNewFlow,
     onToggleRecording,
     onAddBranch,
