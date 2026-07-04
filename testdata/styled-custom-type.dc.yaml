@@ -1,0 +1,20 @@
+diagram:
+  title: "Styled custom type fixture"
+  purpose: "Fixture for PLAN2.md step 10.7 — object-form custom_types."
+  custom_types:
+    - name: cache
+      shape: hexagon
+      color: "#f5a623"
+      icon: database
+
+nodes:
+  - id: A
+    type: cache
+    label: "Redis cache"
+  - id: B
+    type: service
+
+links:
+  - from: B
+    to: A
+    type: request

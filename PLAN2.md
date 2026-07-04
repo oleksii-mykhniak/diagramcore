@@ -197,10 +197,10 @@ object{required:[name]}]`; `docs/format.md` — таблиця нових пол
 CustomTypes (context-генератор, transpile).
 
 **AC:**
-- [ ] Go unit: обидві форми item'а парсяться; змішаний список теж; DC003 працює для обох форм.
-- [ ] `./dc validate examples/*.dc.yaml` — 0 помилок (усі наявні examples валідні без змін); JSON Schema приймає обидві форми, відхиляє object без `name`.
-- [ ] `go test ./...` + `go vet ./...` зелені; `make wasm && make wasm-test` зелені; WASM-валідація в браузері приймає діаграму з object-формою.
-- [ ] `docs/format.md` оновлено; фікстура зі стильованим custom type додана в `testdata/` або `examples/`.
+- [x] Go unit: обидві форми item'а парсяться; змішаний список теж; DC003 працює для обох форм.
+- [x] `./dc validate examples/*.dc.yaml` — 0 помилок (усі наявні examples валідні без змін); JSON Schema приймає обидві форми, відхиляє object без `name`.
+- [x] `go test ./...` + `go vet ./...` зелені; `make wasm && make wasm-test` зелені; WASM-валідація в браузері приймає діаграму з object-формою.
+- [x] `docs/format.md` оновлено; фікстура зі стильованим custom type додана в `testdata/` або `examples/`.
 
 ## Крок 10.8 — Візуали custom_types на канві, в експорті та палітрі
 

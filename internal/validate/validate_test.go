@@ -141,3 +141,62 @@ func TestValidateStringBrokenDiagram(t *testing.T) {
 		t.Errorf("expected a DC004 error, got: %v", errs)
 	}
 }
+
+func TestCustomTypesBothFormsSatisfyDC003(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "scalar form",
+			yaml: `
+diagram:
+  title: "T"
+  custom_types: [cache]
+nodes:
+  - id: A
+    type: cache
+links: []
+`,
+		},
+		{
+			name: "object form",
+			yaml: `
+diagram:
+  title: "T"
+  custom_types:
+    - name: cache
+      shape: hexagon
+      color: "#f5a623"
+nodes:
+  - id: A
+    type: cache
+links: []
+`,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			errs, err := ValidateString(c.yaml)
+			if err != nil {
+				t.Fatalf("ValidateString failed: %v", err)
+			}
+			for _, e := range errs {
+				if e.Code == "DC003" {
+					t.Errorf("unexpected DC003 for a declared custom type: %v", errs)
+				}
+			}
+		})
+	}
+}
+
+func TestStyledCustomTypeFixtureIsValid(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "styled-custom-type.dc.yaml")
+	errs, err := ValidateFile(path)
+	if err != nil {
+		t.Fatalf("ValidateFile(%s) failed: %v", path, err)
+	}
+	if len(errs) != 0 {
+		t.Errorf("expected no validation errors, got: %v", errs)
+	}
+}

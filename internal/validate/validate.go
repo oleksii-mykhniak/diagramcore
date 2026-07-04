@@ -132,7 +132,7 @@ func checkUnknownTypes(d *model.Diagram) []Error {
 		allowedNodeTypes[t] = true
 	}
 	for _, t := range d.Meta.CustomTypes {
-		allowedNodeTypes[t] = true
+		allowedNodeTypes[t.Name] = true
 	}
 	for _, n := range d.Nodes {
 		if !allowedNodeTypes[n.Type] {

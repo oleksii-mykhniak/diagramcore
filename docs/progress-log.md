@@ -1212,3 +1212,35 @@
   `docs/deviations.md`) ✅; наявні e2e (44 специфікації) зелені без
   правок — testid/DOM-структура `NodeShell` збережені ✅; `npm test`
   (46 тестів) + `npm run build` + `npm run lint` зелені ✅.
+
+### Крок 10.7 — Формат: стильовані `custom_types` (Go + schema + WASM)
+- Дата: 2026-07-04
+- Виконано: `internal/model/model.go` — `CustomType{Name, Shape, Color,
+  Icon, Line}` з `UnmarshalYAML`, що приймає скаляр (legacy `[cache,
+  worker]`) або мапу (`{name, shape?, color?, icon?}`), той самий
+  патерн, що вже використовує `StepOrBranch` (диспетч по `value.Kind`).
+  `DiagramMeta.CustomTypes` тепер `[]CustomType`.
+  `internal/validate/validate.go:134` → `t.Name`. `schema/
+  diagramcore.schema.json`: `custom_types.items` —
+  `oneOf[string, object{required:[name], additionalProperties:false}]`.
+  `docs/format.md` — новий підрозділ "Стильовані custom_types" з
+  таблицею полів + приклад змішаного списку; уточнено, що
+  shape/color/icon — суто web-презентаційні (Go/CLI дивиться лише на
+  `name`). `testdata/styled-custom-type.dc.yaml` — фікстура з
+  object-формою. `make wasm` перезібрано; `web/scripts/test-wasm.cjs`
+  доповнено перевіркою, що ця фікстура дає 0 помилок через
+  `globalThis.validate` (браузерний шлях). Інші споживачі `CustomTypes`
+  перевірено — `internal/transpile/{d2,mermaid}.go` лише згадують
+  custom_types у коментарях, коду не чіпають.
+- Коміт: (цей крок)
+- AC: Go unit (`internal/model/model_test.go`, 3 тести) — скалярна/
+  об'єктна/змішана форми парсяться ✅; `internal/validate/
+  validate_test.go` — DC003 не спрацьовує для жодної форми ✅;
+  `./dc validate examples/*.dc.yaml` — 0 помилок, наявні examples не
+  чіпались ✅; JSON Schema приймає обидві форми, відхиляє object без
+  `name` (перевірено вручну структурним оглядом — автоматичного тесту
+  немає, деталі й причина в `docs/deviations.md`, крок 10.7) ✅;
+  `go test ./...` (усі пакети) + `go vet ./...` зелені ✅; `make wasm &&
+  make wasm-test` зелений, включно з новою перевіркою object-форми
+  через `globalThis.validate` ✅; `npm test` (46) + `npm run build`
+  зелені (web-сторона цього кроку не чіпалась, окрім test-wasm.cjs) ✅.

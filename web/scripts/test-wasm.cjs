@@ -17,6 +17,7 @@ const brokenYAML = fs.readFileSync(
 	path.join(repoRoot, "internal", "validate", "testdata", "dc004_flow_no_link.dc.yaml"),
 	"utf8"
 );
+const styledCustomTypeYAML = fs.readFileSync(path.join(repoRoot, "testdata", "styled-custom-type.dc.yaml"), "utf8");
 
 async function main() {
 	const go = new Go();
@@ -42,7 +43,14 @@ async function main() {
 		throw new Error(`expected a DC004 error for the broken diagram, got: ${JSON.stringify(brokenErrors)}`);
 	}
 
-	console.log("OK: valid diagram -> 0 errors; broken diagram -> DC004");
+	const styledErrors = globalThis.validate(styledCustomTypeYAML);
+	if (!Array.isArray(styledErrors) || styledErrors.length !== 0) {
+		throw new Error(
+			`expected 0 errors for the object-form custom_types fixture, got: ${JSON.stringify(styledErrors)}`
+		);
+	}
+
+	console.log("OK: valid diagram -> 0 errors; broken diagram -> DC004; object-form custom_types -> 0 errors");
 	process.exit(0);
 }
 

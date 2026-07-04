@@ -17,7 +17,22 @@
         "version": { "type": "string" },
         "custom_types": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "object",
+                "required": ["name"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "shape": { "type": "string" },
+                  "color": { "type": "string" },
+                  "icon": { "type": "string" }
+                }
+              }
+            ]
+          }
         }
       }
     },

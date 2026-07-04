@@ -19,12 +19,55 @@ type Diagram struct {
 
 // DiagramMeta holds the `diagram` section.
 type DiagramMeta struct {
-	Title       string   `yaml:"title"`
-	Purpose     string   `yaml:"purpose"`
-	Audience    string   `yaml:"audience"`
-	Version     string   `yaml:"version"`
-	CustomTypes []string `yaml:"custom_types"`
-	Line        int      `yaml:"-"`
+	Title       string       `yaml:"title"`
+	Purpose     string       `yaml:"purpose"`
+	Audience    string       `yaml:"audience"`
+	Version     string       `yaml:"version"`
+	CustomTypes []CustomType `yaml:"custom_types"`
+	Line        int          `yaml:"-"`
+}
+
+// CustomType is one entry of `diagram.custom_types` (PLAN2.md step 10.7):
+// either a bare scalar name (legacy form, `Shape`/`Color`/`Icon` left
+// zero) or an object `{name, shape?, color?, icon?}`. `Shape`/`Color`/
+// `Icon` are web-only presentation hints — Go only needs `Name` for
+// DC003 (unknown node type) and doesn't validate them further; an
+// unrecognized `Shape` is not an error (falls back to `component` on the
+// web side, per docs/format.md).
+type CustomType struct {
+	Name  string
+	Shape string
+	Color string
+	Icon  string
+	Line  int
+}
+
+func (c *CustomType) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		var name string
+		if err := value.Decode(&name); err != nil {
+			return err
+		}
+		c.Name = name
+		c.Line = value.Line
+		return nil
+	}
+	type raw struct {
+		Name  string `yaml:"name"`
+		Shape string `yaml:"shape"`
+		Color string `yaml:"color"`
+		Icon  string `yaml:"icon"`
+	}
+	var aux raw
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	c.Name = aux.Name
+	c.Shape = aux.Shape
+	c.Color = aux.Color
+	c.Icon = aux.Icon
+	c.Line = value.Line
+	return nil
 }
 
 func (m *DiagramMeta) UnmarshalYAML(value *yaml.Node) error {
