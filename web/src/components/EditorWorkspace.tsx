@@ -11,6 +11,7 @@ import { StartScreen } from './StartScreen';
 import { StatusBar } from './StatusBar';
 import { RightDock } from './RightDock';
 import type { RightDockTab } from './RightDock';
+import { TabStrip } from './TabStrip';
 import type { ValidationError } from '../wasmValidate';
 import type { DiagramNode, DiagramLink, DiagramNoteDef, Flow } from '../types';
 import type { LayoutPosition } from '../layoutFile';
@@ -23,6 +24,13 @@ interface EditorWorkspaceProps {
   drillError: string | null;
   importNotice: string | null;
   current: DiagramLevel | null;
+  openTabs: string[];
+  activeTab: string | null;
+  mainFileName: string | null;
+  levels: Record<string, DiagramLevel>;
+  tabErrors: Record<string, string>;
+  onSwitchTab: (fileName: string) => void;
+  onCloseTab: (fileName: string) => void;
   onSelectProblem: (error: ValidationError) => void;
   onFlowPlayerChange: (state: FlowPlayerState) => void;
   recordingFlow: Flow | null;
@@ -81,6 +89,13 @@ export function EditorWorkspace({
   drillError,
   importNotice,
   current,
+  openTabs,
+  activeTab,
+  mainFileName,
+  levels,
+  tabErrors,
+  onSwitchTab,
+  onCloseTab,
   onSelectProblem,
   onFlowPlayerChange,
   recordingFlow,
@@ -147,6 +162,22 @@ export function EditorWorkspace({
         </p>
       )}
       {importNotice && <p data-testid="import-notice">{importNotice}</p>}
+      {openTabs.length > 0 && (
+        <TabStrip
+          openTabs={openTabs}
+          activeTab={activeTab}
+          mainFileName={mainFileName}
+          levels={levels}
+          tabErrors={tabErrors}
+          onSwitchTab={onSwitchTab}
+          onCloseTab={onCloseTab}
+        />
+      )}
+      {activeTab && tabErrors[activeTab] && (
+        <p role="alert" data-testid="tab-error">
+          {tabErrors[activeTab]}
+        </p>
+      )}
       {current && (
         <>
           <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>

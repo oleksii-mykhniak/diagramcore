@@ -5,6 +5,7 @@ import { Tour } from './components/Tour';
 import { ExportDialog } from './components/ExportDialog';
 import { useTheme } from './hooks/useTheme';
 import { useDiagramStack } from './hooks/useDiagramStack';
+import type { DiagramLevel } from './hooks/useDiagramStack';
 import { useHistory } from './hooks/useHistory';
 import { useDiagramEditing } from './hooks/useDiagramEditing';
 import { useDiagramExports } from './hooks/useDiagramExports';
@@ -21,7 +22,12 @@ export default function App() {
   const exportSettings = useExportSettings();
 
   const {
-    stack,
+    levels,
+    openTabs,
+    activeTab,
+    mainFileName,
+    tabErrors,
+    breadcrumbFileNames,
     current,
     loadError,
     setLoadError,
@@ -41,7 +47,8 @@ export default function App() {
     onSave,
     hasUnsavedChanges,
     openDetails,
-    goToLevel,
+    switchTab,
+    closeTab,
     setRenderStyle,
     restorePrompt,
     onRestoreAutosave,
@@ -140,8 +147,8 @@ export default function App() {
         onUndo={() => void onUndo()}
         onRedo={() => void onRedo()}
         historyCounts={historyCounts}
-        stack={stack}
-        goToLevel={goToLevel}
+        breadcrumbLevels={breadcrumbFileNames.map((f) => levels[f]).filter((l): l is DiagramLevel => Boolean(l))}
+        onBreadcrumbClick={switchTab}
         selectedNodeId={selectedNodeId}
         onDeleteSelectedNode={onDeleteSelectedNode}
         onShowTour={() => setShowTour(true)}
@@ -184,6 +191,13 @@ export default function App() {
         drillError={drillError}
         importNotice={importNotice}
         current={current}
+        openTabs={openTabs}
+        activeTab={activeTab}
+        mainFileName={mainFileName}
+        levels={levels}
+        tabErrors={tabErrors}
+        onSwitchTab={switchTab}
+        onCloseTab={closeTab}
         onSelectProblem={onSelectProblem}
         onFlowPlayerChange={onFlowPlayerChange}
         recordingFlow={recordingFlow}

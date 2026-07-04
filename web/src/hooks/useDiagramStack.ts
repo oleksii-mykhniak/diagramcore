@@ -61,16 +61,33 @@ function detailsBasename(details: string): string {
 
 const HISTORY_LIMIT = 50;
 
-/** Owns the open-document stack: which file(s) are loaded, the current
- * drill-down level, and the serialized-mutation machinery (`levelRef`/
- * `runMutation`) every editing hook builds on. Also owns undo/redo history
- * state, since a fresh load must always reset it (PLAN.md step 7.7) —
- * kept alongside the stack so every load site (open/drop/native-open/
- * drill-down/share-link) resets it in the same place instead of
- * threading a callback through from a sibling hook. */
+type HistoryEntry = { past: string[]; future: string[] };
+
+/** Owns every currently open diagram tab (PLAN3.md step 11.7 — a main
+ * file plus every `details:` sub-diagram reachable from it, all parsed
+ * eagerly at load time instead of lazily on double-click), which one is
+ * active, and the serialized-mutation machinery (`levelRef`/`runMutation`)
+ * every editing hook builds on. Also owns undo/redo history — one
+ * independent stack per tab, since switching tabs must not affect a
+ * different tab's undo stack — and local-autosave scheduling for the
+ * active tab. */
 export function useDiagramStack() {
   const [virtualFS, setVirtualFS] = useState<Record<string, string>>({});
-  const [stack, setStack] = useState<DiagramLevel[]>([]);
+  const [levels, setLevels] = useState<Record<string, DiagramLevel>>({});
+  /** Every open tab, in the order it was first opened; the main file is
+   * always first and never closable. */
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [mainFileName, setMainFileName] = useState<string | null>(null);
+  /** A tab whose file failed to parse/build (PLAN3.md step 11.7): kept
+   * in `openTabs` so it still gets a tab (and, if it's on the current
+   * breadcrumb path, still shows there) — its content just can't be
+   * displayed, only the error. */
+  const [tabErrors, setTabErrors] = useState<Record<string, string>>({});
+  /** fileName -> the fileName of the tab whose node's `details:` first
+   * opened it, used to reconstruct the breadcrumb path back to the main
+   * file for whichever tab is active. */
+  const [tabParent, setTabParent] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drillError, setDrillError] = useState<string | null>(null);
   /** "Restore unsaved work?" banner (PLAN3.md step 11.3): set whenever a
@@ -79,42 +96,68 @@ export function useDiagramStack() {
    * for the same `fileName`, offering to swap in that draft instead. */
   const [restorePrompt, setRestorePrompt] = useState<AutosaveRecord | null>(null);
 
-  const current = stack.length > 0 ? stack[stack.length - 1] : null;
-  /** Mirrors the current level synchronously (React state updates are not
+  const current = activeTab ? (levels[activeTab] ?? null) : null;
+  /** Mirrors the active level synchronously (React state updates are not
    * synchronous, so a second `applyOps` call fired before the first one's
-   * `setStack` has been reflected in `current` would otherwise read stale
+   * `setLevels` has been reflected in `current` would otherwise read stale
    * `rawText` and clobber the first edit — see docs/deviations.md, step
-   * 7.4). `applyChainRef` additionally serializes overlapping calls so
-   * each one builds on the previous one's result. */
+   * 7.4). Reassigned on every tab switch as well as on every mutation. */
   const levelRef = useRef<DiagramLevel | null>(null);
-  const applyChainRef = useRef<Promise<void>>(Promise.resolve());
 
-  /** Serializes overlapping mutations (e.g. clicking edges in quick
-   * succession while recording a flow) so each one patches the state left
-   * behind by the previous one, instead of racing on a stale
-   * `levelRef.current` (docs/deviations.md, step 7.4). Shared by every
-   * mutation path: patches, YAML-panel replaces, undo, redo. */
+  /** One serialized mutation queue per tab (keyed by fileName at the
+   * moment a mutation is queued, not read lazily at run time) — so an
+   * edit queued for one tab can never end up applying to whichever tab
+   * happens to be active by the time it actually runs, if the user
+   * switched tabs in between. */
+  const mutationChains = useRef<Map<string, Promise<void>>>(new Map());
   const runMutation = useCallback((run: () => Promise<void>) => {
-    const next = applyChainRef.current.then(run, run);
-    applyChainRef.current = next;
+    const key = levelRef.current?.fileName ?? '';
+    const prevChain = mutationChains.current.get(key) ?? Promise.resolve();
+    const next = prevChain.then(run, run);
+    mutationChains.current.set(key, next);
     return next;
   }, []);
 
-  /** Undo/redo (PLAN.md step 7.7): a single stack of previous `rawText`
-   * snapshots per level, covering every YAML-document mutation regardless
-   * of whether it came from the canvas (`applyOps`) or the YAML panel
-   * (`applyTextReplace`) — node drag/layout-only changes don't touch
-   * `rawText`, so they're outside undo's scope, matching the plan's
-   * "history at the YAML document level". Capped at 50 entries. */
-  const historyRef = useRef<{ past: string[]; future: string[] }>({ past: [], future: [] });
+  /** Undo/redo (PLAN.md step 7.7): one `{past, future}` stack per tab
+   * (PLAN3.md step 11.7), covering every YAML-document mutation
+   * regardless of whether it came from the canvas (`applyOps`) or the
+   * YAML panel (`applyTextReplace`) — node drag/layout-only changes
+   * don't touch `rawText`, so they're outside undo's scope. Capped at 50
+   * entries per tab. `historyRef.current` always points at the *active*
+   * tab's entry (reassigned on every switch), so `useHistory` (which
+   * only ever mutates `historyRef.current` directly) needs no per-tab
+   * awareness of its own. */
+  const historyByTab = useRef<Map<string, HistoryEntry>>(new Map());
+  const historyRef = useRef<HistoryEntry>({ past: [], future: [] });
   const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
+
+  const historyFor = useCallback((fileName: string): HistoryEntry => {
+    let h = historyByTab.current.get(fileName);
+    if (!h) {
+      h = { past: [], future: [] };
+      historyByTab.current.set(fileName, h);
+    }
+    return h;
+  }, []);
+
   const syncHistoryCounts = useCallback(() => {
     setHistoryCounts({ past: historyRef.current.past.length, future: historyRef.current.future.length });
   }, []);
-  const resetHistory = useCallback(() => {
-    historyRef.current = { past: [], future: [] };
-    syncHistoryCounts();
-  }, [syncHistoryCounts]);
+
+  /** Discards *every* tab's history — only on a fresh load (Open/drop/
+   * native-open/share-link/restore), which replaces the whole open-tabs
+   * set anyway. Switching between already-open tabs must NOT call this
+   * (see `switchTab`) — each tab's undo stack survives being switched
+   * away from and back to. */
+  const resetAllHistory = useCallback(
+    (activeFileName: string | null) => {
+      historyByTab.current.clear();
+      historyRef.current = activeFileName ? historyFor(activeFileName) : { past: [], future: [] };
+      syncHistoryCounts();
+    },
+    [historyFor, syncHistoryCounts],
+  );
+
   const pushHistory = useCallback(
     (previousText: string) => {
       const h = historyRef.current;
@@ -148,6 +191,58 @@ export function useDiagramStack() {
     };
   }, []);
 
+  /** Eagerly parses every `details:` sub-diagram transitively reachable
+   * from `mainLevel` against `vfs` (PLAN3.md step 11.7), breadth-first,
+   * each file visited at most once (first reference wins for its
+   * breadcrumb parent). A sub-diagram that fails to parse gets an entry
+   * in `errors` (still becomes a tab, showing the error instead of a
+   * canvas) rather than failing the whole open; one that isn't present
+   * in `vfs` at all is skipped silently (same as today's double-click
+   * behavior when the file wasn't opened together with the main one). */
+  const loadReachableDetails = useCallback(
+    async (
+      mainFileName: string,
+      mainLevel: DiagramLevel,
+      vfs: Record<string, string>,
+    ): Promise<{
+      levels: Record<string, DiagramLevel>;
+      tabs: string[];
+      errors: Record<string, string>;
+      parents: Record<string, string>;
+    }> => {
+      const levels: Record<string, DiagramLevel> = { [mainFileName]: mainLevel };
+      const tabs = [mainFileName];
+      const errors: Record<string, string> = {};
+      const parents: Record<string, string> = {};
+      const seen = new Set([mainFileName]);
+      const queue: Array<{ fileName: string; parent: string }> = [];
+      const enqueueDetailsOf = (level: DiagramLevel) => {
+        for (const n of level.diagram.nodes) {
+          if (n.details) queue.push({ fileName: detailsBasename(n.details), parent: level.fileName });
+        }
+      };
+      enqueueDetailsOf(mainLevel);
+      while (queue.length > 0) {
+        const { fileName, parent } = queue.shift()!;
+        if (seen.has(fileName)) continue;
+        seen.add(fileName);
+        const text = vfs[fileName];
+        if (text === undefined) continue;
+        tabs.push(fileName);
+        parents[fileName] = parent;
+        try {
+          const level = await buildLevel(fileName, text);
+          levels[fileName] = level;
+          enqueueDetailsOf(level);
+        } catch (err) {
+          errors[fileName] = err instanceof Error ? err.message : String(err);
+        }
+      }
+      return { levels, tabs, errors, parents };
+    },
+    [buildLevel],
+  );
+
   /** Checks for a local autosave draft of `fileName` after a fresh load
    * (PLAN3.md step 11.3) and, if one exists, surfaces the restore banner
    * instead of silently discarding it. */
@@ -155,6 +250,35 @@ export function useDiagramStack() {
     const record = await loadAutosave(fileName);
     if (record) setRestorePrompt(record);
   }, []);
+
+  /** Replaces the entire open-tabs set with a freshly loaded tree rooted
+   * at `mainLevel` — shared by every "open a new document" entry point
+   * (file input, drop, native picker, share link, autosave restore). */
+  const openTree = useCallback(
+    async (mainLevel: DiagramLevel, vfs: Record<string, string>) => {
+      const { levels: newLevels, tabs, errors, parents } = await loadReachableDetails(mainLevel.fileName, mainLevel, vfs);
+      levelRef.current = mainLevel;
+      setLevels(newLevels);
+      setOpenTabs(tabs);
+      setTabErrors(errors);
+      setTabParent(parents);
+      setMainFileName(mainLevel.fileName);
+      setActiveTab(mainLevel.fileName);
+      resetAllHistory(mainLevel.fileName);
+    },
+    [loadReachableDetails, resetAllHistory],
+  );
+
+  const resetToEmpty = useCallback(() => {
+    levelRef.current = null;
+    setLevels({});
+    setOpenTabs([]);
+    setTabErrors({});
+    setTabParent({});
+    setMainFileName(null);
+    setActiveTab(null);
+    resetAllHistory(null);
+  }, [resetAllHistory]);
 
   const openFiles = useCallback(
     async (files: File[]) => {
@@ -164,21 +288,18 @@ export function useDiagramStack() {
       setRestorePrompt(null);
       try {
         const contents = await Promise.all(files.map(async (f) => [f.name, await f.text()] as const));
-        setVirtualFS(Object.fromEntries(contents));
+        const vfs = Object.fromEntries(contents);
+        setVirtualFS(vfs);
         const [primaryName, primaryText] = contents[0];
-        const level = await buildLevel(primaryName, primaryText);
-        levelRef.current = level;
-        resetHistory();
-        setStack([level]);
+        const mainLevel = await buildLevel(primaryName, primaryText);
+        await openTree(mainLevel, vfs);
         void checkAutosave(primaryName);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : String(err));
-        levelRef.current = null;
-        resetHistory();
-        setStack([]);
+        resetToEmpty();
       }
     },
-    [buildLevel, resetHistory, checkAutosave],
+    [buildLevel, openTree, resetToEmpty, checkAutosave],
   );
 
   /** Opens an in-memory diagram (a bundled example, "New diagram" template
@@ -193,24 +314,21 @@ export function useDiagramStack() {
       setDrillError(null);
       setRestorePrompt(null);
       try {
-        setVirtualFS({ [fileName]: text });
+        const vfs = { [fileName]: text };
+        setVirtualFS(vfs);
         const level = await buildLevel(fileName, text);
         if (positions) {
           level.positions = { ...level.positions, ...positions };
           level.manualPositionIds = new Set(Object.keys(positions));
         }
-        levelRef.current = level;
-        resetHistory();
-        setStack([level]);
+        await openTree(level, vfs);
         void checkAutosave(fileName);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : String(err));
-        levelRef.current = null;
-        resetHistory();
-        setStack([]);
+        resetToEmpty();
       }
     },
-    [buildLevel, resetHistory, checkAutosave],
+    [buildLevel, openTree, resetToEmpty, checkAutosave],
   );
 
   const onFileInput = useCallback(
@@ -235,8 +353,8 @@ export function useDiagramStack() {
   const updateCurrentLevel = useCallback((patch: Partial<DiagramLevel>) => {
     if (!levelRef.current) return;
     // Compute and assign the merged level to `levelRef` right here,
-    // synchronously — NOT inside the `setStack` updater. React 18 batches
-    // state updates and does not guarantee updater functions run
+    // synchronously — NOT inside the `setLevels` updater. React 18
+    // batches state updates and does not guarantee updater functions run
     // synchronously at call time (they may run later, when the batch is
     // flushed), so mirroring into `levelRef` from inside the updater let
     // a second `applyOps`/`applyTextReplace` call — fired immediately
@@ -244,12 +362,7 @@ export function useDiagramStack() {
     // and race the first one (see docs/deviations.md, step 7.7).
     const merged = { ...levelRef.current, ...patch };
     levelRef.current = merged;
-    setStack((prev) => {
-      if (prev.length === 0) return prev;
-      const next = [...prev];
-      next[next.length - 1] = merged;
-      return next;
-    });
+    setLevels((prev) => ({ ...prev, [merged.fileName]: merged }));
   }, []);
 
   /** "Open" via the File System Access API (PLAN.md step 8.1, Chromium
@@ -280,9 +393,7 @@ export function useDiagramStack() {
           level.sizes = { ...level.sizes, ...fromLayoutSizes(imported.views.default?.sizes) };
           if (imported.renderStyle) level.renderStyle = imported.renderStyle;
         }
-        levelRef.current = level;
-        resetHistory();
-        setStack([level]);
+        await openTree(level, { [opened.mainName]: opened.mainText });
         void checkAutosave(opened.mainName);
       } catch (err) {
         // AbortError: user cancelled the picker — not a real error.
@@ -290,7 +401,7 @@ export function useDiagramStack() {
         setLoadError(err instanceof Error ? err.message : String(err));
       }
     },
-    [buildLevel, resetHistory, checkAutosave],
+    [buildLevel, openTree, checkAutosave],
   );
 
   /** "Save"/"Save as" (PLAN.md step 8.1): writes the core YAML and (if any
@@ -356,9 +467,10 @@ export function useDiagramStack() {
   }, []);
 
   // Local autosave (PLAN3.md step 11.3): every level mutation reschedules
-  // a debounced IndexedDB write, keyed by `fileName` — a safety net
-  // against losing work to an accidental reload/close, independent of
-  // the real Save.
+  // a debounced IndexedDB write, keyed by `fileName` (PLAN3.md step
+  // 11.7: since this keys off `current`, which is the *active* tab,
+  // each tab gets its own independent autosave whenever it's the one
+  // being edited).
   useEffect(() => {
     if (!current) return;
     scheduleAutosave(current.fileName, {
@@ -383,10 +495,8 @@ export function useDiagramStack() {
     level.notePositions = { ...level.notePositions, ...record.notePositions };
     level.sizes = { ...level.sizes, ...record.sizes };
     level.renderStyle = record.renderStyle;
-    levelRef.current = level;
-    resetHistory();
-    setStack([level]);
-  }, [restorePrompt, buildLevel, resetHistory]);
+    await openTree(level, { [record.fileName]: record.rawText });
+  }, [restorePrompt, buildLevel, openTree]);
 
   /** Restore banner → "Discard": drops the draft and keeps whatever was
    * just loaded from the real file. */
@@ -413,38 +523,83 @@ export function useDiagramStack() {
         level.sizes = { ...level.sizes, ...fromLayoutSizes(shared.layout.views.default?.sizes) };
         if (shared.layout.renderStyle) level.renderStyle = shared.layout.renderStyle;
       }
-      levelRef.current = level;
-      resetHistory();
-      setStack([level]);
+      await openTree(level, { [shared.fileName]: shared.yaml });
     })();
     // Run once on mount only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Switches the active tab (PLAN3.md step 11.7) — instant, no
+   * reparsing: every open tab's `DiagramLevel` already lives in
+   * `levels`. Restores that tab's own undo stack instead of resetting
+   * it, so switching away and back is completely non-destructive. */
+  const switchTab = useCallback(
+    (fileName: string) => {
+      if (!levels[fileName] && !tabErrors[fileName]) return;
+      setDrillError(null);
+      setActiveTab(fileName);
+      levelRef.current = levels[fileName] ?? null;
+      historyRef.current = historyFor(fileName);
+      syncHistoryCounts();
+    },
+    [levels, tabErrors, historyFor, syncHistoryCounts],
+  );
+
+  /** Double-clicking a node with `details:` (PLAN3.md step 11.7): every
+   * reachable details file was already parsed at load time, so this is
+   * just a tab switch, reopening the tab first if the user had closed
+   * it. A details reference to a file that was never part of the
+   * opened set at all (not in `virtualFS`) still shows the old
+   * non-fatal `drillError` instead. */
   const openDetails = useCallback(
-    async (node: DiagramNode) => {
+    (node: DiagramNode) => {
       setDrillError(null);
       if (!node.details) return;
       const basename = detailsBasename(node.details);
-      const text = virtualFS[basename];
-      if (text === undefined) {
+      if (!levels[basename] && !tabErrors[basename]) {
         setDrillError(
           `Cannot open sub-diagram "${node.details}": that file wasn't opened together with this one. ` +
             'Select both files (or a whole folder) in the file picker to enable drill-down.',
         );
         return;
       }
-      try {
-        const level = await buildLevel(basename, text);
-        levelRef.current = level;
-        resetHistory();
-        setStack((prev) => [...prev, level]);
-      } catch (err) {
-        setDrillError(err instanceof Error ? err.message : String(err));
+      setOpenTabs((prev) => (prev.includes(basename) ? prev : [...prev, basename]));
+      switchTab(basename);
+    },
+    [levels, tabErrors, switchTab],
+  );
+
+  /** Closes a tab (PLAN3.md step 11.7) — the main tab can't be closed.
+   * Closing the active tab falls back to its breadcrumb parent (or the
+   * main tab if it has none), matching how "going up" felt in the old
+   * drill-down stack. The tab's parsed level/history are kept around
+   * (just no longer listed), so reopening it via another double-click
+   * doesn't reparse either. */
+  const closeTab = useCallback(
+    (fileName: string) => {
+      if (fileName === mainFileName) return;
+      setOpenTabs((prev) => prev.filter((f) => f !== fileName));
+      if (activeTab === fileName) {
+        switchTab(tabParent[fileName] ?? mainFileName ?? fileName);
       }
     },
-    [virtualFS, buildLevel, resetHistory],
+    [mainFileName, activeTab, tabParent, switchTab],
   );
+
+  /** The breadcrumb path (PLAN3.md step 11.7) from the main tab down to
+   * whichever tab is active, reconstructed by walking `tabParent`. */
+  const breadcrumbFileNames = (() => {
+    if (!activeTab) return [];
+    const path = [activeTab];
+    const seen = new Set([activeTab]);
+    let cur = tabParent[activeTab];
+    while (cur && !seen.has(cur)) {
+      path.unshift(cur);
+      seen.add(cur);
+      cur = tabParent[cur];
+    }
+    return path;
+  })();
 
   /** View → "Diagram style" (PLAN.md step 10.12): unlike grid/snap, this
    * lives on the level (not a bare UI pref) since it's saved in the
@@ -454,22 +609,14 @@ export function useDiagramStack() {
     [updateCurrentLevel],
   );
 
-  const goToLevel = useCallback(
-    (index: number) => {
-      setDrillError(null);
-      setStack((prev) => {
-        const next = prev.slice(0, index + 1);
-        levelRef.current = next[next.length - 1] ?? null;
-        resetHistory();
-        return next;
-      });
-    },
-    [resetHistory],
-  );
-
   return {
     virtualFS,
-    stack,
+    levels,
+    openTabs,
+    activeTab,
+    mainFileName,
+    tabErrors,
+    breadcrumbFileNames,
     current,
     loadError,
     setLoadError,
@@ -479,7 +626,6 @@ export function useDiagramStack() {
     historyRef,
     historyCounts,
     syncHistoryCounts,
-    resetHistory,
     pushHistory,
     buildLevel,
     openFiles,
@@ -492,7 +638,8 @@ export function useDiagramStack() {
     onSave,
     hasUnsavedChanges,
     openDetails,
-    goToLevel,
+    switchTab,
+    closeTab,
     setRenderStyle,
     restorePrompt,
     onRestoreAutosave,

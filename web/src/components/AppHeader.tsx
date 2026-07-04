@@ -30,8 +30,8 @@ interface AppHeaderProps {
   onUndo: () => void;
   onRedo: () => void;
   historyCounts: { past: number; future: number };
-  stack: DiagramLevel[];
-  goToLevel: (index: number) => void;
+  breadcrumbLevels: DiagramLevel[];
+  onBreadcrumbClick: (fileName: string) => void;
   selectedNodeId: string | null;
   onDeleteSelectedNode: () => void;
   onShowTour: () => void;
@@ -97,8 +97,8 @@ export function AppHeader({
   onUndo,
   onRedo,
   historyCounts,
-  stack,
-  goToLevel,
+  breadcrumbLevels,
+  onBreadcrumbClick,
   selectedNodeId,
   onDeleteSelectedNode,
   onShowTour,
@@ -336,18 +336,18 @@ export function AppHeader({
             {shareError}
           </span>
         )}
-        {stack.length > 0 && (
+        {breadcrumbLevels.length > 0 && (
           <nav data-testid="breadcrumbs">
-            {stack.map((level, i) => (
+            {breadcrumbLevels.map((level, i) => (
               <span key={`${level.fileName}-${i}`}>
                 {i > 0 && ' › '}
-                {i === stack.length - 1 ? (
+                {i === breadcrumbLevels.length - 1 ? (
                   <strong data-testid={`breadcrumb-${i}`}>{level.diagram.diagram.title}</strong>
                 ) : (
                   <button
                     type="button"
                     data-testid={`breadcrumb-${i}`}
-                    onClick={() => goToLevel(i)}
+                    onClick={() => onBreadcrumbClick(level.fileName)}
                     style={{ background: 'none', border: 'none', color: 'var(--dc-accent)', cursor: 'pointer', padding: 0 }}
                   >
                     {level.diagram.diagram.title}
