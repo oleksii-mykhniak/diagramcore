@@ -3,6 +3,9 @@ import { useState } from 'react';
 const TIPS = [
   'Drag a shape from the palette onto the canvas to add a node.',
   'Drag from a node\'s handle to another node to draw a link — the "Links" panel lets you edit or delete any link.',
+  'Set a node\'s parent (drag it into a container, or edit parent: in the YAML) to nest it — nested diagrams render as containers on the canvas and in D2/Mermaid.',
+  'Select a node or link to change its fill, stroke, line style, and — for links — its arrow markers and label, from the Properties/Links panel.',
+  'Shift+drag on empty canvas to rubber-band select several nodes at once — drag, Delete, or Cmd/Ctrl+D (duplicate) all act on the whole selection.',
   'Pick a flow in the flow player and step through it to see which links it uses, in order.',
   'The Problems panel validates live — click an error to jump straight to the node or line that caused it.',
 ];
