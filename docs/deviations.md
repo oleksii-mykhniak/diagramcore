@@ -186,3 +186,24 @@
   `render_diagram_test.go` перевіряє повернений MIME-тип SVG явно
   (`image/svg+xml`), а не намагається змусити спрацювати PNG-шлях.
 - Дата: 2026-07-03, коміт: (див. `phase9-step4` у progress-log.md)
+
+## Крок 10.2 — Декомпозиція App.tsx
+- Причина: план називав три хуки (`useDiagramStack`, `useHistory`,
+  `useDiagramExports`) + два компоненти (`AppHeader`, `EditorWorkspace`).
+  Node/link/flow CRUD-обробники (drop node, update/delete node, connect
+  nodes, update/delete link, flow-recording, select-problem, re-layout,
+  import layout, flow-player change) не влізли природно в жоден із трьох
+  названих хуків — вони не про "стек документів" (useDiagramStack) і не
+  про undo/redo чи експорт — а без окремого місця для них App.tsx не
+  досяг би ліміту 200 рядків.
+- Рішення: додано четвертий хук `hooks/useDiagramEditing.ts` — уся
+  логіка редагування вузлів/зв'язків/flow разом із їхнім transient UI-
+  станом (selection, hover, recording, focus request). `applyOps`/
+  `applyTextReplace` лишились тут (а не в useDiagramStack), бо вони —
+  єдина точка, де мутації документа виконуються; useDiagramStack натомість
+  володіє чергою серіалізації (`runMutation`) і власне historyRef/
+  historyCounts/resetHistory/pushHistory (скидання історії прив'язане до
+  кожного місця завантаження стеку, тож логічно лишити разом). `useHistory`
+  звужено до власне undo/redo-екшенів і гарячих клавіш, отримує
+  historyRef/syncHistoryCounts як параметри від useDiagramStack.
+- Дата: 2026-07-04, коміт: (цей крок)

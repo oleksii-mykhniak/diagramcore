@@ -1033,3 +1033,32 @@
   e2e-регресія (37 специфікацій, включно з новою `theme.spec.ts`) зелена
   без правок наявних спек ✅.
 
+### Крок 10.2 — Декомпозиція App.tsx (без візуальних змін)
+- Дата: 2026-07-04
+- Виконано: `App.tsx` (995 рядків) розрізано на 4 хуки +
+  2 компоненти без зміни поведінки чи testid'ів:
+  `hooks/useDiagramStack.ts` (virtualFS/stack/current/loadError/
+  drillError, levelRef/applyChainRef/runMutation, buildLevel, openFiles/
+  openTextAsDiagram/onFileInput/onDrop/onDragOver, updateCurrentLevel,
+  onOpenNative/onSave, hasUnsavedChanges + beforeunload-ефект,
+  share-link-restore-ефект, openDetails/goToLevel, і historyRef/
+  historyCounts/resetHistory/pushHistory — гілку про причину дивись
+  `docs/deviations.md`, крок 10.2); `hooks/useHistory.ts` (onUndo/onRedo
+  + гарячі клавіші Ctrl/Cmd+Z); `hooks/useDiagramEditing.ts` (четвертий
+  хук поза планом — applyOps/applyTextReplace + весь CRUD
+  вузлів/зв'язків/flow-recording, деталі відхилу — там само);
+  `hooks/useDiagramExports.ts` (onExportPng/Zip/Context/Layout/Share);
+  `components/AppHeader.tsx` (стара шапка як є, з власним
+  `fileInputRef`); `components/EditorWorkspace.tsx` (вміст `<main>`,
+  обчислює `highlight`/`selectedNode` локально). `App.tsx` тепер 133
+  рядки — чиста композиція хуків + двох компонентів.
+- Коміт: (цей крок)
+- AC: `App.tsx` — 133 рядки (ліміт 200) ✅, `grep "#[0-9a-fA-F]"
+  src/App.tsx` — порожньо (жодного нового inline-hex) ✅; `npm test`
+  (41 тест, ті самі, що й до кроку) зелені без правок ✅; повний
+  `npm run test:e2e` (37 специфікацій) зелений **без жодної правки
+  наявних спек** — доказ, що всі testid'и й поведінка (включно з
+  задокументованими гонками `levelRef`/`applyChainRef` зі степів 7.4/7.7)
+  збережені ✅; `npm run build` зелений ✅; `npx tsc -b` без помилок,
+  `npm run lint` без нових попереджень ✅.
+
