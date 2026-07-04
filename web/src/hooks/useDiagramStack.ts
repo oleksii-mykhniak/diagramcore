@@ -13,6 +13,8 @@ import type { FlowPlayerState } from '../flowPlayer';
 import { isNativeFsSupported, openDiagramFiles, pickSaveHandle, writeTextToHandle } from '../nativeFile';
 import { decodeShareState } from '../shareLink';
 import { downloadBlob } from '../svgExport';
+import { cancelScheduledAutosave, clearAutosave, loadAutosave, scheduleAutosave } from '../localAutosave';
+import type { AutosaveRecord } from '../localAutosave';
 
 export interface DiagramLevel {
   fileName: string;
@@ -67,6 +69,11 @@ export function useDiagramStack() {
   const [stack, setStack] = useState<DiagramLevel[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drillError, setDrillError] = useState<string | null>(null);
+  /** "Restore unsaved work?" banner (PLAN3.md step 11.3): set whenever a
+   * fresh load (open/drop/native-open — NOT a share-link restore, which
+   * has its own explicit state) finds a local IndexedDB autosave record
+   * for the same `fileName`, offering to swap in that draft instead. */
+  const [restorePrompt, setRestorePrompt] = useState<AutosaveRecord | null>(null);
 
   const current = stack.length > 0 ? stack[stack.length - 1] : null;
   /** Mirrors the current level synchronously (React state updates are not
@@ -136,11 +143,20 @@ export function useDiagramStack() {
     };
   }, []);
 
+  /** Checks for a local autosave draft of `fileName` after a fresh load
+   * (PLAN3.md step 11.3) and, if one exists, surfaces the restore banner
+   * instead of silently discarding it. */
+  const checkAutosave = useCallback(async (fileName: string) => {
+    const record = await loadAutosave(fileName);
+    if (record) setRestorePrompt(record);
+  }, []);
+
   const openFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
       setLoadError(null);
       setDrillError(null);
+      setRestorePrompt(null);
       try {
         const contents = await Promise.all(files.map(async (f) => [f.name, await f.text()] as const));
         setVirtualFS(Object.fromEntries(contents));
@@ -149,6 +165,7 @@ export function useDiagramStack() {
         levelRef.current = level;
         resetHistory();
         setStack([level]);
+        void checkAutosave(primaryName);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : String(err));
         levelRef.current = null;
@@ -156,7 +173,7 @@ export function useDiagramStack() {
         setStack([]);
       }
     },
-    [buildLevel, resetHistory],
+    [buildLevel, resetHistory, checkAutosave],
   );
 
   /** Opens an in-memory diagram (a bundled example, "New diagram" template
@@ -169,6 +186,7 @@ export function useDiagramStack() {
     async (fileName: string, text: string, positions?: Record<string, LayoutPosition>) => {
       setLoadError(null);
       setDrillError(null);
+      setRestorePrompt(null);
       try {
         setVirtualFS({ [fileName]: text });
         const level = await buildLevel(fileName, text);
@@ -179,6 +197,7 @@ export function useDiagramStack() {
         levelRef.current = level;
         resetHistory();
         setStack([level]);
+        void checkAutosave(fileName);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : String(err));
         levelRef.current = null;
@@ -186,7 +205,7 @@ export function useDiagramStack() {
         setStack([]);
       }
     },
-    [buildLevel, resetHistory],
+    [buildLevel, resetHistory, checkAutosave],
   );
 
   const onFileInput = useCallback(
@@ -240,6 +259,7 @@ export function useDiagramStack() {
       }
       setLoadError(null);
       setDrillError(null);
+      setRestorePrompt(null);
       try {
         const opened = await openDiagramFiles();
         if (!opened) return;
@@ -257,13 +277,14 @@ export function useDiagramStack() {
         levelRef.current = level;
         resetHistory();
         setStack([level]);
+        void checkAutosave(opened.mainName);
       } catch (err) {
         // AbortError: user cancelled the picker — not a real error.
         if (err instanceof Error && err.name === 'AbortError') return;
         setLoadError(err instanceof Error ? err.message : String(err));
       }
     },
-    [buildLevel, resetHistory],
+    [buildLevel, resetHistory, checkAutosave],
   );
 
   /** "Save"/"Save as" (PLAN.md step 8.1): writes the core YAML and (if any
@@ -275,6 +296,11 @@ export function useDiagramStack() {
     if (!current) return;
     const hasLayoutToSave =
       current.manualPositionIds.size > 0 || Boolean(current.diagram.notes?.length) || current.renderStyle !== 'clean';
+    // A real Save makes any pending/stored local autosave draft moot
+    // (PLAN3.md step 11.3) — cancel the debounced write and clear
+    // whatever's already in IndexedDB for this file.
+    cancelScheduledAutosave(current.fileName);
+    void clearAutosave(current.fileName);
     if (!current.mainHandle || !isNativeFsSupported()) {
       downloadBlob(current.fileName, new Blob([current.rawText], { type: 'application/x-yaml' }));
       if (hasLayoutToSave) {
@@ -315,6 +341,45 @@ export function useDiagramStack() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
+
+  // Local autosave (PLAN3.md step 11.3): every level mutation reschedules
+  // a debounced IndexedDB write, keyed by `fileName` — a safety net
+  // against losing work to an accidental reload/close, independent of
+  // the real Save.
+  useEffect(() => {
+    if (!current) return;
+    scheduleAutosave(current.fileName, {
+      rawText: current.rawText,
+      positions: current.positions,
+      notePositions: current.notePositions,
+      renderStyle: current.renderStyle,
+    });
+  }, [current]);
+
+  /** Restore banner → "Restore" (PLAN3.md step 11.3): swaps in the
+   * IndexedDB draft's text/positions in place of what was just loaded
+   * from the real file. */
+  const onRestoreAutosave = useCallback(async () => {
+    if (!restorePrompt) return;
+    const record = restorePrompt;
+    setRestorePrompt(null);
+    const level = await buildLevel(record.fileName, record.rawText);
+    level.positions = { ...level.positions, ...record.positions };
+    level.manualPositionIds = new Set(Object.keys(record.positions));
+    level.notePositions = { ...level.notePositions, ...record.notePositions };
+    level.renderStyle = record.renderStyle;
+    levelRef.current = level;
+    resetHistory();
+    setStack([level]);
+  }, [restorePrompt, buildLevel, resetHistory]);
+
+  /** Restore banner → "Discard": drops the draft and keeps whatever was
+   * just loaded from the real file. */
+  const onDiscardAutosave = useCallback(() => {
+    if (!restorePrompt) return;
+    void clearAutosave(restorePrompt.fileName);
+    setRestorePrompt(null);
+  }, [restorePrompt]);
 
   // Restore a share link (PLAN.md step 8.2) on load: the diagram opens as
   // an unsaved document (no native file handle — Save falls back to
@@ -413,5 +478,8 @@ export function useDiagramStack() {
     openDetails,
     goToLevel,
     setRenderStyle,
+    restorePrompt,
+    onRestoreAutosave,
+    onDiscardAutosave,
   };
 }

@@ -43,6 +43,9 @@ export default function App() {
     openDetails,
     goToLevel,
     setRenderStyle,
+    restorePrompt,
+    onRestoreAutosave,
+    onDiscardAutosave,
   } = useDiagramStack();
 
   const { onUndo, onRedo } = useHistory(levelRef, runMutation, updateCurrentLevel, historyRef, syncHistoryCounts);
@@ -151,6 +154,30 @@ export default function App() {
         onToggleRenderStyle={() => setRenderStyle(current?.renderStyle === 'sketch' ? 'clean' : 'sketch')}
         onImportDrawio={(file) => void onImportDrawio(file)}
       />
+      {restorePrompt && (
+        <div
+          data-testid="restore-autosave-banner"
+          role="alert"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--dc-space-3)',
+            padding: 'var(--dc-space-2) var(--dc-space-3)',
+            background: 'var(--dc-surface)',
+            borderBottom: '1px solid var(--dc-border)',
+            color: 'var(--dc-text)',
+            fontSize: 'var(--dc-font-size-base)',
+          }}
+        >
+          <span>Restore unsaved work from a previous session?</span>
+          <button type="button" data-testid="restore-autosave-restore" onClick={() => void onRestoreAutosave()}>
+            Restore
+          </button>
+          <button type="button" data-testid="restore-autosave-discard" onClick={onDiscardAutosave}>
+            Discard
+          </button>
+        </div>
+      )}
       <EditorWorkspace
         loadError={loadError}
         drillError={drillError}

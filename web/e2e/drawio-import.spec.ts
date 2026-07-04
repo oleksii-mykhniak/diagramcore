@@ -11,6 +11,12 @@ async function importDrawioFile(page: import('@playwright/test').Page, fileName:
   await page.getByTestId('drawio-input').setInputFiles(path.join(fixturesDir, fileName));
 }
 
+// draw.io import is hidden behind `featureFlags.drawioImport` (PLAN3.md
+// step 11.3) — the "Import draw.io…" menu item, and thus `drawio-input`,
+// isn't rendered while it's off. The importer itself and its unit tests
+// (drawioImport.test.ts) stay green; these UI-driven e2e specs are
+// skipped until the flag flips back on, rather than deleted.
+test.describe.skip('draw.io import (hidden behind featureFlags.drawioImport)', () => {
 test('importing an uncompressed .drawio file places nodes at their source positions and validates cleanly', async ({
   page,
 }) => {
@@ -70,4 +76,5 @@ test('a broken/foreign file shows a human-readable error instead of crashing', a
   await expect(page.getByTestId('load-error')).toBeVisible();
   await expect(page.getByTestId('load-error')).toContainText(/draw\.io/i);
   expect(pageErrors).toHaveLength(0);
+});
 });

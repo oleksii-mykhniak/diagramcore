@@ -1,4 +1,7 @@
 import '@testing-library/jest-dom/vitest';
+// jsdom has no IndexedDB implementation; localAutosave.ts (PLAN3.md step
+// 11.3) needs one to be testable.
+import 'fake-indexeddb/auto';
 
 // jsdom has no ResizeObserver; @xyflow/react observes the canvas container
 // to size itself, so polyfill a no-op for tests.

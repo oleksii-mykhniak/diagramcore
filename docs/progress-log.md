@@ -63,3 +63,41 @@
 - Регресія: `npm test` (64/64), `npm run build`, повний
   `npx playwright test` (59/59).
 - Commit: `phase11-step2: YAML-панель у правий док`.
+
+## phase11-step3 — Сховати draw.io import + локальний автосейв IndexedDB — 2026-07-04
+
+- `web/src/featureFlags.ts`: `drawioImport: false`. Пункт меню "Import
+  draw.io…" (і його input) рендериться умовно в `AppHeader`; importer і
+  його unit-тести не займані. Відповідні e2e (`drawio-import.spec.ts`)
+  обгорнуті в `test.describe.skip` з поясненням (деталі —
+  `docs/deviations.md`, крок 11.3) — вмикання флагу назад одразу
+  повертає їх до роботи.
+- Новий модуль `web/src/localAutosave.ts`: тонка обгортка над
+  IndexedDB (база `dc-autosave`, стор `levels`, ключ — `fileName`),
+  що зберігає `{rawText, positions, notePositions, renderStyle,
+  savedAt}`; `scheduleAutosave`/`cancelScheduledAutosave` дебounсять
+  запис на ~1с (`AUTOSAVE_DEBOUNCE_MS`) на мутацію рівня.
+  Тестове середовище отримало `fake-indexeddb` (dev-залежність,
+  підключена в `setupTests.ts`) — jsdom не має власної IndexedDB.
+- `useDiagramStack`: `useEffect` на `current` планує автосейв на кожну
+  мутацію рівня; кожен шлях завантаження (`openFiles`,
+  `openTextAsDiagram`, `onOpenNative` — не share-link) після побудови
+  рівня перевіряє IndexedDB на чернетку з тим самим `fileName` і, якщо
+  є, виставляє `restorePrompt`. Новий банер у `App.tsx`
+  (`restore-autosave-banner`) з кнопками Restore/Discard:
+  Restore перебудовує рівень із чернетки (`buildLevel` на
+  `record.rawText` + позиції/стилі з чернетки, усі позиції — manual);
+  Discard просто чистить IndexedDB-запис. `onSave` скасовує заплановий
+  запис і чистить чернетку для поточного файлу одразу після реального
+  збереження.
+- Тести: `localAutosave.test.ts` (round-trip, дебаунс на реальних
+  таймерах — fake timers конфліктували з внутрішнім плануванням
+  fake-indexeddb, тому дебаунс перевіряється короткими реальними
+  паузами), новий e2e `autosave.spec.ts` (3 сценарії: reload
+  пропонує Restore і повертає незбережену ноду; Discard очищає
+  чернетку остаточно; Save очищає чернетку так, що банер більше не
+  зʼявляється).
+- Регресія: `npm test` (67/67), `npm run build`, повний
+  `npx playwright test` (59 passed + 3 skipped — прихований
+  draw.io-імпорт).
+- Commit: `phase11-step3: сховати draw.io import за флагом, локальний автосейв IndexedDB`.
