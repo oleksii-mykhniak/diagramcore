@@ -1,0 +1,1500 @@
+# Журнал виконання плану
+
+Кожен запис — один завершений крок з PLAN.md: що зроблено, коли, яким комітом.
+Відхилення від плану записуються окремо в `docs/deviations.md` і лише
+згадуються тут посиланням.
+
+## Фаза 0 — Spike: формат на реальних прикладах
+
+### Крок 0.1 — Ініціалізація репозиторію
+- Дата: 2026-07-03
+- Виконано: `git init`, `go mod init github.com/oleksii94/diagramcore`,
+  `.gitignore` (Go + node/web), `docs/concept.md` (написаний на основі
+  розділу "Загальні рішення" та мети проєкту з PLAN.md — окремого
+  концепт-документа в проєкті не існувало, власник підтвердив цей підхід).
+- Коміт: `027b63e`
+- AC: `git log` містить initial commit ✅; `go build ./...` без помилок ✅.
+
+### Крок 0.2 — Специфікація формату v0
+- Дата: 2026-07-03
+- Виконано: `docs/format.md` — описано `diagram`, `nodes`, `links`, `flows`
+  (Step/Branch), базові типи вузлів, семантику валідності flow-кроку
+  (включно з правилом "зворотний хід по directed-ребру = response"),
+  правило відносного шляху для `details`.
+- Коміт: `32cb4d9`
+- AC: усі секції описані з типом/обов'язковістю/default ✅; семантика flow
+  (link має існувати, зворотний напрямок = response) описана ✅; правило
+  відносного шляху `details` описано ✅.
+
+### Крок 0.3 — Три реальні приклади
+- Дата: 2026-07-03
+- Виконано: `examples/auth-system.dc.yaml` (5 вузлів, 2 flows, референс `details`
+  на oauth-detail), `examples/oauth-detail.dc.yaml` (4 вузли, під-діаграма),
+  `examples/payment-processing.dc.yaml` (6 вузлів, flow з `branch`).
+- Валідність YAML перевірена через `ruby -ryaml` (Python `pyyaml` недоступний
+  у середовищі — externally-managed, встановлення відхилено; Ruby є в системі
+  і дає еквівалентну перевірку синтаксису).
+- Коміт: `4b13cfc`
+- AC: 3 файли ≥4 вузли кожен ✅; auth-system 2 flows ✅; payment-processing
+  використовує branch ✅; auth-system використовує details ✅; синтаксично
+  валідний YAML ✅; відповідність format.md (без невідомих полів) ✅.
+
+### Крок 0.4 — JSON Schema
+- Дата: 2026-07-03
+- Виконано: `schema/diagramcore.schema.json` (draft 2020-12), покриває всі
+  секції з format.md. Перевірено через `npx ajv-cli --spec=draft2020`
+  (YAML→JSON конвертація через ruby), всі 3 examples — valid.
+  Зіпсована фікстура `testdata/invalid_missing_node_id.dc.yaml`
+  (вузол без `id`) — invalid, помилка вказує на `required: id`.
+- Коміт: `9e64578`
+- AC: усі examples проходять валідацію ✅; зіпсований файл не проходить ✅.
+
+## Фаза 1 — Ядро-бібліотека та `dc validate`
+
+Перед стартом фази: уточнено `PLAN.md`/`docs/format.md` — циклічні `details`
+референси офіційно не є помилкою, обхід ведеться з множиною відвіданих
+файлів (коміт `32c2bfd`).
+
+### Крок 1.1 — Модель і парсер
+- Дата: 2026-07-03
+- Виконано: `internal/model` — `Diagram, DiagramMeta, Node, Link, Flow,
+  StepOrBranch, Step, Branch` з кастомним `UnmarshalYAML` на кожному типі
+  для збереження номера рядка (`yaml.Node.Line`) і default `directed: true`.
+  `internal/parser.Parse(path)` — читає файл, декодує через `yaml.v3`,
+  резолвить `Diagram.Path` у канонічний абсолютний шлях (потрібно для
+  майбутнього обходу `details` з множиною відвіданих файлів).
+- Коміт: `94a04af`
+- AC: unit-тести парсять усі 3 `examples/` без помилок (кількість вузлів,
+  назви flows, `details`-референс, branch then/else звірені) ✅; файл із
+  синтаксичною помилкою YAML повертає помилку з номером рядка ✅;
+  `go test ./... && go vet ./...` — зелені ✅.
+
+### Крок 1.2 — Семантична валідація
+- Дата: 2026-07-03
+- Виконано: `internal/validate` — вісім правил `DC001`-`DC008` (кожне
+  окремою функцією), помилки збираються всі одразу (не fail-fast), кожна
+  з `file:line`. `details` обходяться рекурсивно з множиною відвіданих
+  файлів (канонічний абсолютний шлях) — кожен файл валідується рівно
+  один раз; цикл `A → B → A` не зависає і не дублює помилки.
+  9 невалідних фікстур у `internal/validate/testdata/` (по одній на
+  кожен код, дві на DC003 — node і link), плюс фікстура з двома
+  незалежними помилками (DC001+DC002) і циклічна пара `cyclic_a/cyclic_b`.
+- Коміт: `fa8861e`
+- AC: ≥8 невалідних фікстур, unit-тест на кожен код ✅ (9 фікстур,
+  всі 8 кодів покриті); всі `examples/` валідні без помилок ✅; файл із
+  двома незалежними помилками повертає обидві ✅; циклічна `details`-пара
+  завершується (тест з таймаутом 2s), exit без зависання, помилка
+  всередині B репортиться рівно один раз ✅; `go test ./... && go vet
+  ./...` — зелені ✅.
+
+### Крок 1.3 — CLI `dc validate`
+- Дата: 2026-07-03
+- Виконано: `cmd/dc/main.go` — команда `dc validate <files...>` з
+  підтримкою glob (`filepath.Glob`, літеральні шляхи без glob-символів
+  проходять як є, щоб відсутній файл дав execution error, а не мовчки
+  зникав), людиночитний вивід `file:line [DCxxx] message` + підсумок
+  `N/M files OK`, прапорець `--json`. Exit codes: 0 valid, 1 validation
+  errors, 2 execution error (execution error має пріоритет над
+  validation).
+- Коміт: `9312885`
+- AC (перевірено вручну): `go build -o dc ./cmd/dc` збирає бінарник ✅;
+  `./dc validate examples/*.dc.yaml` → exit 0, `3/3 files OK` ✅;
+  `./dc validate internal/validate/testdata/dc004_flow_no_link.dc.yaml` →
+  exit 1, вивід містить `DC004` і номер рядка ✅; `./dc validate
+  nonexistent.yaml` → exit 2 ✅; `./dc validate --json examples/*.dc.yaml
+  | python3 -m json.tool` — валідний JSON ✅.
+
+### Крок 1.4 — CI репозиторію
+- Дата: 2026-07-03
+- Виконано: `.github/workflows/ci.yml` — на push/PR у `main`: `go build`,
+  `go test`, `go vet`, збірка `dc`, `./dc validate examples/*.dc.yaml`.
+- Коміт: `1baf1c3`
+- AC: локальна симуляція тих самих команд у shell пройшла зелено ✅.
+
+## Фаза 2 — Генератор AI-контексту
+
+### Крок 2.1 — Генератор
+- Дата: 2026-07-03
+- Виконано: `internal/context.Generate(d, deep)` — markdown: заголовок +
+  purpose/audience → Components (тип, label, description, ai_context,
+  згадка `details`) → Links (людською мовою `from -> to (type): label`)
+  → секція на кожен Flow (нумеровані кроки, branch — відступні
+  Then/Else). `deep=true` рекурсивно інлайнить `details` з множиною
+  відвіданих файлів (канонічний абсолютний шлях) — кожна під-діаграма
+  інлайниться один раз навіть при циклі/повторі.
+- Коміт: `3f097d6`
+- AC: golden-тести для всіх 3 examples (`internal/context/testdata/golden/`,
+  оновлення через `go test -update`) ✅; вивід auth-system містить усі
+  5 вузлів, усі links (перевірені мітки), обидва flows, і не містить
+  стороннього вузла (`Ghost`) ✅; невалідний файл — перевіряється на
+  рівні CLI (крок 2.2).
+
+### Крок 2.2 — CLI-інтеграція
+- Дата: 2026-07-03
+- Виконано: `dc context <file> [-o out.md] [--deep]` у `cmd/dc/main.go`.
+  Спершу `validate.ValidateFile`; якщо є помилки валідації — вони
+  друкуються, exit 1, генерація не відбувається. Прапорці парсяться
+  вручну (не через `flag.FlagSet`), бо документована форма CLI ставить
+  прапорці після позиційного `<file>`, що стандартний `flag` не підтримує.
+- Коміт: `3f097d6`
+- AC (перевірено вручну): `./dc context examples/auth-system.dc.yaml
+  -o /tmp/ctx.md` → файл створено, exit 0 ✅; `./dc context
+  examples/auth-system.dc.yaml --deep` містить вузли з `oauth-detail`
+  (`OAuthGateway` та ін.) ✅; `./dc context
+  internal/validate/testdata/dc004_flow_no_link.dc.yaml` → exit 1,
+  друкує помилку валідації, файл не створюється ✅.
+
+## Фаза 3 — Рендеринг через D2/Mermaid + CI-інтеграція
+
+Додано залежність `oss.terrastruct.com/d2` (нативна Go-бібліотека, як
+зафіксовано в "Загальних рішеннях").
+
+### Крок 3.1 — Транспілятор у D2-текст
+- Дата: 2026-07-03
+- Виконано: `internal/transpile.ToD2` — мапінг типів на shapes
+  (`actor→person`, `storage/queue→cylinder`, `external` — стиль
+  `stroke-dash` замість shape), інші типи (в т.ч. `custom_types`) —
+  дефолтний rectangle. Directed links → `->`, undirected → `--`, мітки
+  в лапках. `dc export <file> --to d2 [-o out]` у `cmd/dc`.
+- Коміт: `175ec77`
+- AC: golden-тести D2 для всіх 3 examples ✅; вивід додатково
+  компілюється через `d2lib.Compile` (dagre layout, реальний D2-компайлер)
+  без помилок для всіх 3 ✅.
+
+### Крок 3.2 — Транспілятор у Mermaid
+- Дата: 2026-07-03
+- Виконано: `internal/transpile.ToMermaid` — `flowchart TD`, вироджений
+  експорт без гарантій стилю. `--to mermaid` у `dc export`.
+- Коміт: `175ec77`
+- AC: golden-тести, вивід починається з `flowchart`, містить усі вузли й
+  ребра ✅; `mmdc` (через `npx @mermaid-js/mermaid-cli`) виявився
+  доступним у середовищі — усі 3 golden `.mmd` вручну відрендерено в
+  валідний SVG без помилок (TODO-заміна з плану не знадобилась) ✅.
+
+### Крок 3.3 — Нативний рендер SVG
+- Дата: 2026-07-03
+- Виконано: `internal/render.SVG(d, Options{Layout, ThemeID})` —
+  `internal/transpile.ToD2` → `d2lib.Compile` → `d2svg.Render`. Обидва
+  layout-движки підключені через `LayoutResolver`
+  (`dagre → d2dagrelayout.DefaultLayout`, `elk → d2elklayout.DefaultLayout`).
+  `log.WithDefault` — щоб внутрішній debug/warn-лог D2 не засмічував
+  stderr. `dc render <file> -o out.svg [--layout dagre|elk]` у `cmd/dc`.
+- Коміт: `1bb444a`
+- AC: unit-тести для обох layout-движків — вивід містить `<svg` і текст
+  вузла `Gateway` ✅; вручну перевірено `./dc render
+  examples/auth-system.dc.yaml -o /tmp/auth.svg` (і з `--layout elk`) —
+  валідний SVG, exit 0, для обох движків ✅.
+
+### Крок 3.4 — Flow: статичне підсвічування
+- Дата: 2026-07-03
+- Виконано: `internal/transpile.ToD2Flow(d, flow)` — вузли/ребра на шляху
+  flow отримують `style.stroke: "#e04b4b"` + `style.stroke-width: 3`,
+  решта — `style.opacity: 0.35`. Участь визначається по всіх кроках
+  (включно з `branch.then`/`branch.else`), пари вузлів — без урахування
+  напрямку (узгоджено з семантикою DC004 "будь-який напрямок валідний").
+  `render.Options.Flow`, `dc render --flow "<name>"`. Неіснуюча назва
+  flow → exit 1 з переліком доступних.
+- Коміт: `d1f7b82`
+- AC: SVG для flow відрізняється від базового (byte-diff) і містить
+  акцентний колір `e04b4b` ✅ (тест на другому flow `auth-system`, який
+  не займає `OAuthProvider` — це навмисно, оскільки перший flow і обидва
+  flows в інших прикладах займають усі вузли/ребра, тож не було б
+  приглушених елементів для перевірки); неіснуюча назва flow → exit 1 з
+  переліком (`./dc render ... --flow nope` перевірено вручну) ✅.
+
+### Крок 3.5 — Flow: покрокова серія кадрів
+- Дата: 2026-07-03
+- Виконано: `emphasis` у `internal/transpile` отримав третій рівень
+  (Current > Path > Muted). `ToD2StepFrame(d, cumulative)` — кроки шляху
+  до поточного отримують стиль Path, поточний — яскравіший (stroke-width
+  5), решта — muted. `FlowStepFrames(flow)` розкладає flow на кадри: один
+  на звичайний Step, один на кожну непорожню гілку branch (then → "a",
+  else → "b"); branch трактується як кінець лінійного кумулятивного
+  шляху (задокументовано в коментарі — жоден із поточних прикладів не
+  має кроків після branch). Кожен кадр завжди рендерить повний набір
+  вузлів/ребер (змінюється лише стиль) — тому граф структурно
+  ідентичний між кадрами і layout стабільний. `render.SVGSteps` +
+  `dc render --flow X --steps -o dir/`.
+- Коміт: `d029290`
+- AC: для flow з 6 кроків (auth-system) — рівно 6 файлів, усі валідні
+  SVG ✅; для flow з branch (payment-processing: 3 steps + then/else) —
+  `step-01..03, step-04a, step-04b` ✅; координати вузла `Gateway`
+  (x/y з D2-групи, base64 id) ідентичні в усіх 6 кадрах auth-system ✅.
+
+### Крок 3.6 — Анімований SVG (D2 steps)
+- Дата: 2026-07-03
+- Виконано: `render.SVGAnimated(d, flow, opts)` — рендерить кожен кадр
+  окремо, збирає їх у один SVG через `d2renderers/d2animate.Wrap`
+  (@keyframes opacity-анімація, той самий механізм, що й `--animate-
+  interval` у D2 CLI). Ключовий нюанс: `RenderOpts.MasterID` (хеш
+  діаграми) треба виставити ДО рендеру будь-якого кадру — інакше
+  `d2svg.Render` генерує кожен кадр як окремий самостійний `<svg>` з
+  власною XML-декларацією, і після вкладення `Wrap`-ом виходить
+  невалідний XML (спіймано тестом через `encoding/xml.Decoder`, не лише
+  візуально). `dc render --flow X --animate -o out.svg`; `--steps` і
+  `--animate` взаємовиключні, обидва вимагають `--flow`.
+- Коміт: `b6466a4`
+- AC: вивід містить `<svg`, `@keyframes`, `animation:` і успішно
+  парситься `encoding/xml.Decoder` (тест) ✅; вручну згенеровано
+  анімований SVG для flow `auth-system` — 6 keyframe-блоків, валідний
+  XML (перевірено `python3 -c "import xml.etree..."`) ✅.
+
+### Крок 3.7 — Позначка вузлів із під-діаграмою (`details`)
+- Дата: 2026-07-03
+- Виконано: вузли з `details` отримують суфікс `" ⊞"` у D2/SVG/Mermaid.
+  У D2/SVG додатково `style.double-border: true` + нативний D2-атрибут
+  `link:` на шлях SVG під-діаграми (`DetailsSVGPath` замінює
+  `*.dc.yaml` → `*.svg`, відносно файлу, де оголошено `details`) — D2
+  сам обгортає такий shape у `<a href>` в SVG-виводі. У Mermaid —
+  директива `click <id> "<path>.svg"` поряд із суфіксом у label.
+- Коміт: `f22e261`
+- AC: golden D2/Mermaid оновлено — змінився лише `auth-system.*`
+  (єдиний приклад з `details`); `oauth-detail`/`payment-processing`
+  (без `details`) побайтово незмінні — регресії нема ✅; SVG
+  `auth-system` містить рівно один маркер `⊞` і обгортає `OAuthProvider`
+  у `<a href="./oauth-detail.svg"` ✅; SVG `payment-processing` (без
+  `details`) не містить ні маркера, ні `<a href` ✅.
+
+### Крок 3.8 — Готовий CI-рецепт для користувачів
+- Дата: 2026-07-03
+- Виконано: `.goreleaser.yml` — збірка `dc` для linux/darwin/windows ×
+  amd64/arm64 (6 платформ, CGO disabled). `docs/ci.md` описує рецепт і
+  адаптацію в зовнішньому репозиторії. `.github/workflows/
+  diagrams.example.yml` — робочий (не заглушка) приклад для
+  `examples/*.dc.yaml` цього репозиторію: build → validate → render SVG
+  → context → upload artifact, лише команди `dc`, реалізовані в
+  попередніх кроках.
+- Коміт: `0f0f323`
+- AC: `goreleaser build --snapshot --clean` зібрав усі 6 бінарників
+  (linux/darwin/windows × amd64/arm64, ≥4 з плану) ✅; кроки
+  example-workflow прогнані локально вручну проти `examples/*.dc.yaml` —
+  усі 6 вихідних файлів (3 SVG + 3 markdown) успішно згенеровані ✅.
+
+**Фаза 3 завершена.**
+
+## Фаза 4 — Layout-файл і стабільні позиції
+
+### Крок 4.1 — Формат layout
+- Дата: 2026-07-03
+- Виконано: `docs/format.md` доповнено секцією про
+  `<name>.layout.json` — `{ views: { <view>: { positions: { <nodeId>:
+  {x,y} } } } }`, поруч із ядром діаграми, не частина `*.dc.yaml`.
+  Відсутній у layout id → автолейаут; зайвий id у layout → warning, не
+  помилка. `schema/layout.schema.json` (draft 2020-12).
+- Коміт: `478099d`
+- AC: формат задокументовано ✅; JSON Schema додано, перевірено вручну
+  через `ajv-cli` (валідний приклад проходить, зіпсований — падає з
+  очікуваною `required` помилкою на `y`) ✅.
+
+### Крок 4.2 — Рендер з урахуванням layout
+- Дата: 2026-07-03
+- Виконано: `internal/layout` (Load/Save/PathFor/Positions/
+  UnknownNodeWarnings). **Відхилення від плану** — D2 `top`/`left` не
+  консумуються жодним OSS layout-движком у бібліотеці, лише
+  пропрієтарними plugin'ами Terrastruct (див. `docs/deviations.md`,
+  крок 4.2); замість цього `render.compileD2Positioned` вручну
+  відтворює internal pipeline `d2lib.Compile` і перезаписує
+  `obj.TopLeft` між layout та export. `render.ComputedPositions` читає
+  позиції з `d2target.Diagram.Shapes` після звичайного автолейауту (для
+  `--write-layout`). CLI: `dc render` автопідхоплює
+  `<name>.layout.json` (або `--layout-file`), `--write-layout` рахує й
+  зберігає позиції.
+- Коміт: `54ab06f`
+- AC: тест — вузол, зафіксований у layout (Gateway → x:500,y:700),
+  опиняється в SVG у межах ±5px ✅; `--write-layout` → повторний рендер
+  (з тими самими обчисленими позиціями) дає побайтово ідентичний SVG
+  (тест + вручну: `--write-layout` створює sidecar, наступний звичайний
+  рендер підхоплює його автоматично і дає identical SVG; зайвий id у
+  layout друкує warning, exit 0) ✅.
+
+**Фаза 4 завершена.**
+
+## Фаза 5 — Web-редактор (TypeScript)
+
+### Крок 5.1 — Go→WASM валідатор
+- Дата: 2026-07-03
+- Виконано: `cmd/wasm/main.go` (build tag `js && wasm`, тому `go build
+  ./...`/`go vet ./...` на хості мовчки його пропускають) експортує
+  глобальну JS-функцію `validate(yamlString) -> errors[]`. Додано
+  `internal/parser.ParseString` (декодує YAML без файлової системи) і
+  `internal/validate.ValidateString` (структурні правила DC001-DC005/
+  DC007/DC008 без обходу `details` — нема файлової системи, щоб іти по
+  референсах). `Makefile`: `make wasm` збирає `web/public/dc.wasm` і
+  оновлює `web/public/wasm_exec.js`; `make wasm-test` додатково прогонає
+  `web/scripts/test-wasm.cjs`.
+- Коміт: `dcb1fea`
+- AC: `web/public/dc.wasm` збирається `make wasm` ✅; JS-тест (Node +
+  `wasm_exec.js`) — `payment-processing.dc.yaml` → 0 помилок,
+  `dc004_flow_no_link.dc.yaml` → `DC004` ✅ (`make wasm-test` пройшов
+  зелено).
+
+### Крок 5.2 — Скелет застосунку
+- Дата: 2026-07-03
+- Виконано: Vite + React 19 + TypeScript у `web/` (scaffold через
+  `create-vite`). `parseDiagram.ts` (js-yaml + мінімальна перевірка
+  форми), `wasmValidate.ts` (завантажує `public/dc.wasm` через клас `Go`
+  з `public/wasm_exec.js`, підключений як звичайний `<script>` у
+  `index.html`), `layout.ts` (elkjs, layered/top-down), `DiagramView.tsx`
+  (SVG-рендер), `App.tsx` (file input + drag&drop, parse → validate →
+  layout → render, повідомлення про помилки завантаження/валідації без
+  падіння застосунку).
+- Коміт: `d11fc70`
+- AC: `npm run build` без помилок ✅; `npm test` (vitest: parseDiagram,
+  layout, App-смоук з замоканим `wasmValidate`) — 8/8 зелено ✅;
+  Playwright (`npm run test:e2e`, chromium встановлено через `npx
+  playwright install`) відкриває `examples/auth-system.dc.yaml` через
+  справжній file input проти `vite preview` і бачить усі 5 вузлів і 4
+  ребра ✅.
+- Нюанс (не відхилення від плану, технічна деталь): `playwright.config.ts`
+  мусив використати `http://localhost:4173`, а не `127.0.0.1:4173` — `vite
+  preview` на цій машині слухає лише IPv6-loopback для "localhost", тож
+  IPv4-літерал не з'єднувався і `webServer` очікування зависало.
+
+### Крок 5.3 — Drag & drop → layout.json
+- Дата: 2026-07-03
+- Виконано: `src/layoutFile.ts` дзеркалить `internal/layout` (Go):
+  `buildLayoutFile`/`parseLayoutFile`/`layoutFileName`/
+  `downloadLayoutFile`. `DiagramView` тепер бере окрему мапу `positions`
+  (замість координат прямо з elk-layout) + опційний `onNodeDrag`
+  (pointerdown/move/up, координати через `getScreenCTM().inverse()`);
+  ребра не перемаршрутизуються після перетягування — той самий
+  спрощення, що й у CLI (deviations.md, крок 4.2). `App.tsx` володіє
+  станом `positions`, кнопки "Export layout" / "Import layout".
+  Застосунок ніколи не переписує відкритий `*.dc.yaml`.
+- Коміт: `450fc1d`
+- AC: Playwright — перетягнути `Gateway` → експортований JSON відрізняється
+  від pre-drag експорту, вихідний YAML побайтово незмінний ✅; експорт →
+  reload → import відновлює ту саму позицію ✅; вручну крос-перевірено з
+  CLI: перетягнуто в браузері, експортовано layout, підкладено в `dc
+  render --layout-file` — позиція в SVG збігається з точністю до
+  субпікселя (257.92,301.25 у браузері проти 257,301 у CLI SVG, набагато
+  точніше за допуск ±5px) ✅.
+
+### Крок 5.4 — Flow-плеєр
+- Дата: 2026-07-03
+- Виконано: `flowPlayer.ts` — `resolveFlowSteps(flow, choices)` розкладає
+  flow у конкретну послідовність кроків, зупиняючись на першій
+  нерозв'язаній гілці (`pendingBranch`) замість вгадування — плеєр
+  чекає вибору користувача. `pairKey` дзеркалить Go
+  `transpile.pairKey`/DC004 (напрямок кроку може бути зворотним до
+  напрямку зв'язку — "response"). `FlowPlayer.tsx` — select flow,
+  prev/next/autoplay (тік 1.2s, авто-зупинка на кінці або нерозв'язаній
+  гілці), панель note, кнопки Then/Else. `DiagramView` — активний крок
+  отримує найяскравіший акцент + `<animateMotion>` маркер уздовж ребра
+  (реверс шляху, якщо напрямок кроку зворотний до зв'язку), відвідані —
+  приглушений акцент.
+- Коміт: `40b1743`
+- AC: unit-тести `resolveFlowSteps` (звичайний flow, зупинка на гілці,
+  продовження по each arm) ✅; Playwright — вибір flow `auth-system` і
+  3× "next" → перші 2 ребра `visited`, 3-тє `active`, панель показує
+  note 3-го кроку, маркер присутній ✅; autoplay проходить 6-кроковий
+  flow до кінця, кнопка "Next" стає disabled, "Autoplay" повертається в
+  стан очікування ✅.
+
+### Крок 5.5 — Drill-down навігація по `details`
+- Дата: 2026-07-03
+- Виконано: `FlowPlayer` став контрольованим (`state`/`onChange`), щоб
+  прогрес плеєра можна було зберігати per-рівень. `App.tsx` тримає
+  `stack: DiagramLevel[]` (fileName, diagram, layout, positions, помилки
+  валідації, flowPlayerState) замість плоского стану; подвійний клік по
+  вузлу з `details` додає рівень у стек; клік по некінцевій крихті
+  обрізає стек — тривіально зберігає стан попередніх рівнів. Оскільки
+  браузерний file input не може прочитати довільний відносний шлях на
+  диску, `details` резолвиться проти in-memory `virtualFS` (мапа
+  basename → текст), заповненої з файлів, обраних РАЗОМ (multi-select /
+  drop папки) — якщо референс не входить у вибірку, показується
+  нефатальна помилка `drill-error`, поточна діаграма лишається.
+  `DiagramView` — вузли з `details` отримують подвійну рамку + суфікс
+  `" ⊞"` в лейблі, подвійний клік передає вузол наверх.
+- Коміт: `2fd6df3`
+- AC: Playwright — вузол з `details` маркований, інші ні (і
+  details-вільна діаграма має нуль маркерів) ✅; подвійний клік відкриває
+  `oauth-detail`, breadcrumbs показує обидва рівні, повернення по першій
+  крихті відновлює позицію, перетягнуту ДО заходу в under-діаграму
+  (порівняно через експортований layout JSON, а не screen bounding box —
+  bounding box "плавав" через зміну висоти flow-player панелі), і
+  вибраний flow з прогресом ✅; битий `details`-шлях (файл не відкритий
+  разом) → помилка, поточна діаграма лишається ✅.
+
+### Крок 5.6 — Експорти
+- Дата: 2026-07-03
+- Виконано: `cmd/wasm` отримав другий глобал — `context(yamlString) ->
+  string`, `internal/context.Generate(d, false)` на діаграмі, розпарсеній
+  через `ParseString` (завжди non-deep — deep-режим потребує файлової
+  системи, якої тут нема). `svgExport.ts` — чистий (не React)
+  SVG-string-білдер `renderDiagramSVGString` (дзеркалить вигляд
+  `DiagramView`: flow-підсвітку, маркер `details`, `animateMotion`) +
+  `svgStringToPngBlob` (offscreen `<canvas>`) + `downloadBlob`.
+  `flowPlayer.ts` отримав `flowStepFrames` — веб-еквівалент Go
+  `transpile.FlowStepFrames`, але на вже розв'язаному (обраними гілками)
+  списку кроків. `App.tsx` — кнопки "Export PNG", "Export flow steps
+  (zip)" (fflate `zipSync`), "Export AI context (markdown)".
+- Коміт: `06f097f`
+- AC: PNG-експорт непорожній з коректними PNG-магічними байтами ✅;
+  markdown-експорт побайтово ідентичний `dc context
+  auth-system.dc.yaml` (виклик реального бінарника `dc` з Playwright-тесту)
+  ✅; zip з кроками flow (fflate `unzipSync`) містить рівно
+  `step-01..06.png` для 6-крокового OAuth flow, кожен непорожній ✅.
+
+**Фаза 5 завершена.**
+
+## Фаза 6 — Движок канви: міграція на React Flow
+
+### Крок 6.1 — Базовий рендер на React Flow
+- Дата: 2026-07-03
+- Виконано: додано `@xyflow/react`. `components/rfNodeTypes.tsx` — спільний
+  `NodeShell` (handles, лейбл, `⊞`-маркер details, стан
+  active/visited через `data-active`/`data-visited`) + 6 тонких
+  обгорток-компонентів (`ActorNode, ServiceNode, StorageNode, QueueNode,
+  ExternalNode, ComponentNode`), кожен зі своїм `data-node-type` і
+  CSS-класом `rf-node--<type>` та відмінною формою (коло, скруглений
+  прямокутник, "циліндр", пунктир, крапки, гострий прямокутник);
+  `resolveNodeType` — фолбек на `component` для невідомих/custom типів.
+  `components/rfEdgeTypes.tsx` — `DcEdge` на `getSmoothStepPath` +
+  `EdgeLabelRenderer` для лейблу зв'язку, той самий колірний код
+  active/visited, що в SVG-в'ювері. `components/FlowCanvas.tsx` — обгортка
+  `<ReactFlow>` (у `ReactFlowProvider`) з `Background`, `MiniMap`,
+  `Controls`, конвертацією `Diagram`+`DiagramLayout`+positions у RF
+  nodes/edges, `onNodesChange` → той самий колбек `onNodeDrag`, що і
+  старий в'ювер (той самий формат `LayoutPosition`). `App.tsx` отримав
+  перемикач `Canvas: SVG | React Flow` (кнопка `canvas-toggle`,
+  default = SVG) — обидва рендерери співіснують до кроку 6.5, як і
+  передбачає план.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/react-flow-canvas.spec.ts` — перемикання на
+  React Flow рендерить усі 5 вузлів (`rf-node-<id>`) і 4 ребра
+  `auth-system.dc.yaml`, minimap і controls видимі ✅; unit-тест
+  `rfNodeTypes.test.tsx` — кожен з 6 базових типів дає відмінний
+  `data-node-type`/CSS-клас ✅; `npm test` (19 тестів) + `npm run build`
+  + повний `npx playwright test` (13 тестів) зелені ✅.
+
+### Крок 6.2 — Auto-layout (elkjs) + ручні позиції
+- Дата: 2026-07-03
+- Виконано: `DiagramLevel` отримав `manualPositionIds: Set<string>` —
+  ідентифікатори вузлів, чия позиція виставлена вручну (drag або імпорт
+  layout-файлу), на відміну від щойно порахованого auto-layout.
+  `onNodeDrag` і `onImportLayout` додають зачеплені id в цей сет.
+  Кнопка "Re-layout" (`onRelayout`) перераховує `computeLayout` заново
+  і оновлює позиції лише для вузлів, яких нема в `manualPositionIds`
+  (та оновлює `layout.edges` для нового routing). Export/import layout
+  вже працювали крос-двигунно "з коробки", бо `positions`/`layout`
+  живуть у спільному стані рівня, незалежному від обраного canvasEngine
+  (`FlowCanvas`/`DiagramView` — лише різні в'юери того самого стану).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/react-flow-layout.spec.ts` — drag на React
+  Flow-канві → "Export layout" містить нові координати, вихідний YAML
+  побайтово незмінний ✅; layout, експортований з SVG-канви (той самий
+  файл, що в кроці 5.3), імпортується на React Flow-канву і відновлює ту
+  саму позицію (крос-перевірка двигунів) ✅; "Re-layout" після імпорту
+  лишає імпортований вузол на місці (±1px), тоді як інша перевірка (у
+  тому ж файлі) підтверджує, що звичайний export/import цикл на самій
+  React Flow-канві теж відтворює позицію точно ✅; `npm test` (19),
+  `npm run build`, повний `npx playwright test` (16) зелені ✅.
+
+### Крок 6.3 — Flow-плеєр на React Flow
+- Дата: 2026-07-03
+- Виконано: перенесення виявилось здебільшого "безкоштовним" — `FlowCanvas`
+  вже з кроку 6.1 приймає ті самі `activeStep`/`visitedStepKeys`, що і
+  старий SVG-в'ювер, і прокидує їх у `data-active`/`data-visited`
+  ребер/вузлів; сам плеєр (`FlowPlayer.tsx`, `flowPlayer.ts`) — спільний
+  компонент, не прив'язаний до конкретної канви. Додано лише
+  анімований маркер: `DcEdge` рендерить `<circle><animateMotion
+  path={path} .../></circle>` поверх активного ребра (аналог
+  `<animateMotion>` у старому в'ювері); реверс шляху для "response"-кроків
+  (як у SVG-в'ювері) свідомо не перенесено в цьому кроці — маркер завжди
+  йде від source до target ребра, незалежно від напрямку кроку
+  (зафіксовано нижче в `docs/deviations.md`).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/react-flow-flow-player.spec.ts` — вибір flow і 3×
+  "next" → перші 2 ребра `data-visited`, 3-тє `data-active`, панель
+  показує note 3-го кроку, `rf-flow-marker-*` присутній ✅; autoplay
+  проходить 6-кроковий flow до кінця, "Next" стає disabled ✅;
+  `npm test` (19), `npm run build`, повний `npx playwright test` (18)
+  зелені ✅.
+
+### Крок 6.4 — Drill-down по `details` на React Flow
+- Дата: 2026-07-03
+- Виконано: також здебільшого "безкоштовно" — `App.tsx` вже з кроку 6.1
+  передає `onNodeDoubleClick={(node) => void openDetails(node)}` у
+  `FlowCanvas` так само, як у `DiagramView`; `openDetails`,
+  `virtualFS`-резолюція, стек рівнів і breadcrumbs — спільний код,
+  незалежний від `canvasEngine`. `rf-details-marker-<id>` (з кроку 6.1)
+  і `data-has-details` на `rf-node-<id>` покрили індикатор ⊞. Змін коду
+  не знадобилось — лише тести.
+- Коміт: (цей крок)
+- AC: ті самі три AC кроку 5.5, підтверджені Playwright
+  (`e2e/react-flow-drill-down.spec.ts`, 4 тести) на React Flow-канві:
+  маркер лише на вузлі з `details` ✅; подвійний клік відкриває
+  `oauth-detail`, breadcrumbs, повернення відновлює позицію (через
+  export layout, не bounding box) і прогрес flow-плеєра ✅; битий шлях →
+  нефатальна помилка, поточна діаграма лишається ✅; діаграма без
+  `details` — нуль маркерів ✅. `npm test` (19), `npm run build`, повний
+  `npx playwright test` (22) зелені ✅.
+
+### Крок 6.5 — Видалення старого рендерера
+- Дата: 2026-07-03
+- Виконано: видалено `components/DiagramView.tsx` і перемикач
+  `canvas-toggle`/`canvasEngine` з `App.tsx` — React Flow тепер єдина
+  канва. Оскільки PNG/zip-експорти (крок 5.6) вже будувались через
+  чистий `svgExport.ts` (не через React-компонент `DiagramView`,
+  а напряму з `diagram+layout+positions` стану), вони не потребували
+  жодних змін — лише оновлено застарілий doc-коментар, що посилався на
+  `DiagramView`. Старі e2e-специфікації (`open-diagram`, `drag-layout`,
+  `drill-down`, `flow-player`, `exports`) переписані на нові
+  `data-testid` (`reactflow-canvas`, `rf-node-*`, `rf-edge-*`) замість
+  дублювання окремими `react-flow-*.spec.ts` файлами (видалені,
+  оскільки повторювали вже перенесені перевірки). `App.test.tsx` —
+  так само на нові id; `setupTests.ts` отримав no-op полiфіл
+  `ResizeObserver` (jsdom його не має, а `@xyflow/react` спостерігає за
+  контейнером канви).
+- Коміт: (цей крок)
+- AC: `grep -rn "DiagramView\|diagram-svg\|canvas-toggle" web/src web/e2e`
+  — порожньо ✅; всі AC кроку 5.6 (PNG, zip кроків flow, AI-context
+  markdown) проходять на React Flow-канві (`exports.spec.ts`, 3 тести)
+  ✅; повна регресія — `npm test` (19), `npm run build`, консолідований
+  `npx playwright test` (13 тестів, замінили 22 з дублікатами) зелені;
+  `go build/vet/test` і `./dc validate` зелені ✅.
+
+**Фаза 6 завершена.**
+
+## Фаза 7 — Повноцінне візуальне редагування
+
+### Крок 7.1 — Серіалізація: модель → YAML-патчі
+- Дата: 2026-07-03
+- Виконано: додано залежність `yaml` (eemeli/yaml) v2.9.
+  `web/src/yamlPatch.ts` — `applyPatch(text, ops[])`: парсить текст у
+  `yaml.Document`, застосовує операції `addNode, updateNode, removeNode,
+  addLink, removeLink, addFlowStep, removeFlowStep, renameNodeId` через
+  мутації самого `Document` (`seq.add/delete`, `map.set/get`,
+  `items.splice`) і серіалізує назад — `Document` зберігає коментарі,
+  порядок ключів і форматування незмінених частин "з коробки" (це і є
+  CST-патчинг з плану — на рівні публічного Document API бібліотеки, без
+  прямого доступу до низькорівневого CST). `renameNodeId` рекурсивно
+  проходить `links[]` і `flows[].steps` (включно з `branch.then`/`else`)
+  і замінює всі згадки id.
+- Коміт: (цей крок)
+- AC: `yamlPatch.test.ts` (9 тестів) — по одному unit-тесту на кожну
+  операцію (патч валідного документа парситься і містить зміну) ✅;
+  golden-тест — документ з коментарями після `addNode` + `removeLink`
+  зберігає коментарі та порядок незмінених секцій побайтово ✅;
+  `renameNodeId` на `payment-processing.dc.yaml` (з branch) оновлює
+  згадки id в links і в обох гілках branch ✅; `npm test` (28),
+  `npm run build`, `npx playwright test` (13) зелені; go-регресія
+  зелена (модуль поки не підключений до UI — це кроки 7.2+) ✅.
+
+### Крок 7.2 — CRUD вузлів з канви
+- Дата: 2026-07-03
+- Виконано: `components/Palette.tsx` — 6 draggable-елементів (базові
+  типи), `dataTransfer` MIME `application/dc-node-type`. `FlowCanvas`
+  отримав `onDropNodeType` (через `useReactFlow().screenToFlowPosition`)
+  і `onNodeClick`/`selectedNodeId` (виділення передається через
+  `data.isSelected` в `DcNodeData`, не через вбудований `node.selected`
+  React Flow — останній конфліктував із подвійним кліком, див.
+  `docs/deviations.md`, крок 7.2). `components/PropertiesPanel.tsx` —
+  форма label/type/description/tags, кожна зміна одразу викликає
+  `updateNode`-патч; кнопка "Delete node". `App.tsx`: `applyOps(ops,
+  {manualPosition?})` — застосовує `yamlPatch.applyPatch`, перепарсює
+  і перевалідовує текст, перераховує layout (той самий merge-підхід,
+  що в "Re-layout" кроку 6.2 — ручні позиції лишаються, решта отримує
+  нові auto-layout координати; нова нода відразу позначається manual
+  з координатами точки, куди її кинули). `dependents.ts` —
+  `findNodeDependents` (links + top-level flow-кроки, що згадують
+  вузол; кроки всередині branch-гілок — поза межами каскадного
+  видалення, задокументовано як обмеження в deviations.md). Видалення
+  вузла з залежностями показує `window.confirm` зі списком, підтвердж
+  ення каскадно видаляє flow-кроки (з кінця індексів, щоб не збити
+  решту), links і сам вузол. Для тестованості додано прихований
+  `data-testid="yaml-source"` textarea з поточним raw YAML (буде
+  замінений повноцінною CodeMirror-панеллю в кроці 7.5).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/node-crud.spec.ts` (4 тести) — drag-and-drop
+  палітри → нода на канві й у YAML-стані з валідним id (`service1`) ✅;
+  редагування label у панелі → канва й YAML оновлені ✅; видалення вузла
+  із залежностями (`AuthService`) → `window.confirm` зі списком
+  посилань, підтвердження прибирає вузол і всі його links з YAML ✅;
+  видалення вузла без залежностей — без діалогу ✅. Регресія:
+  `e2e/drill-down.spec.ts` (подвійний клік) зламалась і була
+  полагоджена (див. deviations.md); повний `npm test` (30),
+  `npm run build`, `npx playwright test` (17) зелені; go-регресія
+  зелена ✅.
+
+### Крок 7.3 — Малювання links + інспектор зв'язків
+- Дата: 2026-07-03
+- Виконано: хендли на нодах (top=target, bottom=source) вже існували з
+  кроку 6.1; `FlowCanvas` отримав `onConnect` → `onConnectNodes(source,
+  target)` (React Flow сам не викликає його, якщо з'єднання кинуте не на
+  handle — тому "лише між існуючими вузлами" виконується без додаткового
+  коду). `components/LinksPanel.tsx` — правий сайдбар зі списком усіх
+  links, фільтри за типом і вузлом, hover елемента списку/ребра
+  синхронізовані в обидва боки через підняте в `App.tsx` спільне
+  `hoveredLinkIndex` (а не локальний стан однієї сторони); клік по
+  елементу розгортає inline-редактор (тип, лейбл) і кнопку видалення.
+  `yamlPatch.ts` отримав новий op `updateLink` (за індексом у
+  `links[]`) — його не було в списку кроку 7.1, бо той список
+  описував лише додавання/видалення; редагування існуючого зв'язку
+  знадобилось саме тут.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/links.spec.ts` (3 тести) — протягування хендла
+  User→DB створює новий `link` (перевірено і кількістю edge-елементів
+  на канві, і вмістом YAML-стану) ✅; кидання з'єднання в порожнє місце
+  канви не змінює YAML взагалі ✅; hover елемента списку → ребро отримує
+  `data-hovered=true`, видалення зі списку прибирає ребро з канви і з
+  YAML ✅. Повна регресія: `npm test` (31), `npm run build`,
+  `npx playwright test` (20) зелені; go-регресія зелена ✅.
+
+### Крок 7.4 — Редактор flows
+- Дата: 2026-07-03
+- Виконано: `yamlPatch.ts` отримав `addFlow` (нова іменована flow з
+  порожніми steps), `addBranch` (додає `{branch:{condition, then:[],
+  else:[]}}`), `addFlowStep` розширено опційним `target:
+  {branchAtIndex, arm}` для запису кроку в then/else-гілку, і
+  `updateFlowStep` (правка поля, напр. note, за індексом) — жодного з
+  цих чотирьох не було в списку кроку 7.1, вони знадобились саме для
+  редактора flows. `components/FlowEditorPanel.tsx` — "New flow"
+  (prompt на ім'я → `addFlow`, одразу вибирається у flow-плеєрі і
+  вмикається запис), "Start/Stop recording", "Add branch" (prompt на
+  умову → `addBranch`, перемикає режим запису на гілку `then`),
+  "Switch to else/then", "Finish branch" (повернення до
+  верхньорівневого запису), і список кроків поточної flow з
+  редагованим note та кнопкою видалення. `FlowCanvas` отримав
+  `onEdgeClick` (парсить індекс з `edge.id`); клік по ребру під час
+  запису викликає `prompt` на note і додає крок через `addFlowStep`
+  (з `target`, якщо триває запис гілки) — клік по неіснуючому ребру
+  неможливий, бо ребра рендеряться лише для реальних `links[]`.
+  Виявлена й виправлена гонка даних у `applyOps` (кілька швидких
+  кліків по ребрах губили проміжні кроки) — див. `docs/deviations.md`,
+  крок 7.4.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/flow-editor.spec.ts` — запис 3 кроків кліками по
+  ребрах у порядку User→Gateway→AuthService→OAuthProvider дає flow з
+  правильним порядком `from`/`to` у YAML-стані ✅; після запису 0
+  помилок валідації (`validation-errors` відсутній, тобто й 0 DC004) ✅;
+  записаний flow одразу з'являється у списку flow-плеєра і програється
+  (`flow-next` → `Step 1 / 3`) ✅. Unit-тести `yamlPatch.test.ts` — по
+  тесту на `addFlow`, `updateFlowStep`, `addBranch`+`addFlowStep` у
+  гілку (13 тестів разом) ✅. Повна регресія: `npm test` (34),
+  `npm run build`, `npx playwright test` (21) зелені; go-регресія
+  зелена ✅.
+
+### Крок 7.5 — YAML-панель з двосторонньою синхронізацією
+- Дата: 2026-07-03
+- Виконано: додано `codemirror` (meta-пакет із `basicSetup`) +
+  `@codemirror/lang-yaml`. `components/YamlPanel.tsx` — неконтрольований
+  `EditorView`, змонтований один раз; зміни в редакторі дебаунсяться
+  (300ms), перевіряються `js-yaml`-парсингом (синтаксис) і
+  `parseDiagram` (мінімальна форма) — лише якщо валідно, викликається
+  `onCommit(text)`; інакше показується `yaml-panel-error` з рядком
+  (`YAMLException.mark.line`), а канва лишається на попередньому
+  валідному стані (просто не викликаємо `onCommit`). Зовнішні зміни
+  тексту (з канви/палітри/etc.) синхронізуються назад у редактор через
+  `diffRange` — обчислює спільний префікс/суфікс і диспатчить
+  CodeMirror-транзакцію лише для змінного діапазону, тому курсор/
+  виділення поза ним не збивається (CodeMirror сам мапить selection
+  через зміни). `App.tsx` отримав `applyTextReplace(text)` — той самий
+  ref/queue механізм, що і `applyOps` (крок 7.4), тож текстові й
+  візуальні правки не ганяються за тим самим `levelRef`. Прихований
+  `yaml-source` textarea (з кроку 7.2) свідомо залишений як є —
+  корисний test-only хук, яким користуються тести попередніх кроків;
+  реальний видимий/редагований інтерфейс — тепер `YamlPanel`.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/yaml-panel.spec.ts` (3 тести) — дописування вузла
+  прямо в тексті панелі (через `insertText`, щоб не зіткнутися зі
+  smart-indent CodeMirror при `Enter`) додає ноду на канву без
+  перезавантаження ✅; додавання ноди з палітри відображається в тексті
+  панелі, коментар користувача (`# keep me`) лишається на місці ✅;
+  синтаксично зіпсований YAML → канва не змінює кількість вузлів,
+  з'являється `yaml-panel-error` ✅. Повна регресія: `npm test` (34),
+  `npm run build`, `npx playwright test` (24) зелені; go-регресія
+  зелена ✅.
+
+### Крок 7.6 — Live-валідація на канві
+- Дата: 2026-07-03
+- Виконано: `components/ProblemsPanel.tsx` замінив плоский
+  `validation-errors` список — той самий перелік `errors`, але з
+  `problems-ok` (нуль помилок) або клікабельним `problems-list`, де
+  клік передає повну помилку в `App.tsx`. `applyOps`/`applyTextReplace`
+  вже викликали `validateDiagram` після кожної зміни (з кроків 7.1/7.5)
+  — "дебаунс" для канви фактично природний (одна зміна = один виклик),
+  а для YAML-панелі — 300ms дебаунс уже реалізований у кроці 7.5;
+  окремий загальний дебаунс не знадобився. `onSelectProblem` —
+  евристика без структурованих посилань від валідатора (`ValidationError`
+  має лише file/line/code/message): шукає серед `error.message` id
+  існуючого вузла (працює для DC004 `flow step X -> Y has no backing
+  link`, де X/Y — реальні id) або назву flow; якщо знайдено вузол —
+  виділяє його (`selectedNodeId`) і просить `FlowCanvas` зробити
+  `fitView` на нього; для flow — вибирає її в flow-плеєрі; інакше —
+  переміщує курсор/виділення на `error.line` у `YamlPanel`. Обидва
+  компоненти отримали `focusNonce`, що інкрементується при кожному
+  кліку, щоб повторний клік на той самий елемент так само спрацьовував.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/problems-panel.spec.ts` (3 тести) — видалення
+  зв'язку `AuthService -> OAuthProvider` через YAML-панель (через
+  test-only `__cmView`-хук, бо CodeMirror віртуалізує рядки поза
+  екраном — симуляція кліків/клавіш углиб документа ненадійна)
+  автоматично позначає DC004 у Problems без жодних кнопок ✅; клік по
+  помилці центрує канву на вузлі "AuthService", який вона називає
+  (властивості-панель відкривається на ньому) ✅; валідний документ →
+  `problems-ok`, порожній `problems-list` ✅. Повна регресія: `npm test`
+  (34), `npm run build`, `npx playwright test` (27) зелені; go-регресія
+  зелена ✅.
+
+### Крок 7.7 — Undo/Redo
+- Дата: 2026-07-03
+- Виконано: `App.tsx` — `historyRef: {past: string[]; future: string[]}`
+  (ліміт 50), `pushHistory`/`resetHistory`/`syncHistoryCounts`
+  (останнє — дзеркалить довжини в `historyCounts` state лише для
+  disabled-стану кнопок). `applyOps`/`applyTextReplace` штовхають
+  попередній `rawText` в історію перед комітом (якщо текст справді
+  змінився); `onUndo`/`onRedo` — той самий ref/queue-механізм, що й інші
+  мутації, переміщують снепшот між past/future і перебудовують рівень
+  так само, як `applyTextReplace`. Історія скидається при відкритті
+  нового файлу чи переході між рівнями drill-down (`resetHistory` у
+  `openFiles`/`openDetails`/`goToLevel`). Ctrl/Cmd+Z і
+  Ctrl/Cmd+Shift+Z перехоплюються на `window` у capture-фазі з
+  `stopPropagation` — це не дає вбудованому undo CodeMirror (з
+  `basicSetup`) обробити ту саму подію, коли фокус у YAML-панелі, тож
+  історія лишається справді єдиною для канви й панелі, як і вимагає
+  план.
+
+  Під час тестування знову виявилась (і цього разу стабільно
+  відтворювалась) гонка даних із кроку 7.4: `levelRef` оновлювався
+  всередині updater-функції `setStack`, а React 18 не гарантує
+  синхронного виконання updater'а при батчингу — див. `docs/
+  deviations.md`, крок 7.7. Виправлено переносом присвоєння
+  `levelRef.current` у тіло `updateCurrentLevel`, синхronно, до виклику
+  `setStack`.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/undo-redo.spec.ts` (2 тести) — додати ноду →
+  undo → ноди нема ні на канві, ні в YAML-стані; redo повертає обидва
+  ✅; візуальна правка (нода з палітри) і текстова правка (нова нода
+  через YAML-панель) відкочуються в правильному зворотному порядку
+  однією історією (undo #2 прибирає текстову правку, undo #1 — візуальну;
+  redo повертає в тому ж порядку) ✅. Повна регресія (двічі поспіль,
+  щоб перевірити відсутність фляки): `npm test` (34), `npm run build`,
+  `npx playwright test` (29) зелені обидва рази; go-регресія зелена ✅.
+
+**Фаза 7 завершена.**
+
+## Фаза 8 — Публічний сайт
+
+### Крок 8.1 — Відкриття та збереження файлів
+- Дата: 2026-07-03
+- Виконано: `src/fileSystemAccess.d.ts` — мінімальні ambient-типи для
+  File System Access API (`showOpenFilePicker`/`showSaveFilePicker`/
+  `FileSystemFileHandle`/`FileSystemWritableFileStream`) — не входять у
+  бандлований DOM lib TypeScript. `nativeFile.ts` —
+  `isNativeFsSupported`, `openDiagramFiles` (мульти-вибір, сортує
+  вибрані файли на "ядро" і `*.layout.json` за іменем — API не дає
+  доступу до несусідніх/невибраних файлів, тому "автопідхоплення"
+  реалізовано як одночасний вибір обох файлів, як і в існуючому
+  multi-select file input), `writeTextToHandle`, `pickSaveHandle`.
+  `App.tsx`: `onOpenNative` (деградує до кліку по прихованому
+  `file-input`, якщо API немає), `onSave` (пише в `mainHandle`/
+  `layoutHandle`; без `mainHandle` або без API — falls back на
+  `downloadBlob`/`downloadLayoutFile`); `savedRawText` на рівні
+  дiаграми + `hasUnsavedChanges` — індикатор і `beforeunload`-попередження
+  (через ref, щоб не переприв'язувати листенер щорендеру).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/native-fs.spec.ts` (3 тести) — відкриття через
+  фейковий (in-memory) File System Access API (реальний OS-пікер
+  недоступний для автоматизації; стандартний спосіб тестування цього
+  API), додавання й перетягування вузла, збереження → ядро на "диску"
+  (fake store) містить нову ноду, layout збережено окремим файлом з
+  позицією ✅; видалення `showOpenFilePicker`/`showSaveFilePicker` →
+  Open деградує до file-input, Save — до download, без винятків
+  сторінки ✅; індикатор незбережених змін з'являється після редагування
+  і зникає після збереження, `beforeunload` дійсно викликає
+  `preventDefault` ✅. Повна регресія: `npm test` (34), `npm run build`,
+  `npx playwright test` (32) зелені; go-регресія зелена ✅.
+
+### Крок 8.2 — Share-лінки
+- Дата: 2026-07-03
+- Виконано: `shareLink.ts` — `encodeShareState`/`decodeShareState`:
+  `{fileName, yaml, layout}` → JSON → deflate (`fflate.zlibSync`) →
+  base64url (без padding, `+/` → `-_`) у фрагмент `#s=...`. `App.tsx`:
+  кнопка "Share" (layout включається, лише якщо є ручні позиції) —
+  показує URL у полі `share-url`, або `share-error` з розміром і
+  лімітом (`SHARE_URL_SIZE_LIMIT = 8KB`), якщо перевищено. Ефект на
+  маунті перевіряє `location.hash` — якщо це share-фрагмент, діаграма
+  відкривається як рівень без `mainHandle` (тобто "незбережений
+  документ" у тому ж сенсі, що й рівень без нативного handle з кроку
+  8.1 — Save деградує до download).
+- Коміт: (цей крок)
+- AC: Playwright `e2e/share-link.spec.ts` (2 тести) — створити діаграму,
+  перетягнути вузол, Share → відкрити URL у новому `context.newPage()`
+  (без спільного стану) → ті самі 5 вузлів і та сама позиція
+  перетягнутого вузла (порівняно через експортований layout) ✅;
+  фрагмент ніколи не йде на сервер (перевірено переліком усіх
+  зроблених HTTP-запитів після навігації на share-URL — жоден не
+  містить фрагмент, що й очікувано, бо браузери принципово не
+  відправляють `#...` у запитах) і URL для `auth-system` ≤ 8KB ✅.
+  Unit-тести `shareLink.test.ts` (3) — round-trip, невалідний
+  фрагмент → null, розмір у межах ліміту. Повна регресія: `npm test`
+  (37), `npm run build`, `npx playwright test` (34) зелені; go-регресія
+  зелена ✅.
+
+### Крок 8.3 — Галерея прикладів і онбординг
+- Дата: 2026-07-03
+- Виконано: `scripts/generate-example-previews.mjs` — шелить реальний
+  бінарник `dc render <file> -o <out.svg>` (не переписує рендер у JS)
+  для кожного `examples/*.dc.yaml` у `public/example-previews/`;
+  підключено як `prebuild` (npm lifecycle) перед `build`, результат у
+  `.gitignore` (генерований артефакт). `src/examples.ts` —
+  `import.meta.glob('../../examples/*.dc.yaml', {query:'?raw', eager})`
+  вбудовує реальний текст прикладів у бандл. `components/StartScreen.tsx`
+  — галерея (превью-картинка + ім'я файлу, клік відкриває приклад),
+  "New diagram" (порожній шаблон), кнопка "Show tour" →
+  `components/Tour.tsx` (4 підказки: палітра, links, flow-плеєр,
+  Problems-панель; план не вимагає AC на сам тур, тому реалізовано
+  мінімально — без примусового показу при першому візиті).
+  `App.tsx` отримав `openTextAsDiagram` (той самий шлях, що й
+  `openFiles`, але для вже наявного в пам'яті тексту — без нативного
+  handle, Save деградує до download); стартовий екран показується
+  замість старого "Drag a file here" при `!current`.
+- Коміт: (цей крок)
+- AC: Playwright `e2e/example-gallery.spec.ts` (2 тести) — клік по
+  прикладу з галереї відкриває його в редакторі з усіма вузлами ✅;
+  прев'ю — реальний SVG, згенерований білд-скриптом (перевірено HTTP-
+  запитом на `/example-previews/auth-system.svg`: валідний `<svg>`,
+  містить лейбли всіх вузлів реального файлу) ✅. Повна регресія:
+  `npm test` (37), `npm run build` (з prebuild), `npx playwright test`
+  (36) зелені; go-регресія зелена ✅.
+
+### Крок 8.4 — Деплой і CI
+- Дата: 2026-07-03
+- Виконано: `.github/workflows/deploy-web.yml` — build dc + `make wasm`
+  → `npm ci` → `npm run build` (з prebuild-генерацією превью) →
+  `npx playwright test` проти прод-білда → `actions/upload-pages-
+  artifact` + `actions/deploy-pages` (push на `main`);
+  `.github/workflows/ci.yml` отримав job `web` (той самий шлях без
+  деплою, для PR і push). `vite.config.ts`: `base: './'` — потрібно
+  для GitHub Pages project-сайту (`user.github.io/repo/`, не корінь
+  домену); знайдені й виправлені 2 місця з абсолютними шляхами, які
+  зламались би під підшляхом: `wasmValidate.ts` (`fetch('/dc.wasm')` →
+  відносно `import.meta.env.BASE_URL`) і `examples.ts` (URL превью
+  аналогічно). `web/README.md` переписано під проєкт (заміна Vite-
+  шаблону) — dev/build/test/deploy інструкції, плейсхолдер для
+  публічного URL.
+- Коміт: (цей крок)
+- AC: workflow-файл існує, локальна симуляція тих самих команд
+  (`go build -o dc`, `make wasm`, `npm ci`, `npm test`, `npm run build`,
+  `npx playwright install`, `npx playwright test`) пройдена ✅;
+  прод-білд, відкритий через `vite preview` (файл-сервер), працює з
+  WASM-валідацією — весь `npx playwright test` (36 тестів, включно з
+  `problems-panel.spec.ts`, який напряму залежить від WASM-валідатора)
+  зелений проти прод-білда ✅. Сайт доступний за публічним URL
+  (з прямого дозволу власника: `gh repo create`, push, `gh api ...
+  pages`, репозиторій переведено в public для увімкнення Pages на
+  безкоштовному плані — деталі в `docs/deviations.md`, крок 8.4):
+  https://oleksii-mykhniak.github.io/diagramcore/ — відкриває галерею
+  прикладів (перевірено `curl` на `/`, `/dc.wasm`,
+  `/example-previews/auth-system.svg`, усі 200) ✅; URL вписано в
+  `web/README.md`.
+
+**Фаза 8 завершена.**
+
+## Фаза 9 — MCP-сервер і AI-стиль
+
+### Крок 9.1 — `dc mcp`: базові інструменти
+- Дата: 2026-07-03
+- Виконано: додано залежність `github.com/modelcontextprotocol/go-sdk`
+  (офіційний Go MCP SDK, v1.6.1). `internal/mcpserver/server.go` —
+  `NewServer()` реєструє три інструменти через дженерик `mcp.AddTool`:
+  `validate_diagram` (path АБО content, повертає `{ok, errors[]}` з
+  `diagramError{file,line,code,message}` — тонка обгортка над
+  `internal/validate`), `get_context` (path+deep, обгортка над
+  `internal/context.Generate`), `list_diagrams` (dir, рекурсивний обхід
+  `*.dc.yaml` через `filepath.WalkDir`). `Run(ctx)` — `server.Run(ctx,
+  &mcp.StdioTransport{})`. `cmd/dc`: підкоманда `mcp` (стандартний
+  `stdcontext.Background()`, з аліасом через колізію імені з уже
+  імпортованим `internal/context`). `docs/mcp.md` — команда підключення
+  і опис інструментів.
+- Коміт: (цей крок)
+- AC: інтеграційний тест `internal/mcpserver/server_test.go` —
+  MCP-клієнт (через `mcp.NewInMemoryTransports`, офіційний спосіб
+  тестування SDK) викликає `validate_diagram` на
+  `examples/auth-system.dc.yaml` → `ok:true`, 0 помилок ✅; на фікстурі
+  `dc004_flow_no_link.dc.yaml` → `ok:false`, помилка з кодом DC004 і
+  ненульовим рядком ✅; `get_context`/`list_diagrams` теж перевірені ✅.
+  `dc mcp` заведений у реальний Claude Code (`claude mcp add --scope
+  local diagramcore -- ./dc mcp`, `claude mcp list` → "✔ Connected") —
+  ручна перевірка пройдена, команда записана в `docs/mcp.md` ✅.
+  `go build/test/vet ./...` і `./dc validate examples/*.dc.yaml`
+  зелені ✅.
+
+### Крок 9.2 — Структуровані операції редагування
+- Дата: 2026-07-03
+- Виконано: `internal/edit/edit.go` — Go-аналог `web/src/yamlPatch.ts`:
+  `Apply(text, ops)` парсить у `yaml.Node`-дерево (не в
+  `model.Diagram`-структуру — це і зберігає коментарі) і мутує його
+  напряму; `Operation` — один плаский struct (Go не має тегованих
+  об'єднань) з полями під усі операції: `add_node, update_node,
+  remove_node, add_link, remove_link, add_flow_step, remove_flow_step,
+  rename_node_id` плюс `set_position` (розпізнається, але свідомо
+  відхиляється в `Apply` — про нього дбає інструмент MCP окремо, бо
+  він не чіпає YAML). `rename_node_id` рекурсивно оновлює `links[]` і
+  `flows[].steps` (включно з `branch.then`/`else`). Кодування назад —
+  через `yaml.NewEncoder` з `SetIndent(2)` (не пакетний `yaml.Marshal`,
+  який форматує з відступом 4 і зламав би кожен існуючий `*.dc.yaml`).
+  `internal/mcpserver/edit_diagram.go` — інструмент `edit_diagram`:
+  розділяє `set_position`-операції від решти, застосовує YAML-операції,
+  валідує РЕЗУЛЬТАТ (`validate.ValidateString`) — якщо є помилки, файл
+  НЕ записується (атомарність), повертаються структуровані помилки;
+  інакше пише файл, потім мерджить `set_position`-и в
+  `<name>.layout.json` (через `layout.Load`/`layout.Save` — існуючі
+  позиції інших вузлів зберігаються).
+- Коміт: (цей крок)
+- AC: unit-тести `internal/edit/edit_test.go` (9 тестів, включно з
+  golden-тестом на побайтову ідентичність коментарів/форматування) ✅;
+  інтеграційні тести `internal/mcpserver/edit_diagram_test.go` (3,
+  через `mcp.NewInMemoryTransports`) — `add_node`+`add_link` через MCP
+  → файл на диску змінений, коментар (`# keep me`) на місці ✅; лінк на
+  неіснуючий вузол → файл НЕ змінився (побайтове порівняння до/після),
+  повернено структуровану помилку DC002 ✅; `set_position` змінює лише
+  `*.layout.json`, core YAML побайтово незмінний ✅. `docs/mcp.md`
+  доповнено описом інструменту. `go build/test/vet ./...` і
+  `./dc validate examples/*.dc.yaml` зелені ✅.
+
+### Крок 9.3 — Style guide і `lint_style`
+- Дата: 2026-07-03
+- Виконано: `internal/style/style.go` — `Config` (decoded
+  `dc-style.yaml`: `allowed_types, allowed_tags, id_pattern,
+  require_description, max_nodes, theme`), `Load(path)` (відсутній файл
+  → `nil, nil`, не помилка), `Lint(d, cfg)` — 5 правил → коди
+  DS001-DS005 (тип/тег не в білому списку, id не за regex, відсутній
+  опис, забагато вузлів); `nil cfg` → 0 порушень. `examples/dc-style.yaml`
+  — реальний style-файл, якому вже відповідають усі 3 приклади (тест
+  `TestExamplesConformToTheirOwnStyleGuide`). `docs/format.md`
+  доповнено специфікацією `dc-style.yaml` і таблицею кодів.
+  `internal/mcpserver/style.go` — MCP-інструменти `get_style_guide(dir)`
+  і `lint_style(path)` (шукає `dc-style.yaml` в директорії `path`, не
+  успадковує з батьківських). `cmd/dc`: `dc lint --style [--json]
+  <files...>` — той самий `internal/style.Load`/`Lint`, що й
+  MCP-інструмент (спільна реалізація, не дублювання логіки).
+- Коміт: (цей крок)
+- AC: `internal/style/style_test.go` (5 тестів) — фікстура
+  `testdata/violates.dc.yaml` порушує 4 правила (DS001-DS004) одним
+  вузлом ✅; `testdata/conforming.dc.yaml` — 0 порушень ✅.
+  `internal/mcpserver/style_cli_test.go` —
+  `TestLintStyleAgreesWithCLI`: викликає MCP `lint_style` і `dc lint
+  --style --json` (через `go run`) на тому самому файлі, порівнює
+  множини кодів — ідентичні ✅. `go build/test/vet ./...`,
+  `./dc validate` і `./dc lint --style examples/*.dc.yaml` зелені ✅.
+
+### Крок 9.4 — Рендер для "очей" агента
+- Дата: 2026-07-03
+- Виконано: `internal/mcpserver/render_diagram.go` — MCP-інструмент
+  `render_diagram(path, flow?, format?)`: рендерить через той самий
+  `internal/render.SVG`/`SVGAnimated`, що й `dc render`, застосовуючи
+  `<name>.layout.json`, якщо є; `flow` вмикає підсвітку шляху (як
+  `dc render --flow --animate`); повертає `mcp.ImageContent` напряму
+  (не JSON-обгортку `{ok,...}`, як інші інструменти — образ це і є
+  результат). `format: "png"` — best-effort через `rsvg-convert` (якщо
+  є в PATH), інакше мовчки SVG замість помилки — PNG був відкладений
+  ще в фазі 3/кроці 4.1 (немає SVG-растеризатора серед Go-залежностей
+  проєкту), план явно дозволяє цей відхил для цього інструменту; див.
+  `docs/deviations.md`, крок 9.4.
+- Коміт: (цей крок)
+- AC: `internal/mcpserver/render_diagram_test.go` (3 тести) —
+  `render_diagram` на `auth-system` повертає непорожній `ImageContent` з
+  валідним SVG (`<svg` у вмісті), `mimeType: image/svg+xml` (тестове
+  середовище без `rsvg-convert`) ✅; виклик з `flow` дає інший вміст, ніж
+  без нього (підсвічений шлях відрізняється від базового рендеру) ✅;
+  невідома назва flow → `IsError: true` ✅. `docs/mcp.md` доповнено
+  описом інструменту й повного циклу агента (створити → провалідувати
+  → відрендерити → виправити). `go build/test/vet ./...`,
+  `./dc validate` і `./dc lint --style` зелені ✅.
+
+**Фаза 9 завершена. Весь PLAN.md виконано.**
+
+## Фаза 10 — Production-ready UI/UX веб-редактора (PLAN2.md)
+
+### Крок 10.1 — Дизайн-токени, теми light/dark, design-skill
+- Дата: 2026-07-04
+- Виконано: `web/src/theme.css` — токени кольору (bg/surface/border/text/
+  accent/danger/flow-active/flow-visited/node-*), spacing (`--dc-space-1..6`),
+  радіуси, типографіка на `:root[data-theme=light]` (дефолт) і
+  `[data-theme=dark]`; `web/src/hooks/useTheme.ts` (localStorage `dc.theme`,
+  `[theme, setTheme, toggleTheme]`) + unit-тести; тимчасовий
+  `data-testid="theme-toggle"` у шапці `App.tsx` (переїде у View-меню в
+  10.3). `index.css`: прибрано авто `color-scheme: light dark`, явний
+  `color-scheme: light`/`dark` за `data-theme`. Захардкоджені hex у
+  `rfNodeTypes.tsx`/`rfEdgeTypes.tsx`/`App.tsx` (шапка, breadcrumbs) →
+  токени. `.claude/skills/design/SKILL.md` — палітра обох тем, spacing,
+  типографіка, правило "нуль inline-hex", компонентні правила,
+  testid-стабільність, патерн розширення render-style пресетів (10.12).
+- Коміт: (цей крок)
+- AC: `useTheme.test.ts` (4 тести) — дефолт `light` без збереженого
+  значення, перемикання `data-theme` + persist, toggle, читання
+  збереженого значення ✅; `e2e/theme.spec.ts` — клік по перемикачу міняє
+  computed `background-color` body, після reload тема збережена ✅;
+  `grep -rn "#e04b4b\|#e08a4b\|#0066cc" web/src --include="*.tsx"` —
+  порожній ✅; `npm test` (41 тест) + `npm run build` зелені; повна
+  e2e-регресія (37 специфікацій, включно з новою `theme.spec.ts`) зелена
+  без правок наявних спек ✅.
+
+### Крок 10.2 — Декомпозиція App.tsx (без візуальних змін)
+- Дата: 2026-07-04
+- Виконано: `App.tsx` (995 рядків) розрізано на 4 хуки +
+  2 компоненти без зміни поведінки чи testid'ів:
+  `hooks/useDiagramStack.ts` (virtualFS/stack/current/loadError/
+  drillError, levelRef/applyChainRef/runMutation, buildLevel, openFiles/
+  openTextAsDiagram/onFileInput/onDrop/onDragOver, updateCurrentLevel,
+  onOpenNative/onSave, hasUnsavedChanges + beforeunload-ефект,
+  share-link-restore-ефект, openDetails/goToLevel, і historyRef/
+  historyCounts/resetHistory/pushHistory — гілку про причину дивись
+  `docs/deviations.md`, крок 10.2); `hooks/useHistory.ts` (onUndo/onRedo
+  + гарячі клавіші Ctrl/Cmd+Z); `hooks/useDiagramEditing.ts` (четвертий
+  хук поза планом — applyOps/applyTextReplace + весь CRUD
+  вузлів/зв'язків/flow-recording, деталі відхилу — там само);
+  `hooks/useDiagramExports.ts` (onExportPng/Zip/Context/Layout/Share);
+  `components/AppHeader.tsx` (стара шапка як є, з власним
+  `fileInputRef`); `components/EditorWorkspace.tsx` (вміст `<main>`,
+  обчислює `highlight`/`selectedNode` локально). `App.tsx` тепер 133
+  рядки — чиста композиція хуків + двох компонентів.
+- Коміт: (цей крок)
+- AC: `App.tsx` — 133 рядки (ліміт 200) ✅, `grep "#[0-9a-fA-F]"
+  src/App.tsx` — порожньо (жодного нового inline-hex) ✅; `npm test`
+  (41 тест, ті самі, що й до кроку) зелені без правок ✅; повний
+  `npm run test:e2e` (37 специфікацій) зелений **без жодної правки
+  наявних спек** — доказ, що всі testid'и й поведінка (включно з
+  задокументованими гонками `levelRef`/`applyChainRef` зі степів 7.4/7.7)
+  збережені ✅; `npm run build` зелений ✅; `npx tsc -b` без помилок,
+  `npm run lint` без нових попереджень ✅.
+
+### Крок 10.3 — MenuBar + іконковий Toolbar
+- Дата: 2026-07-04
+- Виконано: нова залежність `lucide-react`. `components/MenuBar.tsx` —
+  самописний ARIA menubar/menu/menuitem (~180 рядків): клік відкриває/
+  закриває, hover перемикає між відкритими меню, Escape/клік поза
+  закриває, ArrowUp/Down навігує пунктами відкритого меню, автофокус
+  першого доступного пункту при відкритті. `components/AppHeader.tsx`
+  переписано: рядок 1 — лого + `MenuBar` (File/Edit/View/Arrange/Help),
+  рядок 2 — тонкий toolbar з lucide-іконками (Undo2/Redo2/RefreshCw/
+  Maximize2-Minimize2/Sun-Moon) + unsaved-indicator/share-url/
+  share-error/breadcrumbs. Дії старої шапки зберегли testid: `save`,
+  `export-png`, `export-layout`, `layout-input`, `export-context`,
+  `export-flow-steps-zip`, `share`, `open-native` — тепер пункти File-
+  меню; `undo`/`redo`/`relayout`/`theme-toggle` — іконки тулбару (не
+  дублюються в меню під тим самим testid — Edit/Arrange-меню
+  використовують `menu-undo`/`menu-redo`/`menu-relayout`, щоб уникнути
+  колізії з тулбаром). Нова дія Arrange → "Re-layout all"
+  (`onRelayoutAll` в `useDiagramEditing.ts`) скидає всі manual-позиції.
+  Fullscreen — робочий (`requestFullscreen`/`exitFullscreen`). Help →
+  Tour піднято на рівень `App.tsx` (окремий `showTour`-стан, доступний
+  і з відкритою діаграмою) + посилання на формат-доки/GitHub. Скоуп
+  View-меню й toolbar звужено відносно тексту плану — деталі й причина
+  в `docs/deviations.md`, крок 10.3. `e2e/helpers/menu.ts` —
+  `openMenu(page, 'file'|'edit'|'view'|'arrange'|'help')`; оновлено
+  `exports.spec.ts`, `share-link.spec.ts`, `native-fs.spec.ts`,
+  `drag-layout.spec.ts` і (не згадувався в плані) `drill-down.spec.ts`
+  — усі відкривають потрібне меню перед кліком; `undo-redo.spec.ts` не
+  змінювався. Нова `e2e/menubar.spec.ts` (4 тести): відкриття/закриття
+  кліком/Escape/клік-поза, hover-перемикання, ArrowDown+Enter-навігація,
+  усі testid'и File-меню присутні й робочі.
+- Коміт: (цей крок)
+- AC: Playwright — File відкривається/закривається кліком, Escape,
+  клік поза ✅; hover по Edit при відкритому File перемикає меню ✅;
+  усі дії старої шапки досяжні й працюють (оновлені специфікації
+  зелені) ✅; стрілки навігують, Enter активує, ARIA role=menubar/menu/
+  menuitem присутні (перевірено в `menubar.spec.ts`) ✅; `grep -rn
+  "style={{[^}]*#[0-9a-fA-F]" src/components/AppHeader.tsx
+  src/components/MenuBar.tsx src/App.tsx` — порожньо ✅, обидві теми
+  перевірені вручну скріншотами (світла/темна) ✅; повна e2e-регресія
+  (41 специфікація, включно з новою `menubar.spec.ts`) + `npm test`
+  (41 юніт-тест) + `npm run build` + `npm run lint` (без нових
+  попереджень) зелені ✅.
+
+
+### Крок 10.4 — Доки: ліва палітра, правий док, статус-бар
+- Дата: 2026-07-04
+- Виконано: `components/Palette.tsx` — вертикальний список у лівому
+  сайдбарі, прев'ю-фігура (наближена геометрія на токенах, не остаточний
+  shape-реєстр — той приходить у 10.6) + назва типу; testid `palette`/
+  `palette-item-*` без змін. `components/RightDock.tsx` — новий
+  таб-бар (Properties/Links/Flows, testid `dock-tab-<id>`) + контент
+  (`right-dock-content`), collapsible (`right-dock-toggle`), стан
+  `{collapsed}` у localStorage `dc.ui.rightDock`. `components/
+  StatusBar.tsx` — індикатор валідації (`status-validation`: "OK" / "N
+  problems", клік розгортає `ProblemsPanel` у popover над собою) +
+  лічильник `status-counts` (nodes/links); zoom-індикатор — свідомий
+  descope (вимагає інстанс React Flow назовні `FlowCanvas` — див.
+  `docs/deviations.md`, крок 10.4). `EditorWorkspace.tsx`: `<main>`
+  лишився block-контейнером (НЕ flex-column — перша спроба зламала
+  геометрію через content-based висоту YAML-панелі, деталі в
+  deviations.md); робочий рядок Palette+канва+RightDock — окремий
+  `display:flex` рядок, що успадковує висоту від фіксованих 600px
+  канви (той самий патерн, що вже працював для канва+LinksPanel).
+  Клік по вузлу (canvas або Problems-панель) перемикає RightDock на
+  Properties і розгортає його (`useEffect` на `selectedNodeId`).
+  `ProblemsPanel` — стилізовано токенами, без власного margin/border
+  (тепер живе всередині статус-бар-попапу). `e2e/helpers/dock.ts` —
+  `openDock(page, 'properties'|'links'|'flows')`; оновлено
+  `problems-panel.spec.ts`, `links.spec.ts`, `flow-player.spec.ts`,
+  `flow-editor.spec.ts`, і (не згадані в плані) `drill-down.spec.ts` та
+  `exports.spec.ts` (обидва теж чіпають `flow-select`); `node-crud.spec.ts`
+  зелений без змін (Properties — дефолтна вкладка).
+- Коміт: (цей крок)
+- AC: Playwright — канва центральна, drag із палітри створює вузол
+  (`node-crud.spec` без змін, зелений) ✅; вкладки дока перемикаються,
+  hover-синхронізація Links↔канва працює (адаптований `links.spec`) ✅;
+  клік по проблемі в розгорнутому попапі фокусує вузол (адаптований
+  `problems-panel.spec`) ✅; flow-плеєр і запис flow працюють із
+  вкладки Flows (адаптовані `flow-player.spec`/`flow-editor.spec`) ✅;
+  правий док згортається, стан переживає reload через
+  `dc.ui.rightDock` ✅; повна e2e-регресія (41 специфікація) + `npm test`
+  (41) + `npm run build` + `npm run lint` зелені ✅. Верифіковано
+  вручну скріншотами в обох темах — розкладка, палітра, док, статус-бар
+  коректні (лишається нетематизований default MiniMap React Flow —
+  бібліотечний віджет, поза скоупом).
+
+### Крок 10.5 — Колапсибельна YAML-панель + Grid/Snap + персист View
+- Дата: 2026-07-04
+- Виконано: `hooks/useViewSettings.ts` — grid/snap (boolean) +
+  yamlPanelOpen/yamlPanelHeight, кожен персиститься під власним ключем
+  localStorage (`dc.ui.grid`, `dc.ui.snap`, `dc.ui.yamlPanel`,
+  `dc.ui.yamlPanelHeight`). View-меню: нові пункти `menu-grid-toggle`,
+  `menu-snap-toggle`, `menu-yaml-panel-toggle`. `EditorWorkspace.tsx`:
+  YAML-секція — нижня панель на всю ширину з заголовком-кнопкою
+  (`yaml-panel-toggle`, розгорнуто за замовчуванням) і resize-хендлом
+  по висоті (`yaml-panel-resize-handle`, drag змінює
+  `yamlPanelHeight`); канва тепер дійсно responsive (`height:'100%'`
+  замість захардкодженої `600`) — деталі й чому це безпечно тепер (на
+  відміну від невдалої першої спроби в 10.4) — `docs/deviations.md`,
+  крок 10.5. `FlowCanvas.tsx`: нові пропси `showGrid`/
+  `snapToGridEnabled` → умовний `<Background/>` і `snapToGrid`/
+  `snapGrid={[10,10]}` React Flow. Нова `e2e/view-settings.spec.ts`
+  (3 тести): згортання YAML-панелі росте канву й переживає reload,
+  Grid off прибирає `.react-flow__background` і переживає reload,
+  Snap on дає координати кратні 10 (перевірено через Export layout).
+  Наявний `yaml-panel.spec.ts` — без змін (дефолт розгорнуто,
+  CodeMirror і так далі функціонує в новому bounded-контейнері).
+- Коміт: (цей крок)
+- AC: Playwright — згортання ховає редактор і росте канву (578px →
+  785px висоти в ручній перевірці), reload зберігає стан, розгортання
+  показує актуальний вміст ✅; YAML↔канва синхронізація не зламана
+  (наявний `yaml-panel.spec` зелений без правок) ✅; Grid off прибирає
+  крапки (`.react-flow__background` зникає), Snap on дає координати
+  кратні 10 ✅; налаштування View переживають reload ✅; повна
+  e2e-регресія (44 специфікації, включно з новою `view-settings.spec.ts`)
+  + `npm test` (41) + `npm run build` + `npm run lint` зелені ✅.
+
+### Крок 10.6 — Єдиний shape-реєстр: канва + експорт малюють однаково
+- Дата: 2026-07-04
+- Виконано: `shapes.ts` — `ShapeSpec{name, renderSvgInner(w,h,style)}`
+  для 6 базових типів (actor→ellipse, service→rounded rect,
+  storage→cylinder path+ellipse cap, queue→dashed rect,
+  external→dotted rect, component→near-square) + hexagon/diamond/
+  ellipse/cloud/parallelogram (під custom types/draw.io, 10.8/10.10);
+  `resolveShape()` — fallback на component для невідомої назви.
+  `rfNodeTypes.tsx`: `NodeShell` фіксованого розміру
+  `NODE_WIDTH×NODE_HEIGHT` (з `layout.ts`), SVG-підкладка через
+  `renderSvgInner`, label/handles/⊞-маркер — шар поверх; активний/
+  visited/selected стан і раніше — колір бордера. `svgExport.ts`:
+  вузли малюються через той самий `resolveShape(...).renderSvgInner`
+  (замість універсального `<rect>`); нова `resolveThemeColors()` читає
+  `--dc-node-fill`/`--dc-node-border`/`--dc-flow-active`/`--dc-flow-
+  visited`/`--dc-node-external-fill`/`--dc-text` з `getComputedStyle`,
+  fallback-об'єкт (значення light-теми) для vitest/jsdom; кольори
+  ребер/маркерів/arrow-marker — теж із теми. `shapes.test.ts` (4 тести)
+  + доповнення `rfNodeTypes.test.tsx` (canvas vs export геометрія,
+  strip-color+self-closing-tag нормалізація для jsdom).
+- Коміт: (цей крок)
+- AC: Unit — 6 базових типів дають відмінний SVG (`shapes.test.ts`) ✅;
+  канва і експорт використовують один `resolveShape(...).renderSvgInner`
+  для одного типу (тест рендерить обидва шляхи, порівнює геометрію
+  після нормалізації кольорів/self-closing тегів) ✅; `exports.spec` —
+  PNG непорожній (без змін, зелений) ✅, вручну перевірено скріншотом:
+  експортований PNG і канва малюють storage-вузол ідентичним
+  cylinder-контуром ✅; `svgExport.ts` без захардкоджених hex поза
+  `FALLBACK_THEME_COLORS`-константою (растеризаційний PNG-фон
+  `#fff` — окремий концерн, параметризується в 10.9, зафіксовано в
+  `docs/deviations.md`) ✅; наявні e2e (44 специфікації) зелені без
+  правок — testid/DOM-структура `NodeShell` збережені ✅; `npm test`
+  (46 тестів) + `npm run build` + `npm run lint` зелені ✅.
+
+### Крок 10.7 — Формат: стильовані `custom_types` (Go + schema + WASM)
+- Дата: 2026-07-04
+- Виконано: `internal/model/model.go` — `CustomType{Name, Shape, Color,
+  Icon, Line}` з `UnmarshalYAML`, що приймає скаляр (legacy `[cache,
+  worker]`) або мапу (`{name, shape?, color?, icon?}`), той самий
+  патерн, що вже використовує `StepOrBranch` (диспетч по `value.Kind`).
+  `DiagramMeta.CustomTypes` тепер `[]CustomType`.
+  `internal/validate/validate.go:134` → `t.Name`. `schema/
+  diagramcore.schema.json`: `custom_types.items` —
+  `oneOf[string, object{required:[name], additionalProperties:false}]`.
+  `docs/format.md` — новий підрозділ "Стильовані custom_types" з
+  таблицею полів + приклад змішаного списку; уточнено, що
+  shape/color/icon — суто web-презентаційні (Go/CLI дивиться лише на
+  `name`). `testdata/styled-custom-type.dc.yaml` — фікстура з
+  object-формою. `make wasm` перезібрано; `web/scripts/test-wasm.cjs`
+  доповнено перевіркою, що ця фікстура дає 0 помилок через
+  `globalThis.validate` (браузерний шлях). Інші споживачі `CustomTypes`
+  перевірено — `internal/transpile/{d2,mermaid}.go` лише згадують
+  custom_types у коментарях, коду не чіпають.
+- Коміт: (цей крок)
+- AC: Go unit (`internal/model/model_test.go`, 3 тести) — скалярна/
+  об'єктна/змішана форми парсяться ✅; `internal/validate/
+  validate_test.go` — DC003 не спрацьовує для жодної форми ✅;
+  `./dc validate examples/*.dc.yaml` — 0 помилок, наявні examples не
+  чіпались ✅; JSON Schema приймає обидві форми, відхиляє object без
+  `name` (перевірено вручну структурним оглядом — автоматичного тесту
+  немає, деталі й причина в `docs/deviations.md`, крок 10.7) ✅;
+  `go test ./...` (усі пакети) + `go vet ./...` зелені ✅; `make wasm &&
+  make wasm-test` зелений, включно з новою перевіркою object-форми
+  через `globalThis.validate` ✅; `npm test` (46) + `npm run build`
+  зелені (web-сторона цього кроку не чіпалась, окрім test-wasm.cjs) ✅.
+
+### Крок 10.8 — Візуали custom_types на канві, в експорті та палітрі
+- Дата: 2026-07-04
+- Виконано: `types.ts` — `CustomTypeDef` + `normalizeCustomTypes()`
+  (уніфікує скалярну/об'єктну форми `custom_types` для web). `shapes.ts`
+  — `nodeVisual(diagram, nodeType)`: для базових 6 типів — сам тип;
+  для custom — шукає визначення в `custom_types`, `shape` (fallback на
+  component) + `color`/`icon`. `rfNodeTypes.tsx`: `NodeShell` розділяє
+  `nodeType` (семантичний dc-тип, для data-атрибутів/className) і
+  `shapeName` (ключ shape-реєстру для геометрії) — різні для custom
+  типу зі стилем; нова `CustomNode` — генерик-компонент для будь-якого
+  типу поза базовими 6, реєструється в `nodeTypes['custom']`.
+  `resolveNodeType` тепер мапить невідомий тип на `'custom'` (не одразу
+  на `component`, як раніше — falback на component стається вже
+  всередині `nodeVisual`, якщо стилю нема). `svgExport.ts`: вузли
+  малюються через `nodeVisual` (замість прямого `resolveShape`), тож
+  колір/фігура custom-типу застосовуються і в PNG/SVG-експорті; іконка
+  — свідомий descope в експорті (тільки канва/палітра, зафіксовано в
+  плані). `Palette.tsx`: секція "Custom" зі списком `custom_types`
+  поточної діаграми, drag створює вузол цього типу.
+  `PropertiesPanel.tsx`: select `type` включає custom-типи. Курований
+  `customTypeIcons.ts` замість `lucide-react`'s `DynamicIcon` — деталі
+  й причина (вибух білду до 1740 файлів) в `docs/deviations.md`, крок
+  10.8. Нові тести: `shapes.customType.test.ts` (3), розширення
+  `rfNodeTypes.test.tsx`; нова `e2e/custom-types.spec.ts` (2 тести).
+- Коміт: (цей крок)
+- AC: Unit — діаграма з `custom_types:[{name:cache,shape:hexagon,
+  color:"#f5a623"}]` рендерить hexagon цим кольором і на канві
+  (`nodeVisual`+`NodeShell`), і в `renderDiagramSVGString` ✅; Playwright
+  — фікстура `testdata/styled-custom-type.dc.yaml` відкривається →
+  `palette-item-cache` з'являється, drag створює вузол `cache1`,
+  `type: cache` в YAML, Problems — OK ✅; custom type без стилю
+  рендериться як component без падінь (окремий тест) ✅; `npm test`
+  (49) + `npm run build` (2.4MB, без регресії розміру) + повна
+  e2e-регресія (46 специфікацій) зелені ✅.
+
+### Крок 10.9 — Діалог експорту зображення (PNG/JPG/SVG + налаштування)
+- Дата: 2026-07-04
+- Виконано: `svgExport.ts` — `svgStringToPngBlob` узагальнено в
+  `svgStringToRasterBlob(svg, w, h, {scale, background, mime, quality})`
+  (`background: 'transparent'|'white'|'theme'`; JPG + transparent →
+  автоматично 'white', бо JPEG без альфа-каналу); `renderDiagramSVGString`
+  отримав `RenderOptions.includeGrid` — малює SVG `<pattern>` з крапками
+  (як `<Background/>` на канві) у `<defs>` + `<rect fill="url(#dc-grid)">`.
+  `hooks/useExportSettings.ts` — `{format, scale, background,
+  includeGrid}`, персист `dc.ui.exportSettings`. `components/
+  ExportDialog.tsx` — модалка (testid `export-dialog`): формат
+  (`export-format`: png/jpg/svg), scale (`export-scale`: 1x/2x/4x,
+  disabled для SVG — viewBox не змінюється), background
+  (`export-background`, опція transparent `disabled` для jpg),
+  "include grid" (`export-include-grid`), `export-cancel`/
+  `export-confirm`. `hooks/useDiagramExports.ts`: `onExportPng` →
+  `onExportImage(settings)` — SVG качає рядок напряму, PNG/JPG через
+  `svgStringToRasterBlob`; `onExportFlowStepsZip(settings)` тепер теж
+  приймає ті самі налаштування (scale/background/grid/формат — розширення
+  `.svg`/`.png`/`.jpg` за форматом). File-меню: `export-png` (testid
+  збережено) тепер відкриває діалог замість прямого скачування;
+  експорт відбувається кліком по `export-confirm`. Оновлено
+  `exports.spec.ts` (PNG-тест: клік по export-png → діалог → confirm);
+  нова `e2e/export-dialog.spec.ts` (3 тести): SVG-експорт, 2x-масштаб
+  (перевірка decoded PNG IHDR width/height), transparent-альфа (PNG
+  color-type byte) + JPG-transparent-disabled. Новий unit-тест у
+  `svgExport.test.ts` для `includeGrid`.
+- Коміт: (цей крок)
+- AC: Playwright — SVG-файл починається з `<svg`, містить фігури
+  вузлів (`<ellipse>`) ✅; PNG 2x — decoded width/height рівно вдвічі
+  більші за 1x (парсинг PNG IHDR chunk) ✅; PNG transparent має альфу
+  (PNG color-type 6/4), JPG-експорт качається, опція transparent
+  задизейблена для JPG (перевірено через DOM-властивість `disabled`) ✅;
+  Grid on/off у SVG — unit-тест (`<pattern>` присутній/відсутній) ✅;
+  адаптований `exports.spec.ts` + повна e2e-регресія (49 специфікацій)
+  + `npm test` (50) + `npm run build` (без регресії розміру — 2 файли,
+  2.4MB) зелені ✅.
+
+### Крок 10.10 — Імпорт draw.io
+- Дата: 2026-07-04
+- Виконано: `src/drawioImport.ts` — `importDrawio(file: File):
+  Promise<DrawioImportResult>`. Приймає `.drawio`/`.xml` напряму, і
+  `.svg` з вбудованим mxfile (атрибут `content` кореневого `<svg>`) —
+  generic SVG чесно відхиляється з повідомленням "Only draw.io-exported
+  SVG is supported". Розпакування: нестиснений `<diagram>` має
+  `<mxGraphModel>` дочірнім ЕЛЕМЕНТОМ (не текстом) —
+  `XMLSerializer().serializeToString()`; стиснений — текстовий
+  base64-вузол → `atob` → fflate `inflateSync` (raw deflate, без
+  zlib/gzip-заголовка — те, що використовує draw.io) → UTF-8 decode →
+  `decodeURIComponent` (деталі й баг, знайдений і виправлений під час
+  розробки — `docs/deviations.md`, крок 10.10). Мапінг mxCell: style-
+  рядок → key/value парсер; евристики (у порядку пріоритету)
+  `shape=cylinder*|*couchdb*`→storage, `shape=actor|umlActor`→actor,
+  `shape=cloud`→external, `dashed=1`→queue, `rounded=1`→service, решта
+  → component (`fillColor` ігнорується в v1). Vertex: label = value без
+  HTML-тегів + decode HTML-сутностей (через `<textarea>`-трюк), id
+  санітизується до `[A-Za-z][A-Za-z0-9_]*` (мапа старий→новий,
+  унікальність через suffix-лічильник); geometry (`mxGeometry` x/y) →
+  позиції. Edges → `links` type `request`, label з value; edges на
+  відсутні вузли відкидаються, лічильник — у підсумковому рядку
+  "Imported N nodes, M links, skipped K". YAML — через бібліотеку
+  `yaml` (`stringify`). `hooks/useDiagramStack.ts`:
+  `openTextAsDiagram` отримав необов'язковий третій параметр
+  `positions` (manual, не auto-layout) — вже безпечно, бо опціональний,
+  інші виклики не змінились. `App.tsx`: `onImportDrawio` — парсить →
+  ОБОВ'ЯЗКОВО прогонить через WASM `validateDiagram` → якщо помилки,
+  показує їх через існуючий `load-error` канал і НЕ відкриває діаграму;
+  якщо 0 помилок — відкриває через `openTextAsDiagram` + показує
+  `import-notice` з підсумком. File-меню: "Import draw.io…"
+  (`drawio-input`, прихований file input, як і `layout-input`).
+  Фікстури: `web/testdata/drawio/{uncompressed.drawio, compressed.drawio,
+  with-mxfile.svg, not-drawio.svg}` (останній — для error-path тесту).
+  `src/drawioImport.test.ts` (6 unit-тестів); нова
+  `e2e/drawio-import.spec.ts` (3 тести).
+- Коміт: (цей крок)
+- AC: Unit — усі 3 валідні фікстури парсяться (нестиснена/стиснена/SVG),
+  усі евристики shape→type покриті одним тестом (6 базових типів),
+  id-санітизація зберігає зв'язність links, позиції з mxGeometry
+  зберігаються ✅; Playwright — імпорт нестисненої фікстури: вузли на
+  позиціях з файлу, `yaml-source` містить очікувані nodes/links (усі 6
+  типів + label ребра), Problems — OK ✅; імпортована діаграма
+  редагується як звичайна (додати вузол, undo — працює, перевірено) ✅;
+  чужий SVG (без mxfile) → людське повідомлення через `load-error`,
+  жодних page errors ✅; `npm test` (56) + `npm run build` + повна
+  e2e-регресія (52 специфікації) + `npm run lint` зелені ✅. Вручну
+  перевірено скріншотом: коректні фігури (ellipse/cylinder/dashed) і
+  summary-рядок над канвою.
+
+### Крок 10.11 — Текстові анотації (notes) + показ description
+- Дата: 2026-07-04
+- Виконано: формат — top-level `notes: [{id, text, target?}]`
+  (`internal/model`, `internal/validate` — унікальність id, target
+  посилається на існуючий вузол/зв'язок; testdata dc009/dc010),
+  `schema/diagramcore.schema.json`, `docs/format.md`, `internal/context`
+  включає текст notes у markdown. Web: `yamlPatch.ts` —
+  `addNote`/`updateNote`/`removeNote` (створює `notes:` при першому
+  використанні); `layoutFile.ts`/`useDiagramStack.ts` — окремий
+  `notePositions` (нотатки не мають auto-layout, кожна отримує позицію
+  при відкритті/імпорті/дропі). `rfNodeTypes.tsx` — `NoteNode`
+  (borderless, draggable, без handles) + `showDescription` другим рядком
+  під лейблом вузла. `FlowCanvas.tsx` — рендерить notes поряд із
+  вузлами, drag/double-click окремо від звичайних нод, `onDropNoteType`
+  через ту саму DnD-подію палітри (`NOTE_DND_TYPE = 'note'` як значення
+  того самого `DND_NODE_TYPE`-ключа). `Palette.tsx` — пункт "Text".
+  `useDiagramEditing.ts` — `onDropNoteType`/`onNoteDrag`/
+  `onNoteDoubleClick` (prompt: порожній текст видаляє note); `applyOps`
+  отримав `opts.notePosition` (той самий атомарний патерн, що й
+  `manualPosition`, щоб уникнути гонки з async-мутацією). View →
+  "Show descriptions" (`useViewSettings`, персист); export-діалог —
+  "Include descriptions" (`useExportSettings`, персист). `svgExport.ts`
+  — `renderDiagramSVGString` малює notes за notePositions і, за
+  `includeDescriptions`, другий рядок тексту під вузлом; `onExportLayout`
+  і `onShare` виправлено, щоб теж включали `notePositions` (раніше
+  включали лише `positions`, notes губились при "Export layout"/Share,
+  якщо не було жодної ручної позиції вузла — знайдено і виправлено під
+  час цього кроку, без окремого запису в deviations.md — тривіальний
+  недогляд, той самий патерн вже існував у Save).
+- Коміт: (цей крок)
+- AC: Go unit — notes парсяться, унікальність id/target-валідація
+  працює, `dc context` містить текст notes, examples валідні ✅;
+  `go test ./...` + `go vet ./...` + `make wasm && make wasm-test` +
+  `./dc validate examples/*.dc.yaml` зелені ✅; Playwright
+  (`e2e/notes.spec.ts`, 3 тести) — note з палітри з'являється в
+  `yaml-source`, перетягування зберігається в `layout.json`
+  (`notePositions`), undo прибирає note; подвійний клік редагує текст
+  через prompt; note присутній в SVG-експорті; "Show descriptions"
+  показує/ховає опис на канві (`rf-node-description-<id>`) і в
+  SVG-експорті (`export-include-descriptions`) ✅; `npm test` (60,
+  +1 у `svgExport.test.ts`) + `npm run build` (без регресії розміру) +
+  повна e2e-регресія (55 специфікацій) + `npm run lint` зелені ✅.
+
+### Крок 10.12 — Пресети стилю рендерингу (clean / sketch)
+- Дата: 2026-07-04
+- Виконано: нова залежність `roughjs` (~9.4KB gzip у бандлі — в межах
+  очікуваних ~10KB). `src/sketch.ts` — тонка обгортка над headless
+  `RoughGenerator` (`toPaths`/`opsToPath`, без DOM), фіксований `seed`
+  для детермінізму; `sketchRect`/`sketchEllipse`/`sketchPolygon`/
+  `sketchPath` (форми) і `sketchLineD`/`sketchEdgeD` (ребра — окремо,
+  бо мають лишатись одним `<path d>` під `marker-end`/`BaseEdge`).
+  `shapes.ts` — `ShapeStyle.renderStyle?: 'clean'|'sketch'`; кожна з 11
+  форм (базові 6 + hexagon/diamond/ellipse/cloud/parallelogram) гілкується
+  на `renderStyle`, малюючи ту саму геометрію (той самий `d`/points) або
+  напряму (clean), або через roughjs (sketch) — тому й custom-типи з
+  `shape:` автоматично отримують sketch без окремого коду. Канва:
+  `rfNodeTypes.tsx`/`rfEdgeTypes.tsx` пробрасують `renderStyle` з даних
+  вузла/ребра в `renderSvgInner`/`sketchEdgeD(getSmoothStepPath(...))`.
+  Експорт: `svgExport.ts` — `RenderOptions.renderStyle`, ребра через
+  `sketchLineD(layout.edges[].points)` замість `<polyline>`.
+  Персист: `layoutFile.ts` — `LayoutFile.renderStyle?` (top-level, не
+  per-view — стиль стосується всього вигляду діаграми); `useDiagramStack`
+  — `DiagramLevel.renderStyle` (дефолт `'clean'`), відновлюється з
+  layout-файлу при native-open/import-layout/share-link, пишеться при
+  Save/Export layout/Share (умова "є що зберігати" розширена: manual
+  positions АБО notes АБО `renderStyle !== 'clean'`); новий
+  `setRenderStyle` в `useDiagramStack`. UI: View → "Diagram style: Clean/
+  Sketch" (`menu-render-style-toggle`, вимкнено без відкритої діаграми);
+  `reactflow-canvas` має `data-render-style` для тестів; export-діалог
+  показує поточний стиль інформаційно (`export-render-style`) — сам
+  стиль міняється лише через View-меню, не з діалогу.
+  Свідомий descope: рукописний шрифт для sketch-тексту (потребує
+  self-hosted субсету, окрема задача) — `docs/deviations.md`, крок 10.12;
+  текст лишається системним шрифтом і в sketch-режимі.
+- Коміт: (цей крок)
+- AC: Unit (`shapes.test.ts`, `svgExport.test.ts`) — clean/sketch дають
+  різний SVG для кожної з 11 форм, sketch детермінований (два виклики з
+  тим самим seed дають ідентичний рядок), edges sketch — `<path>` замість
+  `<polyline>` ✅; Playwright (`e2e/render-style.spec.ts`) — View →
+  Diagram style → sketch міняє `data-render-style` на канві; share-link
+  у новому контексті відновлює sketch; SVG-експорт у sketch не містить
+  `<polyline>`/`<ellipse>` (усе через roughjs `<path>`), export-діалог
+  показує "Sketch" ✅; повна e2e-регресія (56 специфікацій, включно з
+  custom-types — custom shapes успадковують sketch без окремого коду)
+  ✅; `npm test` (63) + `npm run build` (бандл +9.4KB gzip, в межах
+  очікуваного) + `npm run lint` зелені.
+
+### Крок 10.13 — Полірування, StartScreen/Tour, фінальна регресія
+- Дата: 2026-07-04
+- Виконано: grep-чистка усіх залишкових inline-hex кольорів у
+  `web/src` (6 файлів: `PropertiesPanel.tsx`, `FlowEditorPanel.tsx`,
+  `Tour.tsx`, `FlowPlayer.tsx`, `LinksPanel.tsx`, `StartScreen.tsx` —
+  переведені на `var(--dc-*)` токени; `Tour`/`StartScreen`'s example
+  cards заразом отримали surface/border/radius-токени замість голих
+  значень). Нові e2e: `e2e/tour.spec.ts` (Tour через Help-меню — усі
+  тіпси до "Done"; і через `StartScreen`'s "Show tour" — "Skip");
+  `theme.spec.ts` доповнено smoke-тестом основного workflow
+  (відкрити/редагувати/note/sketch-стиль/export-діалог) під темною
+  темою — раніше вся e2e-регресія ганяла лише світлу.
+  Побічно виявлено і виправлено під час grep/regression-проходу
+  (не окремий крок плану, тому без нового запису в progress-log, лише
+  тут): (1) `schema/layout.schema.json` не встигав за форматом
+  layout-файлу — не мав `notePositions` (з 10.11) і `renderStyle` (з
+  10.12), а `additionalProperties: false` означав, що зовнішній
+  валідатор проти цієї схеми відхилив би цілком коректний
+  web-експортований layout-файл; схему доповнено. (2) Go
+  `internal/layout.Save` (використовується `dc render --write-layout`
+  і MCP `edit_diagram`) перезаписував увесь layout-файл лише з
+  `positions`, тихо відкидаючи `notePositions`/`renderStyle`, якщо вони
+  вже були у файлі (записані web-редактором) — виправлено: `Save`
+  тепер читає існуючий файл і зберігає ці поля, якщо вони були
+  (`TestSavePreservesWebEditorOnlyFields`, нова). `docs/format.md` і
+  `.claude/skills/design/SKILL.md` оновлені (renderStyle в описі
+  layout-файлу; SKILL.md's inline-hex правило позначене як "виконано
+  для всього дерева", прибрано застаріле згадування рукописного шрифту
+  для sketch-тексту). `docs/deviations.md` — Mermaid/generic-SVG імпорт
+  зафіксовані як свідомий descope фази (кандидати на майбутнє).
+- Коміт: (цей крок)
+- AC: `grep -rn "style={{[^}]*#[0-9a-fA-F]" web/src` — порожньо ✅;
+  Tour end-to-end (Playwright, 2 тести) ✅; повна регресія — `go test
+  ./...` + `go vet ./...` + `make wasm && make wasm-test` +
+  `./dc validate examples/*.dc.yaml` + `npm test` (63) + `npm run build`
+  + `npm run lint` + повний `npm run test:e2e` (59 специфікацій,
+  включно зі smoke-тестом у темній темі) — усе зелене ✅;
+  `.claude/skills/design/SKILL.md` синхронізовано з поточним станом
+  токенів/пресетів ✅.
+
+**Фаза 10 «Production-ready UI/UX» завершена** (кроки 10.1–10.13).
+Свідомі descope на майбутнє: Mermaid-імпорт, generic SVG-імпорт,
+рукописний шрифт для sketch-стилю (усі три — `docs/deviations.md`).
