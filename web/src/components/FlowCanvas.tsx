@@ -80,6 +80,18 @@ interface Props {
   onNodeDoubleClick?: (node: DiagramNode) => void;
   onNodeClick?: (node: DiagramNode) => void;
   selectedNodeId?: string | null;
+  /** Multi-selection (PLAN3.md step 11.10), driven by React Flow's own
+   * rubber-band select — every id in it gets the same selected-highlight
+   * as `selectedNodeId`. */
+  selectedNodeIds?: string[];
+  /** Fires on every rubber-band selection change (and on empty-pane
+   * click, which clears it) — the caller owns turning this into its
+   * own selection state. */
+  onSelectionChange?: (ids: string[]) => void;
+  /** Group drag (PLAN3.md step 11.10): every dragged node's new absolute
+   * position, committed once on release. Container reparenting isn't
+   * checked for a group drag (only single-node `onNodeDragStop` does). */
+  onGroupDragStop?: (updates: Array<{ id: string; pos: LayoutPosition }>) => void;
   onDropNodeType?: (type: string, position: LayoutPosition) => void;
   onConnectNodes?: (source: string, target: string) => void;
   hoveredLinkIndex?: number | null;
@@ -136,6 +148,9 @@ function FlowCanvasInner({
   onNodeDoubleClick,
   onNodeClick,
   selectedNodeId,
+  selectedNodeIds,
+  onSelectionChange,
+  onGroupDragStop,
   onDropNodeType,
   onConnectNodes,
   hoveredLinkIndex,
@@ -237,11 +252,23 @@ function FlowCanvasInner({
           position,
           width: size.width,
           height: size.height,
+          // React Flow's own `selected` flag (PLAN3.md step 11.10) is
+          // deliberately NOT derived from `selectedNodeId`/`selectedNodeIds`
+          // here — this object only gets (re)built (via the `allNodes`
+          // memo below) on real external changes (load, undo, relayout,
+          // drag-stop), same as `position`. A separate effect further
+          // down patches `selected`/`data.isSelected` directly onto the
+          // *live* `nodes` state on every selection change instead: doing
+          // it here would make `allNodes` (and thus the position-resync
+          // effect) depend on selection too, so simply *clicking* a node
+          // mid-drag would recompute `allNodes` and reset the in-progress
+          // drag position back to its last-committed value.
+          selected: false,
           ...(n.parent ? { parentId: n.parent } : {}),
           data: isContainer
             ? {
                 label: dcNode ? nodeLabel(dcNode) : n.id,
-                isSelected: selectedNodeId === n.id,
+                isSelected: false,
                 minWidth,
                 minHeight,
                 onResizeEnd: (nextSize: { width: number; height: number }) => onNodeResizeStop?.(n.id, nextSize),
@@ -251,7 +278,7 @@ function FlowCanvasInner({
                 hasDetails: Boolean(dcNode?.details),
                 isActive: activeKey !== null && (activeStep?.from === n.id || activeStep?.to === n.id),
                 isVisited: false,
-                isSelected: selectedNodeId === n.id,
+                isSelected: false,
                 description: dcNode?.description,
                 showDescription: showDescriptions,
                 renderStyle,
@@ -273,7 +300,6 @@ function FlowCanvasInner({
       geometry,
       activeStep,
       activeKey,
-      selectedNodeId,
       diagram,
       showDescriptions,
       renderStyle,
@@ -324,6 +350,15 @@ function FlowCanvasInner({
           type: 'dc-edge',
           markerEnd: toRfMarker(resolved.markerEnd),
           markerStart: toRfMarker(resolved.markerStart),
+          // React Flow's own `selected` flag, explicitly unconditional
+          // (PLAN3.md step 11.10 doesn't add edge multi-select) — for the
+          // same reason node objects now set `selected` too: leaving it
+          // `undefined` here lets it drift from whatever RF's internal
+          // click/selection tracking last set on this edge, and every
+          // external resync (`edges` changes identity every render since
+          // this whole array is freshly built) then "corrects" it back,
+          // which is itself a selection-change RF reacts to — a loop.
+          selected: false,
           data,
         };
       }),
@@ -357,6 +392,40 @@ function FlowCanvasInner({
     setNodes(allNodes);
   }, [allNodes, setNodes]);
 
+  // Applies `selectedNodeId`/`selectedNodeIds` (PLAN3.md step 11.10) onto
+  // the *live* `nodes` state via the functional updater — never through
+  // `allNodes` (see the "selected: false" comment above) — so it can't
+  // clobber an in-progress drag's position. Re-runs after every position
+  // resync too (`allNodes` in the deps), since that resync just reset
+  // every node's `selected`/`data.isSelected` to `false`.
+  useEffect(() => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        const isSelected = selectedNodeId === n.id || (selectedNodeIds?.includes(n.id) ?? false);
+        const prevIsSelected = (n.data as { isSelected?: boolean } | undefined)?.isSelected ?? false;
+        if (n.selected === isSelected && prevIsSelected === isSelected) return n;
+        return { ...n, selected: isSelected, data: { ...n.data, isSelected } };
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNodeId, selectedNodeIds, allNodes, setNodes]);
+
+  // Rubber-band selection (PLAN3.md step 11.10) is derived from `nodes`
+  // itself (already synced through `onNodesChange`'s own 'select' change
+  // events) rather than React Flow's separate `onSelectionChange` prop —
+  // subscribing to that prop directly was observed to put RF's internal
+  // store into a render loop ("Maximum update depth exceeded") whenever
+  // several selected nodes/edges were removed in the same commit (e.g.
+  // deleting a node with multiple dependent links). Reading `.selected`
+  // off nodes we already own sidesteps that RF-internal instability
+  // entirely, at the cost of nothing (this effect fires on every `nodes`
+  // change, not just selection ones, but `onSelectionChange` is already
+  // guarded by the caller against no-op updates — see `useDiagramEditing.ts`).
+  useEffect(() => {
+    onSelectionChange?.(nodes.filter((n) => n.selected && !noteIds.has(n.id)).map((n) => n.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
+
   /** True if `candidateId` is `ofId` itself, or a descendant of it —
    * used to keep a container drag from being reparented into its own
    * subtree (which would create a cycle). */
@@ -369,11 +438,26 @@ function FlowCanvasInner({
     return false;
   };
 
+  /** Converts an RF (possibly parent-relative) drag position back to an
+   * absolute canvas position — shared by the single-node and group drag
+   * handlers below. */
+  const toAbsolutePosition = (id: string, rfPosition: LayoutPosition): LayoutPosition => {
+    const parent = geometry.layoutNodeById.get(id)?.parent;
+    const parentAbs = parent ? geometry.absoluteById.get(parent) : undefined;
+    return parentAbs ? { x: rfPosition.x + parentAbs.x, y: rfPosition.y + parentAbs.y } : rfPosition;
+  };
+
   const handleNodeDragStop = (id: string, rfPosition: LayoutPosition) => {
     if (noteIds.has(id)) {
       onNoteDrag?.(id, rfPosition);
       return;
     }
+    // A node that's part of a multi-selection moves together with the
+    // rest of the selection (PLAN3.md step 11.10) — `onSelectionDragStop`
+    // handles the whole group as one commit; skip the single-node path
+    // (with its container-reparent check, which a group drag doesn't do)
+    // so the two handlers can't double-commit the same drag.
+    if ((selectedNodeIds?.length ?? 0) > 1 && selectedNodeIds?.includes(id)) return;
     const ln = geometry.layoutNodeById.get(id);
     const oldParent = ln?.parent;
     const parentAbs = oldParent ? geometry.absoluteById.get(oldParent) : undefined;
@@ -405,6 +489,13 @@ function FlowCanvasInner({
 
     const parentChanged = newParent !== (oldParent ?? null);
     onNodeDragStop?.(id, absPosition, parentChanged ? newParent : undefined);
+  };
+
+  const handleSelectionDragStop = (draggedNodes: Node[]) => {
+    const updates = draggedNodes
+      .filter((n) => !noteIds.has(n.id))
+      .map((n) => ({ id: n.id, pos: toAbsolutePosition(n.id, n.position) }));
+    if (updates.length > 0) onGroupDragStop?.(updates);
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -440,6 +531,7 @@ function FlowCanvasInner({
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onNodeDragStop={(_, node) => handleNodeDragStop(node.id, node.position)}
+        onSelectionDragStop={(_, draggedNodes) => handleSelectionDragStop(draggedNodes)}
         onNodeDoubleClick={(_, node) => {
           if (clickTimer.current) {
             clearTimeout(clickTimer.current);
@@ -478,6 +570,11 @@ function FlowCanvasInner({
         fitView
         snapToGrid={snapToGridEnabled}
         snapGrid={[10, 10]}
+        // Delete/Duplicate are handled by our own keyboard shortcut
+        // (PLAN3.md step 11.10, `useDiagramEditing.ts`) — going through
+        // `applyOps` for cascade cleanup + undo, not React Flow's own
+        // built-in delete-selected-on-Backspace.
+        deleteKeyCode={null}
       >
         {showGrid && <Background />}
         <MiniMap />

@@ -33,7 +33,9 @@ interface AppHeaderProps {
   breadcrumbLevels: DiagramLevel[];
   onBreadcrumbClick: (fileName: string) => void;
   selectedNodeId: string | null;
+  selectedNodeIds: string[];
   onDeleteSelectedNode: () => void;
+  onDuplicateSelectedNodes: () => void;
   onShowTour: () => void;
   grid: boolean;
   onToggleGrid: () => void;
@@ -102,7 +104,9 @@ export function AppHeader({
   breadcrumbLevels,
   onBreadcrumbClick,
   selectedNodeId,
+  selectedNodeIds,
   onDeleteSelectedNode,
+  onDuplicateSelectedNodes,
   onShowTour,
   grid,
   onToggleGrid,
@@ -189,7 +193,18 @@ export function AppHeader({
       items: [
         { label: 'Undo', testId: 'menu-undo', onSelect: onUndo, disabled: historyCounts.past === 0 },
         { label: 'Redo', testId: 'menu-redo', onSelect: onRedo, disabled: historyCounts.future === 0 },
-        { label: 'Delete node', testId: 'menu-delete-node', onSelect: onDeleteSelectedNode, disabled: !selectedNodeId },
+        {
+          label: selectedNodeIds.length > 1 ? `Delete ${selectedNodeIds.length} nodes` : 'Delete node',
+          testId: 'menu-delete-node',
+          onSelect: onDeleteSelectedNode,
+          disabled: selectedNodeIds.length === 0 && !selectedNodeId,
+        },
+        {
+          label: selectedNodeIds.length > 1 ? `Duplicate ${selectedNodeIds.length} nodes` : 'Duplicate node',
+          testId: 'menu-duplicate-node',
+          onSelect: onDuplicateSelectedNodes,
+          disabled: selectedNodeIds.length === 0 && !selectedNodeId,
+        },
       ],
     },
     {

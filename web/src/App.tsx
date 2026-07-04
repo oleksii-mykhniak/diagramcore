@@ -59,6 +59,10 @@ export default function App() {
 
   const {
     selectedNodeId,
+    selectedNodeIds,
+    onSelectionChange,
+    onGroupNodeDragStop,
+    onDuplicateSelectedNodes,
     hoveredLinkIndex,
     setHoveredLinkIndex,
     selectedLinkIndex,
@@ -159,7 +163,9 @@ export default function App() {
         breadcrumbLevels={breadcrumbFileNames.map((f) => levels[f]).filter((l): l is DiagramLevel => Boolean(l))}
         onBreadcrumbClick={switchTab}
         selectedNodeId={selectedNodeId}
+        selectedNodeIds={selectedNodeIds}
         onDeleteSelectedNode={onDeleteSelectedNode}
+        onDuplicateSelectedNodes={onDuplicateSelectedNodes}
         onShowTour={() => setShowTour(true)}
         grid={view.grid}
         onToggleGrid={view.toggleGrid}
@@ -222,6 +228,9 @@ export default function App() {
         onUpdateFlowStepNote={onUpdateFlowStepNote}
         onDeleteStep={onDeleteFlowStep}
         selectedNodeId={selectedNodeId}
+        selectedNodeIds={selectedNodeIds}
+        onSelectionChange={onSelectionChange}
+        onGroupNodeDragStop={onGroupNodeDragStop}
         onNodeDragStop={onNodeDragStop}
         onNodeResizeStop={onNodeResizeStop}
         onUpdateNodeStyle={onUpdateNodeStyle}

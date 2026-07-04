@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ChangeEvent } from 'react';
 import { parseDiagram } from '../parseDiagram';
@@ -33,6 +33,13 @@ export function useDiagramEditing(
   setLoadError: (error: string | null) => void,
 ) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  /** Multi-selection (PLAN3.md step 11.10) — kept alongside
+   * `selectedNodeId` (which stays the single-node source for the
+   * Properties panel) so Delete/Duplicate/keyboard shortcuts have a
+   * consistent scope whether the selection came from a plain click
+   * (`onNodeClick` sets both to a single id) or a rubber-band drag
+   * (`onSelectionChange`, which may set 0, 1, or many). */
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [hoveredLinkIndex, setHoveredLinkIndex] = useState<number | null>(null);
   /** Selected link (PLAN3.md step 11.9) — set when clicking an edge on
    * the canvas outside of flow recording, so its properties can open in
@@ -48,13 +55,14 @@ export function useDiagramEditing(
    * level: re-parses/re-validates the patched text and re-derives layout,
    * keeping manual positions and giving newly-added or newly-auto-laid-out
    * nodes fresh auto-layout coordinates (mirrors the merge in
-   * `onRelayout`). `manualPosition` additionally marks/positions a single
-   * node as manual — used when a node is created by dropping it at a
-   * specific canvas location. */
+   * `onRelayout`). `manualPositions` additionally marks/positions one or
+   * more nodes as manual in the same commit — used when a node is
+   * created by dropping it at a specific canvas location, or several are
+   * created at once (PLAN3.md step 11.10's Duplicate). */
   const applyOps = useCallback(
     (
       ops: PatchOp[],
-      opts?: { manualPosition?: { id: string; pos: LayoutPosition }; notePosition?: { id: string; pos: LayoutPosition } },
+      opts?: { manualPositions?: Array<{ id: string; pos: LayoutPosition }>; notePosition?: { id: string; pos: LayoutPosition } },
     ) => {
       const run = async () => {
         const level = levelRef.current;
@@ -69,9 +77,9 @@ export function useDiagramEditing(
           positions[n.id] =
             manualPositionIds.has(n.id) && level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
         }
-        if (opts?.manualPosition) {
-          positions[opts.manualPosition.id] = opts.manualPosition.pos;
-          manualPositionIds.add(opts.manualPosition.id);
+        for (const { id, pos } of opts?.manualPositions ?? []) {
+          positions[id] = pos;
+          manualPositionIds.add(id);
         }
         const notePositions = opts?.notePosition
           ? { ...level.notePositions, [opts.notePosition.id]: opts.notePosition.pos }
@@ -140,15 +148,65 @@ export function useDiagramEditing(
         n += 1;
         id = `${type}${n}`;
       }
-      void applyOps([{ op: 'addNode', node: { id, type } }], { manualPosition: { id, pos } });
+      void applyOps([{ op: 'addNode', node: { id, type } }], { manualPositions: [{ id, pos }] });
       setSelectedNodeId(id);
+      setSelectedNodeIds([id]);
     },
     [current, applyOps],
   );
 
   const onNodeClick = useCallback((node: DiagramNode) => {
     setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
   }, []);
+
+  /** Rubber-band selection (PLAN3.md step 11.10) — driven by React
+   * Flow's own `onSelectionChange`. Keeps `selectedNodeId` in sync so
+   * the Properties panel still works for a single-node rubber-band
+   * selection, same as a plain click. */
+  /** Deliberately does NOT touch `selectedNodeId` (the Properties-panel/
+   * right-dock-switching selection): React Flow tracks its own native
+   * "selected" flag on every plain click too, not just rubber-band drags
+   * — including the *first* click of a double-click, independently of
+   * (and faster than) the 250ms deferred single-click/dblclick
+   * disambiguation in `FlowCanvas.tsx`. Feeding that into `selectedNodeId`
+   * made double-clicking a details node also flip the right dock to
+   * Properties (clobbering whatever tab — e.g. Flows — the user had
+   * open) before the dblclick was even recognized. `selectedNodeIds`
+   * only drives Delete/Duplicate/group-drag and the selection highlight,
+   * neither of which cares about that distinction. */
+  const onSelectionChange = useCallback((ids: string[]) => {
+    // `isSelected` (FlowCanvas.tsx) is derived from `selectedNodeIds`, so
+    // a naive `setSelectedNodeIds(ids)` here — even when the selection's
+    // *content* hasn't changed — creates a new array reference, which
+    // recomputes `rfNodes`/`allNodes`, resets React Flow's node array via
+    // the sync effect, and makes RF re-fire `onSelectionChange` with
+    // another fresh array: an infinite render loop. Bail out (keeping the
+    // previous reference) when the set of ids is unchanged.
+    setSelectedNodeIds((prev) => {
+      if (prev.length === ids.length && prev.every((id) => ids.includes(id))) return prev;
+      return ids;
+    });
+  }, []);
+
+  /** Group drag (PLAN3.md step 11.10): every dragged node's new
+   * position is committed in one `updateCurrentLevel` call, mirroring
+   * the single-commit-per-gesture pattern `onNodeDrag`/resize already
+   * use — container reparenting is out of scope for a group drag (only
+   * single-node drag checks container overlap). */
+  const onGroupNodeDragStop = useCallback(
+    (updates: Array<{ id: string; pos: LayoutPosition }>) => {
+      if (!current || updates.length === 0) return;
+      const positions = { ...current.positions };
+      const manualPositionIds = new Set(current.manualPositionIds);
+      for (const { id, pos } of updates) {
+        positions[id] = pos;
+        manualPositionIds.add(id);
+      }
+      updateCurrentLevel({ positions, manualPositionIds });
+    },
+    [current, updateCurrentLevel],
+  );
 
   /** Palette "Text" item dropped on the canvas (PLAN.md step 10.11):
    * creates a `notes:` entry and seeds its position, mirroring
@@ -199,22 +257,51 @@ export function useDiagramEditing(
     [selectedNodeId, applyOps],
   );
 
+  /** Delete key / Edit menu "Delete" / Properties panel "Delete node"
+   * (PLAN3.md step 11.10 generalizes this from a single node to the
+   * whole current selection — `selectedNodeIds` when non-empty, falling
+   * back to the single `selectedNodeId` for callers, like the
+   * Properties panel's own button, that only ever deal with one node).
+   * Dependent links/flow steps across every selected node are
+   * aggregated and deduped (a link between two selected nodes would
+   * otherwise show up once per endpoint) into a single confirm and a
+   * single `applyOps` call — one undo step removes the whole group. */
   const onDeleteSelectedNode = useCallback(() => {
-    if (!current || !selectedNodeId) return;
-    const deps = findNodeDependents(current.diagram, selectedNodeId);
-    if (deps.links.length > 0 || deps.flowSteps.length > 0) {
+    if (!current) return;
+    const ids = selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const linkKeys = new Set<string>();
+    const links: { from: string; to: string }[] = [];
+    const flowStepKeys = new Set<string>();
+    const flowSteps: { flowName: string; index: number }[] = [];
+    for (const id of ids) {
+      const deps = findNodeDependents(current.diagram, id);
+      for (const l of deps.links) {
+        const key = `${l.from}->${l.to}`;
+        if (linkKeys.has(key)) continue;
+        linkKeys.add(key);
+        links.push(l);
+      }
+      for (const s of deps.flowSteps) {
+        const key = `${s.flowName}#${s.index}`;
+        if (flowStepKeys.has(key)) continue;
+        flowStepKeys.add(key);
+        flowSteps.push(s);
+      }
+    }
+    if (links.length > 0 || flowSteps.length > 0) {
       const lines = [
-        ...deps.links.map((l) => `link ${l.from} -> ${l.to}`),
-        ...deps.flowSteps.map((s) => `step in flow "${s.flowName}"`),
+        ...links.map((l) => `link ${l.from} -> ${l.to}`),
+        ...flowSteps.map((s) => `step in flow "${s.flowName}"`),
       ];
-      const proceed = window.confirm(
-        `Deleting node "${selectedNodeId}" also removes:\n${lines.join('\n')}\n\nContinue?`,
-      );
+      const subject = ids.length === 1 ? `node "${ids[0]}"` : `${ids.length} nodes`;
+      const proceed = window.confirm(`Deleting ${subject} also removes:\n${lines.join('\n')}\n\nContinue?`);
       if (!proceed) return;
     }
     const ops: PatchOp[] = [];
     const indicesByFlow = new Map<string, number[]>();
-    for (const s of deps.flowSteps) {
+    for (const s of flowSteps) {
       const arr = indicesByFlow.get(s.flowName) ?? [];
       arr.push(s.index);
       indicesByFlow.set(s.flowName, arr);
@@ -224,11 +311,79 @@ export function useDiagramEditing(
         ops.push({ op: 'removeFlowStep', flowName, atIndex });
       }
     }
-    for (const l of deps.links) ops.push({ op: 'removeLink', from: l.from, to: l.to });
-    ops.push({ op: 'removeNode', id: selectedNodeId });
+    for (const l of links) ops.push({ op: 'removeLink', from: l.from, to: l.to });
+    for (const id of idSet) ops.push({ op: 'removeNode', id });
     void applyOps(ops);
     setSelectedNodeId(null);
-  }, [current, selectedNodeId, applyOps]);
+    setSelectedNodeIds([]);
+  }, [current, selectedNodeId, selectedNodeIds, applyOps]);
+
+  /** Cmd/Ctrl+D / Edit menu "Duplicate" (PLAN3.md step 11.10): clones
+   * every selected node (new unique id, same type/label/description/
+   * other fields, position offset by +40/+40) in a single `applyOps`
+   * call — one undo step adds the whole group. Links aren't
+   * duplicated, only the nodes themselves. */
+  const onDuplicateSelectedNodes = useCallback(() => {
+    if (!current) return;
+    const ids = selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
+    if (ids.length === 0) return;
+    const existingIds = new Set(current.diagram.nodes.map((n) => n.id));
+    const ops: PatchOp[] = [];
+    const manualPositions: Array<{ id: string; pos: LayoutPosition }> = [];
+    const newIds: string[] = [];
+    for (const id of ids) {
+      const node = current.diagram.nodes.find((n) => n.id === id);
+      if (!node) continue;
+      let newId = `${id}-copy`;
+      let n = 2;
+      while (existingIds.has(newId)) {
+        newId = `${id}-copy${n}`;
+        n += 1;
+      }
+      existingIds.add(newId);
+      ops.push({ op: 'addNode', node: { ...node, id: newId } });
+      const pos = current.positions[id] ?? { x: 0, y: 0 };
+      manualPositions.push({ id: newId, pos: { x: pos.x + 40, y: pos.y + 40 } });
+      newIds.push(newId);
+    }
+    if (ops.length === 0) return;
+    void applyOps(ops, { manualPositions });
+    setSelectedNodeIds(newIds);
+    setSelectedNodeId(newIds.length === 1 ? newIds[0] : null);
+  }, [current, selectedNodeId, selectedNodeIds, applyOps]);
+
+  /** Esc clears the selection (PLAN3.md step 11.10); Delete/Backspace
+   * and Cmd/Ctrl+D drive the two actions above from anywhere except an
+   * editable field (so typing in a text input, the color picker, etc.
+   * isn't hijacked) — captured on `window` like `useHistory`'s
+   * Ctrl/Cmd+Z, but NOT in the capture phase, so a YAML-panel/input
+   * keystroke still reaches its own field first and can mark itself as
+   * "handled" by being an editable target. */
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false;
+      return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+    };
+    const handler = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
+      if (e.key === 'Escape') {
+        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedNodeIds.length > 0 || selectedNodeId)) {
+        e.preventDefault();
+        onDeleteSelectedNode();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && (selectedNodeIds.length > 0 || selectedNodeId)) {
+        e.preventDefault();
+        onDuplicateSelectedNodes();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedNodeId, selectedNodeIds, onDeleteSelectedNode, onDuplicateSelectedNodes]);
 
   const onConnectNodes = useCallback(
     (source: string, target: string) => {
@@ -259,13 +414,13 @@ export function useDiagramEditing(
       if (!current) return;
       // Dragging a node across a container boundary (PLAN3.md step
       // 11.6) also patches `parent:` in the YAML, through the same
-      // `applyOps` path (and its manualPosition option) `onDropNodeType`
+      // `applyOps` path (and its manualPositions option) `onDropNodeType`
       // uses — that keeps the position commit and the parent patch as
       // a single re-derivation of layout/positions instead of two
       // separate state updates racing each other.
       if (newParent !== undefined) {
         void applyOps([{ op: 'updateNode', id, patch: { parent: newParent ?? undefined } }], {
-          manualPosition: { id, pos },
+          manualPositions: [{ id, pos }],
         });
         return;
       }
@@ -463,6 +618,7 @@ export function useDiagramEditing(
       const nodeId = current.diagram.nodes.find((n) => error.message.includes(n.id))?.id;
       if (nodeId) {
         setSelectedNodeId(nodeId);
+        setSelectedNodeIds([nodeId]);
         setFocusRequest((prev) => ({ kind: 'node', id: nodeId, nonce: (prev?.nonce ?? 0) + 1 }));
         return;
       }
@@ -541,6 +697,10 @@ export function useDiagramEditing(
   return {
     selectedNodeId,
     setSelectedNodeId,
+    selectedNodeIds,
+    onSelectionChange,
+    onGroupNodeDragStop,
+    onDuplicateSelectedNodes,
     hoveredLinkIndex,
     setHoveredLinkIndex,
     selectedLinkIndex,

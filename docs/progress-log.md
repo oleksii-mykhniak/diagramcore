@@ -445,3 +445,44 @@
   повний `npx playwright test` (85 passed + 3 skipped — прихований
   draw.io).
 - Commit: `phase11-step9: ребра — стрілки/стиль/рухомі лейбли/видимість`.
+
+## Крок 11.10 — Мультивиділення і базові операції редагування
+- `FlowCanvas.tsx`: rubber-band (shift+drag, React Flow builtin) тепер
+  щось означає — `selected`/`data.isSelected` явно виставлені на кожному
+  rf-вузлі/ребрі (замість `undefined`) і синхронізуються окремим ефектом
+  через функціональний `setNodes(prev => prev.map(...))`, а не через
+  основний `allNodes`-меморизований масив (детально, разом із двома
+  супутніми React Flow пастками навколо `onSelectionChange` — див.
+  `docs/deviations.md`, крок 11.10). Нові пропси `selectedNodeIds`,
+  `onSelectionChange`, `onGroupDragStop`; `onSelectionDragStop` комітить
+  усі позиції виділеної групи ОДНИМ викликом.
+  `deleteKeyCode={null}` — вимкнено вбудоване RF-видалення по Backspace,
+  бо своє власне (з каскадним прибиранням лінків/flow-steps і
+  підтвердженням) іде через `applyOps`.
+- `useDiagramEditing.ts`: `selectedNodeIds: string[]` — окремий від
+  `selectedNodeId` стан (навмисно; `selectedNodeId` лишається лише на
+  власному 250мс deferred-click шляху, не на RF-похідному — інакше
+  подвійний клік по вузлу з `details:` встигає на мить перемкнути
+  правий док на Properties ще до drill-down). `onDeleteSelectedNode`
+  узагальнено на список id (з дедуплікацією залежних лінків/flow-steps
+  між кількома вибраними вузлами) — один `applyOps`, один крок undo.
+  Новий `onDuplicateSelectedNodes` (Cmd/Ctrl+D): клонує кожен вибраний
+  вузол (новий унікальний id `<id>-copy[N]`, ті самі поля, позиція зі
+  зсувом +40/+40) в одному виклику. `applyOps`'s `manualPosition`
+  (одиничний) замінено на `manualPositions` (масив) — обидва старі
+  виклики (`onDropNodeType`, `onNodeDrag` reparent) оновлено.
+  Клавіатурні шорткати (Delete/Backspace, Cmd/Ctrl+D, Esc) — єдиний
+  `window`-ефект, що ігнорує events із текстових полів/select/
+  contenteditable.
+- View-незалежні дрібниці: Edit-меню отримав "Duplicate" поруч із
+  "Delete" (лейбл рахує кількість вибраних вузлів), обидва враховують
+  `selectedNodeIds` як і клавіатурні шорткати.
+- Регресія: `go build/vet/test ./...`, `./dc validate
+  examples/*.dc.yaml` (4/4), `npm test` (91/91), `npm run build`,
+  повний `npx playwright test` (90 passed + 3 skipped — прихований
+  draw.io), новий `e2e/multi-select.spec.ts` (5 сценаріїв: rubber-band +
+  групове перетягування одним апдейтом; Delete кількох з підтвердженням
+  + Undo одним кроком; Duplicate; Esc знімає виділення; Edit-меню працює
+  з поточним виділенням).
+- Commit: `phase11-step10: мультивиділення — rubber-band, групове
+  перетягування, Delete/Duplicate, Esc`.

@@ -46,6 +46,9 @@ interface EditorWorkspaceProps {
   onUpdateFlowStepNote: (atIndex: number, note: string) => void;
   onDeleteStep: (atIndex: number) => void;
   selectedNodeId: string | null;
+  selectedNodeIds: string[];
+  onSelectionChange: (ids: string[]) => void;
+  onGroupNodeDragStop: (updates: Array<{ id: string; pos: LayoutPosition }>) => void;
   onNodeDragStop: (id: string, pos: LayoutPosition) => void;
   onNodeResizeStop: (id: string, size: { width: number; height: number }) => void;
   onUpdateNodeStyle: (patch: Partial<StyleOverride>) => void;
@@ -121,6 +124,9 @@ export function EditorWorkspace({
   onUpdateFlowStepNote,
   onDeleteStep,
   selectedNodeId,
+  selectedNodeIds,
+  onSelectionChange,
+  onGroupNodeDragStop,
   onNodeDragStop,
   onNodeResizeStop,
   onUpdateNodeStyle,
@@ -225,6 +231,9 @@ export function EditorWorkspace({
                 onNodeDoubleClick={onNodeDoubleClick}
                 onNodeClick={onNodeClick}
                 selectedNodeId={selectedNodeId}
+                selectedNodeIds={selectedNodeIds}
+                onSelectionChange={onSelectionChange}
+                onGroupDragStop={onGroupNodeDragStop}
                 onDropNodeType={onDropNodeType}
                 onConnectNodes={onConnectNodes}
                 hoveredLinkIndex={hoveredLinkIndex}
