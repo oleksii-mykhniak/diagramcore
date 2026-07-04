@@ -49,6 +49,9 @@ interface Props {
    * (PLAN.md step 7.6, Problems panel "click to focus"). */
   focusNodeId?: string | null;
   focusNonce?: number;
+  /** View → Grid/Snap to grid (PLAN.md step 10.5), persisted by the caller. */
+  showGrid?: boolean;
+  snapToGridEnabled?: boolean;
 }
 
 function FlowCanvasInner({
@@ -68,6 +71,8 @@ function FlowCanvasInner({
   onEdgeClick,
   focusNodeId,
   focusNonce,
+  showGrid = true,
+  snapToGridEnabled = false,
 }: Props) {
   const nodeById = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram.nodes]);
   const { fitView, screenToFlowPosition } = useReactFlow();
@@ -163,7 +168,7 @@ function FlowCanvasInner({
   return (
     <div
       data-testid="reactflow-canvas"
-      style={{ width: '100%', height: 600 }}
+      style={{ width: '100%', height: '100%' }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -204,8 +209,10 @@ function FlowCanvasInner({
           if (!Number.isNaN(index)) onEdgeClick?.(index);
         }}
         fitView
+        snapToGrid={snapToGridEnabled}
+        snapGrid={[10, 10]}
       >
-        <Background />
+        {showGrid && <Background />}
         <MiniMap />
         <Controls />
       </ReactFlow>

@@ -62,3 +62,13 @@ body {
   background: var(--dc-bg);
   color: var(--dc-text);
 }
+
+/* Bound CodeMirror to its container instead of growing with content
+   (PLAN.md step 10.5) — the YAML panel gets a fixed/resizable height and
+   scrolls internally, so it no longer squeezes the canvas row's height. */
+.cm-editor {
+  height: 100%;
+}
+.cm-scroller {
+  overflow: auto;
+}

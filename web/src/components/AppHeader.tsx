@@ -34,6 +34,12 @@ interface AppHeaderProps {
   selectedNodeId: string | null;
   onDeleteSelectedNode: () => void;
   onShowTour: () => void;
+  grid: boolean;
+  onToggleGrid: () => void;
+  snap: boolean;
+  onToggleSnap: () => void;
+  yamlPanelOpen: boolean;
+  onToggleYamlPanel: () => void;
 }
 
 const REPO_URL = 'https://github.com/oleksii-mykhniak/diagramcore';
@@ -92,6 +98,12 @@ export function AppHeader({
   selectedNodeId,
   onDeleteSelectedNode,
   onShowTour,
+  grid,
+  onToggleGrid,
+  snap,
+  onToggleSnap,
+  yamlPanelOpen,
+  onToggleYamlPanel,
 }: AppHeaderProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -162,6 +174,13 @@ export function AppHeader({
             toggleFullscreen();
             setIsFullscreen((f) => !f);
           },
+        },
+        { label: grid ? 'Grid: on' : 'Grid: off', testId: 'menu-grid-toggle', onSelect: onToggleGrid },
+        { label: snap ? 'Snap to grid: on' : 'Snap to grid: off', testId: 'menu-snap-toggle', onSelect: onToggleSnap },
+        {
+          label: yamlPanelOpen ? 'YAML panel: shown' : 'YAML panel: hidden',
+          testId: 'menu-yaml-panel-toggle',
+          onSelect: onToggleYamlPanel,
         },
       ],
     },

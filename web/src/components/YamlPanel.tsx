@@ -133,8 +133,8 @@ export function YamlPanel({ text, onCommit, focusLine, focusNonce }: Props) {
   }, [focusLine, focusNonce]);
 
   return (
-    <div>
-      <div data-testid="yaml-panel" ref={containerRef} />
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div data-testid="yaml-panel" ref={containerRef} style={{ flex: 1, minHeight: 0 }} />
       {error && (
         <p data-testid="yaml-panel-error" role="alert">
           {error.line !== undefined ? `Line ${error.line}: ` : ''}

@@ -1147,3 +1147,34 @@
   вручну скріншотами в обох темах — розкладка, палітра, док, статус-бар
   коректні (лишається нетематизований default MiniMap React Flow —
   бібліотечний віджет, поза скоупом).
+
+### Крок 10.5 — Колапсибельна YAML-панель + Grid/Snap + персист View
+- Дата: 2026-07-04
+- Виконано: `hooks/useViewSettings.ts` — grid/snap (boolean) +
+  yamlPanelOpen/yamlPanelHeight, кожен персиститься під власним ключем
+  localStorage (`dc.ui.grid`, `dc.ui.snap`, `dc.ui.yamlPanel`,
+  `dc.ui.yamlPanelHeight`). View-меню: нові пункти `menu-grid-toggle`,
+  `menu-snap-toggle`, `menu-yaml-panel-toggle`. `EditorWorkspace.tsx`:
+  YAML-секція — нижня панель на всю ширину з заголовком-кнопкою
+  (`yaml-panel-toggle`, розгорнуто за замовчуванням) і resize-хендлом
+  по висоті (`yaml-panel-resize-handle`, drag змінює
+  `yamlPanelHeight`); канва тепер дійсно responsive (`height:'100%'`
+  замість захардкодженої `600`) — деталі й чому це безпечно тепер (на
+  відміну від невдалої першої спроби в 10.4) — `docs/deviations.md`,
+  крок 10.5. `FlowCanvas.tsx`: нові пропси `showGrid`/
+  `snapToGridEnabled` → умовний `<Background/>` і `snapToGrid`/
+  `snapGrid={[10,10]}` React Flow. Нова `e2e/view-settings.spec.ts`
+  (3 тести): згортання YAML-панелі росте канву й переживає reload,
+  Grid off прибирає `.react-flow__background` і переживає reload,
+  Snap on дає координати кратні 10 (перевірено через Export layout).
+  Наявний `yaml-panel.spec.ts` — без змін (дефолт розгорнуто,
+  CodeMirror і так далі функціонує в новому bounded-контейнері).
+- Коміт: (цей крок)
+- AC: Playwright — згортання ховає редактор і росте канву (578px →
+  785px висоти в ручній перевірці), reload зберігає стан, розгортання
+  показує актуальний вміст ✅; YAML↔канва синхронізація не зламана
+  (наявний `yaml-panel.spec` зелений без правок) ✅; Grid off прибирає
+  крапки (`.react-flow__background` зникає), Snap on дає координати
+  кратні 10 ✅; налаштування View переживають reload ✅; повна
+  e2e-регресія (44 специфікації, включно з новою `view-settings.spec.ts`)
+  + `npm test` (41) + `npm run build` + `npm run lint` зелені ✅.

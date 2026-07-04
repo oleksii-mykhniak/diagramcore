@@ -7,10 +7,12 @@ import { useDiagramStack } from './hooks/useDiagramStack';
 import { useHistory } from './hooks/useHistory';
 import { useDiagramEditing } from './hooks/useDiagramEditing';
 import { useDiagramExports } from './hooks/useDiagramExports';
+import { useViewSettings } from './hooks/useViewSettings';
 
 export default function App() {
   const [theme, , toggleTheme] = useTheme();
   const [showTour, setShowTour] = useState(false);
+  const view = useViewSettings();
 
   const {
     stack,
@@ -102,6 +104,12 @@ export default function App() {
         selectedNodeId={selectedNodeId}
         onDeleteSelectedNode={onDeleteSelectedNode}
         onShowTour={() => setShowTour(true)}
+        grid={view.grid}
+        onToggleGrid={view.toggleGrid}
+        snap={view.snap}
+        onToggleSnap={view.toggleSnap}
+        yamlPanelOpen={view.yamlPanelOpen}
+        onToggleYamlPanel={view.toggleYamlPanel}
       />
       <EditorWorkspace
         loadError={loadError}
@@ -136,6 +144,12 @@ export default function App() {
         onCommitYamlText={(text) => void applyTextReplace(text)}
         onOpenExample={(fileName, text) => void openTextAsDiagram(fileName, text)}
         onNewDiagram={(text) => void openTextAsDiagram('untitled.dc.yaml', text)}
+        grid={view.grid}
+        snap={view.snap}
+        yamlPanelOpen={view.yamlPanelOpen}
+        onToggleYamlPanel={view.toggleYamlPanel}
+        yamlPanelHeight={view.yamlPanelHeight}
+        onYamlPanelHeightChange={view.setYamlPanelHeight}
       />
       {showTour && <Tour onClose={() => setShowTour(false)} />}
     </div>

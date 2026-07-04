@@ -51,7 +51,15 @@ interface EditorWorkspaceProps {
   onCommitYamlText: (text: string) => void;
   onOpenExample: (fileName: string, text: string) => void;
   onNewDiagram: (text: string) => void;
+  grid: boolean;
+  snap: boolean;
+  yamlPanelOpen: boolean;
+  onToggleYamlPanel: () => void;
+  yamlPanelHeight: number;
+  onYamlPanelHeightChange: (height: number) => void;
 }
+
+const YAML_PANEL_COLLAPSED_HEIGHT = 33;
 
 const RIGHT_DOCK_STORAGE_KEY = 'dc.ui.rightDock';
 
@@ -101,6 +109,12 @@ export function EditorWorkspace({
   onCommitYamlText,
   onOpenExample,
   onNewDiagram,
+  grid,
+  snap,
+  yamlPanelOpen,
+  onToggleYamlPanel,
+  yamlPanelHeight,
+  onYamlPanelHeightChange,
 }: EditorWorkspaceProps) {
   const highlight = current ? computeFlowHighlight(current.diagram, current.flowPlayerState) : null;
   const selectedNode = current?.diagram.nodes.find((n) => n.id === selectedNodeId) ?? null;
@@ -118,8 +132,23 @@ export function EditorWorkspace({
     setRightDockCollapsed(false);
   }, [selectedNodeId]);
 
+  const onResizeHandleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = yamlPanelHeight;
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      onYamlPanelHeightChange(startHeight - (moveEvent.clientY - startY));
+    };
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
   return (
-    <main style={{ flex: 1, overflow: 'auto' }}>
+    <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {loadError && (
         <p role="alert" data-testid="load-error">
           {loadError}
@@ -132,7 +161,7 @@ export function EditorWorkspace({
       )}
       {current && (
         <>
-          <div style={{ display: 'flex' }}>
+          <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
             <Palette />
             <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
               <FlowCanvas
@@ -152,6 +181,8 @@ export function EditorWorkspace({
                 focusNonce={focusRequest?.nonce}
                 activeStep={highlight?.activeStep ?? undefined}
                 visitedStepKeys={highlight?.visitedStepKeys}
+                showGrid={grid}
+                snapToGridEnabled={snap}
               />
             </div>
             <RightDock
@@ -205,14 +236,53 @@ export function EditorWorkspace({
         </>
       )}
       {current && (
-        <div style={{ borderTop: '1px solid #ccc', padding: '8px 16px' }}>
-          <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>YAML</h3>
-          <YamlPanel
-            text={current.rawText}
-            onCommit={onCommitYamlText}
-            focusLine={focusRequest?.kind === 'line' ? focusRequest.line : null}
-            focusNonce={focusRequest?.nonce}
-          />
+        <div
+          style={{
+            flex: '0 0 auto',
+            height: yamlPanelOpen ? yamlPanelHeight : YAML_PANEL_COLLAPSED_HEIGHT,
+            borderTop: '1px solid var(--dc-border)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          {yamlPanelOpen && (
+            <div
+              data-testid="yaml-panel-resize-handle"
+              onMouseDown={onResizeHandleMouseDown}
+              style={{ height: 4, cursor: 'row-resize', background: 'var(--dc-border)', flex: '0 0 auto' }}
+            />
+          )}
+          <button
+            type="button"
+            data-testid="yaml-panel-toggle"
+            onClick={onToggleYamlPanel}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--dc-space-2)',
+              background: 'var(--dc-surface)',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 'var(--dc-space-1) var(--dc-space-3)',
+              fontSize: 'var(--dc-font-size-base)',
+              fontWeight: 600,
+              color: 'var(--dc-text)',
+              flex: '0 0 auto',
+            }}
+          >
+            {yamlPanelOpen ? '▾' : '▸'} YAML
+          </button>
+          {yamlPanelOpen && (
+            <div style={{ flex: 1, minHeight: 0, padding: '0 var(--dc-space-3) var(--dc-space-2)' }}>
+              <YamlPanel
+                text={current.rawText}
+                onCommit={onCommitYamlText}
+                focusLine={focusRequest?.kind === 'line' ? focusRequest.line : null}
+                focusNonce={focusRequest?.nonce}
+              />
+            </div>
+          )}
         </div>
       )}
       {current && (
