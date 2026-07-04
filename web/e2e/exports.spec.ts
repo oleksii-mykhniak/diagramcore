@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { openMenu } from './helpers/menu';
+import { openDock } from './helpers/dock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, '..', '..');
@@ -59,6 +60,7 @@ test('exporting flow steps as a zip contains one PNG per step', async ({ page })
   await expect(page.getByTestId('export-flow-steps-zip')).toBeDisabled();
   await page.keyboard.press('Escape');
 
+  await openDock(page, 'flows');
   await page.getByTestId('flow-select').selectOption({ label: 'Успішна авторизація через OAuth' });
 
   await openMenu(page, 'file');

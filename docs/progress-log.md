@@ -1105,3 +1105,45 @@
   (41 юніт-тест) + `npm run build` + `npm run lint` (без нових
   попереджень) зелені ✅.
 
+
+### Крок 10.4 — Доки: ліва палітра, правий док, статус-бар
+- Дата: 2026-07-04
+- Виконано: `components/Palette.tsx` — вертикальний список у лівому
+  сайдбарі, прев'ю-фігура (наближена геометрія на токенах, не остаточний
+  shape-реєстр — той приходить у 10.6) + назва типу; testid `palette`/
+  `palette-item-*` без змін. `components/RightDock.tsx` — новий
+  таб-бар (Properties/Links/Flows, testid `dock-tab-<id>`) + контент
+  (`right-dock-content`), collapsible (`right-dock-toggle`), стан
+  `{collapsed}` у localStorage `dc.ui.rightDock`. `components/
+  StatusBar.tsx` — індикатор валідації (`status-validation`: "OK" / "N
+  problems", клік розгортає `ProblemsPanel` у popover над собою) +
+  лічильник `status-counts` (nodes/links); zoom-індикатор — свідомий
+  descope (вимагає інстанс React Flow назовні `FlowCanvas` — див.
+  `docs/deviations.md`, крок 10.4). `EditorWorkspace.tsx`: `<main>`
+  лишився block-контейнером (НЕ flex-column — перша спроба зламала
+  геометрію через content-based висоту YAML-панелі, деталі в
+  deviations.md); робочий рядок Palette+канва+RightDock — окремий
+  `display:flex` рядок, що успадковує висоту від фіксованих 600px
+  канви (той самий патерн, що вже працював для канва+LinksPanel).
+  Клік по вузлу (canvas або Problems-панель) перемикає RightDock на
+  Properties і розгортає його (`useEffect` на `selectedNodeId`).
+  `ProblemsPanel` — стилізовано токенами, без власного margin/border
+  (тепер живе всередині статус-бар-попапу). `e2e/helpers/dock.ts` —
+  `openDock(page, 'properties'|'links'|'flows')`; оновлено
+  `problems-panel.spec.ts`, `links.spec.ts`, `flow-player.spec.ts`,
+  `flow-editor.spec.ts`, і (не згадані в плані) `drill-down.spec.ts` та
+  `exports.spec.ts` (обидва теж чіпають `flow-select`); `node-crud.spec.ts`
+  зелений без змін (Properties — дефолтна вкладка).
+- Коміт: (цей крок)
+- AC: Playwright — канва центральна, drag із палітри створює вузол
+  (`node-crud.spec` без змін, зелений) ✅; вкладки дока перемикаються,
+  hover-синхронізація Links↔канва працює (адаптований `links.spec`) ✅;
+  клік по проблемі в розгорнутому попапі фокусує вузол (адаптований
+  `problems-panel.spec`) ✅; flow-плеєр і запис flow працюють із
+  вкладки Flows (адаптовані `flow-player.spec`/`flow-editor.spec`) ✅;
+  правий док згортається, стан переживає reload через
+  `dc.ui.rightDock` ✅; повна e2e-регресія (41 специфікація) + `npm test`
+  (41) + `npm run build` + `npm run lint` зелені ✅. Верифіковано
+  вручну скріншотами в обох темах — розкладка, палітра, док, статус-бар
+  коректні (лишається нетематизований default MiniMap React Flow —
+  бібліотечний віджет, поза скоупом).

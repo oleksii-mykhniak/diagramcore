@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openDock } from './helpers/dock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
@@ -25,6 +26,7 @@ test('recording a flow by clicking edges produces a flow with correctly-ordered 
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
+  await openDock(page, 'flows');
   await page.getByTestId('new-flow').click();
   await expect(page.getByTestId('toggle-recording')).toHaveText('Stop recording');
 
@@ -56,7 +58,9 @@ test('recording a flow by clicking edges produces a flow with correctly-ordered 
   expect(gatewayIdx).toBeLessThan(authIdx);
 
   // 0 validation errors (DC004 or otherwise) after recording.
+  await page.getByTestId('status-validation').click();
   await expect(page.getByTestId('problems-ok')).toBeVisible();
+  await page.getByTestId('status-validation').click();
 
   // Immediately playable by the flow player.
   await page.getByTestId('flow-select').selectOption({ label: 'Recorded scenario' });

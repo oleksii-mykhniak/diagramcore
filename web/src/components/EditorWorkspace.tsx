@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { FlowCanvas } from './FlowCanvas';
 import { FlowPlayer } from './FlowPlayer';
 import { Palette } from './Palette';
@@ -6,8 +7,10 @@ import { LinksPanel } from './LinksPanel';
 import { FlowEditorPanel } from './FlowEditorPanel';
 import type { BranchTarget } from './FlowEditorPanel';
 import { YamlPanel } from './YamlPanel';
-import { ProblemsPanel } from './ProblemsPanel';
 import { StartScreen } from './StartScreen';
+import { StatusBar } from './StatusBar';
+import { RightDock } from './RightDock';
+import type { RightDockTab } from './RightDock';
 import type { ValidationError } from '../wasmValidate';
 import type { DiagramNode, DiagramLink, Flow } from '../types';
 import type { LayoutPosition } from '../layoutFile';
@@ -50,9 +53,21 @@ interface EditorWorkspaceProps {
   onNewDiagram: (text: string) => void;
 }
 
-/** The content of `<main>`: problems/flow-player/flow-recorder above the
- * canvas+panels, then the YAML panel, matching the pre-decomposition
- * DOM/testid structure exactly. */
+const RIGHT_DOCK_STORAGE_KEY = 'dc.ui.rightDock';
+
+function readRightDockCollapsed(): boolean {
+  try {
+    return Boolean(JSON.parse(localStorage.getItem(RIGHT_DOCK_STORAGE_KEY) ?? '{}').collapsed);
+  } catch {
+    return false;
+  }
+}
+
+/** The content of `<main>`: a CSS-grid workspace (left palette, center
+ * canvas, right tabbed dock, bottom status bar — PLAN.md step 10.4)
+ * plus the YAML panel below it. Selecting a node (canvas click or a
+ * Problems-panel jump) always switches the right dock to Properties and
+ * expands it, mirroring the old inline overlay's always-visible behavior. */
 export function EditorWorkspace({
   loadError,
   drillError,
@@ -90,8 +105,21 @@ export function EditorWorkspace({
   const highlight = current ? computeFlowHighlight(current.diagram, current.flowPlayerState) : null;
   const selectedNode = current?.diagram.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
+  const [rightDockTab, setRightDockTab] = useState<RightDockTab>('properties');
+  const [rightDockCollapsed, setRightDockCollapsed] = useState(readRightDockCollapsed);
+
+  useEffect(() => {
+    localStorage.setItem(RIGHT_DOCK_STORAGE_KEY, JSON.stringify({ collapsed: rightDockCollapsed }));
+  }, [rightDockCollapsed]);
+
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    setRightDockTab('properties');
+    setRightDockCollapsed(false);
+  }, [selectedNodeId]);
+
   return (
-    <main style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+    <main style={{ flex: 1, overflow: 'auto' }}>
       {loadError && (
         <p role="alert" data-testid="load-error">
           {loadError}
@@ -102,61 +130,82 @@ export function EditorWorkspace({
           {drillError}
         </p>
       )}
-      {current && <ProblemsPanel errors={current.errors} onSelectError={onSelectProblem} />}
-      {current && <FlowPlayer diagram={current.diagram} state={current.flowPlayerState} onChange={onFlowPlayerChange} />}
       {current && (
-        <FlowEditorPanel
-          flow={recordingFlow}
-          recording={recording}
-          branchTarget={branchTarget}
-          onNewFlow={onNewFlow}
-          onToggleRecording={onToggleRecording}
-          onAddBranch={onAddBranch}
-          onSwitchArm={onSwitchArm}
-          onFinishBranch={onFinishBranch}
-          onUpdateStepNote={onUpdateFlowStepNote}
-          onDeleteStep={onDeleteStep}
-        />
-      )}
-      {current && <Palette />}
-      {current && (
-        <div style={{ display: 'flex' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-            <FlowCanvas
-              diagram={current.diagram}
-              layout={current.layout}
-              positions={current.positions}
-              onNodeDrag={onNodeDrag}
-              onNodeDoubleClick={onNodeDoubleClick}
-              onNodeClick={onNodeClick}
-              selectedNodeId={selectedNodeId}
-              onDropNodeType={onDropNodeType}
-              onConnectNodes={onConnectNodes}
-              hoveredLinkIndex={hoveredLinkIndex}
-              onEdgeHover={onEdgeHover}
-              onEdgeClick={onEdgeClick}
-              focusNodeId={focusRequest?.kind === 'node' ? focusRequest.id : null}
-              focusNonce={focusRequest?.nonce}
-              activeStep={highlight?.activeStep ?? undefined}
-              visitedStepKeys={highlight?.visitedStepKeys}
+        <>
+          <div style={{ display: 'flex' }}>
+            <Palette />
+            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+              <FlowCanvas
+                diagram={current.diagram}
+                layout={current.layout}
+                positions={current.positions}
+                onNodeDrag={onNodeDrag}
+                onNodeDoubleClick={onNodeDoubleClick}
+                onNodeClick={onNodeClick}
+                selectedNodeId={selectedNodeId}
+                onDropNodeType={onDropNodeType}
+                onConnectNodes={onConnectNodes}
+                hoveredLinkIndex={hoveredLinkIndex}
+                onEdgeHover={onEdgeHover}
+                onEdgeClick={onEdgeClick}
+                focusNodeId={focusRequest?.kind === 'node' ? focusRequest.id : null}
+                focusNonce={focusRequest?.nonce}
+                activeStep={highlight?.activeStep ?? undefined}
+                visitedStepKeys={highlight?.visitedStepKeys}
+              />
+            </div>
+            <RightDock
+              tab={rightDockTab}
+              onTabChange={setRightDockTab}
+              collapsed={rightDockCollapsed}
+              onToggleCollapsed={() => setRightDockCollapsed((c) => !c)}
+              propertiesContent={
+                selectedNode ? (
+                  <PropertiesPanel node={selectedNode} onUpdate={onUpdateSelectedNode} onDelete={onDeleteSelectedNode} />
+                ) : (
+                  <p data-testid="properties-empty" style={{ padding: 'var(--dc-space-3)', color: 'var(--dc-text-muted)' }}>
+                    Select a node to edit its properties.
+                  </p>
+                )
+              }
+              linksContent={
+                <LinksPanel
+                  links={current.diagram.links}
+                  hoveredLinkIndex={hoveredLinkIndex}
+                  onHoverLink={onEdgeHover}
+                  onUpdateLink={onUpdateLink}
+                  onDeleteLink={onDeleteLink}
+                />
+              }
+              flowsContent={
+                <>
+                  <FlowPlayer diagram={current.diagram} state={current.flowPlayerState} onChange={onFlowPlayerChange} />
+                  <FlowEditorPanel
+                    flow={recordingFlow}
+                    recording={recording}
+                    branchTarget={branchTarget}
+                    onNewFlow={onNewFlow}
+                    onToggleRecording={onToggleRecording}
+                    onAddBranch={onAddBranch}
+                    onSwitchArm={onSwitchArm}
+                    onFinishBranch={onFinishBranch}
+                    onUpdateStepNote={onUpdateFlowStepNote}
+                    onDeleteStep={onDeleteStep}
+                  />
+                </>
+              }
             />
-            {selectedNode && (
-              <div style={{ position: 'absolute', top: 0, right: 0, background: '#fff' }}>
-                <PropertiesPanel node={selectedNode} onUpdate={onUpdateSelectedNode} onDelete={onDeleteSelectedNode} />
-              </div>
-            )}
           </div>
-          <LinksPanel
-            links={current.diagram.links}
-            hoveredLinkIndex={hoveredLinkIndex}
-            onHoverLink={onEdgeHover}
-            onUpdateLink={onUpdateLink}
-            onDeleteLink={onDeleteLink}
+          <StatusBar
+            errors={current.errors}
+            onSelectError={onSelectProblem}
+            nodeCount={current.diagram.nodes.length}
+            linkCount={current.diagram.links.length}
           />
-        </div>
+        </>
       )}
       {current && (
-        <div style={{ marginTop: 16, borderTop: '1px solid #ccc', paddingTop: 8 }}>
+        <div style={{ borderTop: '1px solid #ccc', padding: '8px 16px' }}>
           <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>YAML</h3>
           <YamlPanel
             text={current.rawText}
@@ -174,7 +223,11 @@ export function EditorWorkspace({
           style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0 }}
         />
       )}
-      {!current && !loadError && <StartScreen onOpenExample={onOpenExample} onNewDiagram={onNewDiagram} />}
+      {!current && !loadError && (
+        <div style={{ padding: 16 }}>
+          <StartScreen onOpenExample={onOpenExample} onNewDiagram={onNewDiagram} />
+        </div>
+      )}
     </main>
   );
 }

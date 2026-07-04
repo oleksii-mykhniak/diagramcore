@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openMenu } from './helpers/menu';
+import { openDock } from './helpers/dock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const examplesDir = path.join(__dirname, '..', '..', 'examples');
@@ -50,6 +51,7 @@ test('double-clicking a details node drills down, breadcrumbs track both levels,
   await page.mouse.move(box.x + 200, box.y + 150, { steps: 10 });
   await page.mouse.up();
 
+  await openDock(page, 'flows');
   await page.getByTestId('flow-select').selectOption({ label: 'Успішна авторизація через OAuth' });
   await page.getByTestId('flow-next').click();
   await page.getByTestId('flow-next').click();

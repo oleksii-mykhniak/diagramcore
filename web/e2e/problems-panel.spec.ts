@@ -34,6 +34,7 @@ test('a valid document shows the OK indicator and an empty problems list', async
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
+  await page.getByTestId('status-validation').click();
   await expect(page.getByTestId('problems-ok')).toBeVisible();
   await expect(page.getByTestId('problems-list')).toHaveCount(0);
 });
@@ -44,6 +45,7 @@ test('deleting a link used by a flow (via the YAML panel) flags the flow with DC
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
+  await page.getByTestId('status-validation').click();
   await expect(page.getByTestId('problems-ok')).toBeVisible();
 
   await deleteAuthServiceToOAuthProviderLink(page);
@@ -60,6 +62,7 @@ test('clicking a problem centers the canvas on the offending node', async ({ pag
 
   await deleteAuthServiceToOAuthProviderLink(page);
 
+  await page.getByTestId('status-validation').click();
   await expect(page.getByTestId('problems-list')).toBeVisible({ timeout: 5000 });
   await page.getByTestId('problem-0').click();
 
