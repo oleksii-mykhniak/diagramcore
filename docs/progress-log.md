@@ -141,3 +141,42 @@
   був потрібен); `npm test` (70/70), `npm run build`, повний
   `npx playwright test` (62 passed + 3 skipped — прихований draw.io).
 - Commit: `phase11-step4: resize вузлів (layout-файл, канва, SVG-експорт)`.
+
+## phase11-step5 — Формат: parent + довільні типи (Go core+schema+WASM) — 2026-07-04
+
+- `internal/model.Node` отримав `Parent string` (yaml `parent`); `CustomType`
+  розширено `Stroke`/`StrokeWidth`(+`HasStrokeWidth`)/`LineStyle`/
+  `Rounded`(+`HasRounded`) — `Has*` прапорці відрізняють "не задано" від
+  нульового значення. `schema/diagramcore.schema.json`: `node.type` більше
+  не enum (будь-який непорожній рядок), додано `node.parent`,
+  `custom_types` object-form отримав `stroke`/`strokeWidth`/`lineStyle`/
+  `rounded`.
+- `internal/validate`: `checkUnknownTypes` більше не звіряє тип вузла
+  проти білого списку (лише тип лінку лишається `DC003`); нова
+  `checkParents` — `DC011` (неіснуючий parent) і `DC012` (цикл у
+  ланцюжку `parent`, включно з самопосиланням). Видалено мертвий
+  `baseNodeTypes` (ніде більше не читався).
+- Рендерери: `internal/transpile/d2.go` — `d2Paths` резолвить dot-path
+  кожного вузла з ланцюжка `parent` (стійкий до циклів — зупиняє обхід
+  на повторному id), вузли й посилання лінків пишуться повним шляхом
+  (`gcp.k8s.pods`) — D2 малює це нативними вкладеними контейнерами.
+  `internal/transpile/mermaid.go` — вкладені `subgraph`/`end` замість
+  плоского списку. `internal/context/context.go` — `writeComponents`
+  індентує дітей під батьком у Markdown-списку компонентів.
+- Новий приклад `examples/nested.dc.yaml` (GCP → k8s → namespace →
+  services, 3 рівні вкладеності + реальні зв'язки між листовими
+  вузлами) — одразу задовольняє й фікстуру, яку крок 11.6 просить
+  створити для канви.
+- Тести: `internal/model` (parent round-trip, style-розширення
+  custom_types), `internal/validate` (DC011/DC012 фікстури + valid
+  3-рівневий ланцюжок + довільний тип більше не DC003), golden-тести
+  D2/Mermaid/`dc context` на `nested` (плюс наявні golden для 3 базових
+  прикладів — не зачеплені, бо в них немає `parent`), web
+  `yamlPatch.test.ts` (updateNode встановлює/чистить `parent`).
+- Регресія: `go build/vet/test ./...` зелені, `./dc validate
+  examples/*.dc.yaml` (4/4, включно з новим nested), `make wasm &&
+  make wasm-test` зелені (web-валідатор автоматично успадковує
+  DC011/DC012 — той самий скомпільований `internal/validate`); `npm
+  test` (70/70), `npm run build`, повний `npx playwright test` (62
+  passed + 3 skipped — прихований draw.io).
+- Commit: `phase11-step5: формат — parent-вкладеність, довільні типи вузлів (Go+schema+WASM)`.

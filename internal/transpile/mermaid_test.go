@@ -10,7 +10,7 @@ import (
 )
 
 func TestToMermaidGolden(t *testing.T) {
-	examples := []string{"auth-system", "oauth-detail", "payment-processing"}
+	examples := []string{"auth-system", "oauth-detail", "payment-processing", "nested"}
 
 	for _, name := range examples {
 		t.Run(name, func(t *testing.T) {

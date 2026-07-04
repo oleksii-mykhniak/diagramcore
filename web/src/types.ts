@@ -6,6 +6,12 @@ export interface CustomTypeDef {
   shape?: string;
   color?: string;
   icon?: string;
+  /** Instance/type-level style extensions (PLAN3.md step 11.5) — mirror
+   * `internal/model.CustomType`'s Stroke/StrokeWidth/LineStyle/Rounded. */
+  stroke?: string;
+  strokeWidth?: number;
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+  rounded?: boolean;
 }
 
 export interface DiagramMeta {
@@ -33,6 +39,9 @@ export interface DiagramNode {
   ai_context?: string;
   tags?: string[];
   details?: string;
+  /** Id of the containing node (PLAN3.md step 11.5) — draw.io/React
+   * Flow's `parentId`, D2's `a.b` nesting, Mermaid's `subgraph`. */
+  parent?: string;
 }
 
 export interface DiagramLink {

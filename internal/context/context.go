@@ -37,22 +37,7 @@ func generate(d *model.Diagram, deep bool, visited map[string]bool, depth int) (
 	}
 
 	fmt.Fprintf(&b, "### Components\n\n")
-	for _, n := range d.Nodes {
-		label := n.Label
-		if label == "" {
-			label = n.ID
-		}
-		fmt.Fprintf(&b, "- **%s** (%s): %s\n", n.ID, n.Type, label)
-		if n.Description != "" {
-			fmt.Fprintf(&b, "  %s\n", n.Description)
-		}
-		if n.AIContext != "" {
-			fmt.Fprintf(&b, "  AI context: %s\n", n.AIContext)
-		}
-		if n.Details != "" {
-			fmt.Fprintf(&b, "  Node %s has a detailed sub-diagram: %s\n", n.ID, n.Details)
-		}
-	}
+	writeComponents(&b, d.Nodes)
 	fmt.Fprintln(&b)
 
 	fmt.Fprintf(&b, "### Links\n\n")
@@ -112,6 +97,59 @@ func generate(d *model.Diagram, deep bool, visited map[string]bool, depth int) (
 	}
 
 	return b.String(), nil
+}
+
+// writeComponents lists nodes, indenting a node's `parent:` children
+// underneath it (phase 11, step 11.5) so the AI-context markdown shows
+// the containment hierarchy instead of a flat list. Nodes with no
+// parent (or whose declared parent doesn't exist) are top-level; a
+// cyclic parent chain is broken by simply not descending into an
+// already-visited id, so this never infinite-loops on invalid input
+// (`dc validate` is what actually rejects those as DC011/DC012).
+func writeComponents(b *strings.Builder, nodes []model.Node) {
+	ids := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		ids[n.ID] = true
+	}
+	childrenOf := map[string][]model.Node{}
+	var topLevel []model.Node
+	for _, n := range nodes {
+		if n.Parent != "" && n.Parent != n.ID && ids[n.Parent] {
+			childrenOf[n.Parent] = append(childrenOf[n.Parent], n)
+		} else {
+			topLevel = append(topLevel, n)
+		}
+	}
+
+	var write func(n model.Node, depth int, seen map[string]bool)
+	write = func(n model.Node, depth int, seen map[string]bool) {
+		prefix := strings.Repeat("  ", depth)
+		label := n.Label
+		if label == "" {
+			label = n.ID
+		}
+		fmt.Fprintf(b, "%s- **%s** (%s): %s\n", prefix, n.ID, n.Type, label)
+		if n.Description != "" {
+			fmt.Fprintf(b, "%s  %s\n", prefix, n.Description)
+		}
+		if n.AIContext != "" {
+			fmt.Fprintf(b, "%s  AI context: %s\n", prefix, n.AIContext)
+		}
+		if n.Details != "" {
+			fmt.Fprintf(b, "%s  Node %s has a detailed sub-diagram: %s\n", prefix, n.ID, n.Details)
+		}
+		seen[n.ID] = true
+		for _, c := range childrenOf[n.ID] {
+			if seen[c.ID] {
+				continue
+			}
+			write(c, depth+1, seen)
+		}
+	}
+	seen := map[string]bool{}
+	for _, n := range topLevel {
+		write(n, 0, seen)
+	}
 }
 
 func writeSteps(b *strings.Builder, steps []model.StepOrBranch, indent int) {

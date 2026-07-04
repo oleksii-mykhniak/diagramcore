@@ -1,0 +1,10 @@
+diagram:
+  title: "DC011"
+
+nodes:
+  - id: A
+    type: component
+    parent: Ghost
+
+links: []
+flows: []

@@ -1,9 +1,0 @@
-diagram:
-  title: "DC003 node"
-
-nodes:
-  - id: A
-    type: spaceship
-
-links: []
-flows: []

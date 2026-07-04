@@ -113,3 +113,64 @@ notes:
 		t.Errorf("unexpected note[1]: %+v", d.Notes[1])
 	}
 }
+
+// TestNodeParentField covers phase 11 step 11.5's `parent:` field: present
+// on a nested node, empty (zero value) on a top-level one.
+func TestNodeParentField(t *testing.T) {
+	d, err := parser.ParseString([]byte(`
+diagram:
+  title: "T"
+nodes:
+  - id: gcp
+    type: component
+  - id: k8s
+    type: component
+    parent: gcp
+links: []
+`))
+	if err != nil {
+		t.Fatalf("ParseString: %v", err)
+	}
+	if d.Nodes[0].Parent != "" {
+		t.Errorf("top-level node: Parent = %q, want empty", d.Nodes[0].Parent)
+	}
+	if d.Nodes[1].Parent != "gcp" {
+		t.Errorf("nested node: Parent = %q, want %q", d.Nodes[1].Parent, "gcp")
+	}
+}
+
+// TestCustomTypeStyleExtensions covers phase 11 step 11.5's stroke/
+// strokeWidth/lineStyle/rounded additions to the object form of
+// custom_types.
+func TestCustomTypeStyleExtensions(t *testing.T) {
+	d, err := parser.ParseString([]byte(`
+diagram:
+  title: "T"
+  custom_types:
+    - name: cache
+      stroke: "#8a5a00"
+      strokeWidth: 2.5
+      lineStyle: dashed
+      rounded: true
+nodes:
+  - id: A
+    type: cache
+links: []
+`))
+	if err != nil {
+		t.Fatalf("ParseString: %v", err)
+	}
+	ct := d.Meta.CustomTypes[0]
+	if ct.Stroke != "#8a5a00" {
+		t.Errorf("Stroke = %q, want %q", ct.Stroke, "#8a5a00")
+	}
+	if !ct.HasStrokeWidth || ct.StrokeWidth != 2.5 {
+		t.Errorf("StrokeWidth = %v (has=%v), want 2.5 (has=true)", ct.StrokeWidth, ct.HasStrokeWidth)
+	}
+	if ct.LineStyle != "dashed" {
+		t.Errorf("LineStyle = %q, want %q", ct.LineStyle, "dashed")
+	}
+	if !ct.HasRounded || !ct.Rounded {
+		t.Errorf("Rounded = %v (has=%v), want true (has=true)", ct.Rounded, ct.HasRounded)
+	}
+}

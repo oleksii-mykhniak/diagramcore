@@ -47,6 +47,7 @@ type flowHighlight struct {
 
 func toD2(d *model.Diagram, hl *flowHighlight) string {
 	var b strings.Builder
+	paths := d2Paths(d)
 
 	for _, n := range d.Nodes {
 		em := emphasisNone
@@ -57,7 +58,7 @@ func toD2(d *model.Diagram, hl *flowHighlight) string {
 				em = emphasisMuted
 			}
 		}
-		writeD2Node(&b, n, em)
+		writeD2Node(&b, n, paths[n.ID], em)
 	}
 	if len(d.Nodes) > 0 && len(d.Links) > 0 {
 		b.WriteString("\n")
@@ -71,10 +72,41 @@ func toD2(d *model.Diagram, hl *flowHighlight) string {
 				em = emphasisMuted
 			}
 		}
-		writeD2Link(&b, l, em)
+		writeD2Link(&b, l, paths, em)
 	}
 
 	return b.String()
+}
+
+// d2Paths resolves every node's dot-joined D2 path from its `parent:`
+// chain (phase 11, step 11.5) — e.g. `gcp.k8s.pods` for a node `pods`
+// with `parent: k8s` where `k8s` itself has `parent: gcp`. D2 renders a
+// dotted id as nested containers natively. Cycles (which `dc validate`
+// rejects as DC012, but this package doesn't re-check) are broken by
+// stopping the walk the second time an id is seen, so rendering never
+// infinite-loops on an invalid diagram.
+func d2Paths(d *model.Diagram) map[string]string {
+	byID := make(map[string]model.Node, len(d.Nodes))
+	for _, n := range d.Nodes {
+		byID[n.ID] = n
+	}
+	paths := make(map[string]string, len(d.Nodes))
+	for _, n := range d.Nodes {
+		var segments []string
+		seen := map[string]bool{}
+		cur := n.ID
+		for cur != "" && !seen[cur] {
+			seen[cur] = true
+			segments = append([]string{cur}, segments...)
+			parent, ok := byID[cur]
+			if !ok {
+				break
+			}
+			cur = parent.Parent
+		}
+		paths[n.ID] = strings.Join(segments, ".")
+	}
+	return paths
 }
 
 // ToD2StepFrame renders a single frame of a step-by-step flow playback:
@@ -105,6 +137,7 @@ func ToD2StepFrame(d *model.Diagram, cumulative []model.Step) string {
 	}
 
 	var b strings.Builder
+	paths := d2Paths(d)
 	for _, n := range d.Nodes {
 		em := emphasisMuted
 		switch {
@@ -113,7 +146,7 @@ func ToD2StepFrame(d *model.Diagram, cumulative []model.Step) string {
 		case visitedNodeIDs[n.ID]:
 			em = emphasisPath
 		}
-		writeD2Node(&b, n, em)
+		writeD2Node(&b, n, paths[n.ID], em)
 	}
 	if len(d.Nodes) > 0 && len(d.Links) > 0 {
 		b.WriteString("\n")
@@ -127,7 +160,7 @@ func ToD2StepFrame(d *model.Diagram, cumulative []model.Step) string {
 		case visitedLinkKeys[key]:
 			em = emphasisPath
 		}
-		writeD2Link(&b, l, em)
+		writeD2Link(&b, l, paths, em)
 	}
 	return b.String()
 }
@@ -225,7 +258,7 @@ func DetailsSVGPath(details string) string {
 	return details
 }
 
-func writeD2Node(b *strings.Builder, n model.Node, em emphasis) {
+func writeD2Node(b *strings.Builder, n model.Node, path string, em emphasis) {
 	label := n.Label
 	if label == "" {
 		label = n.ID
@@ -238,11 +271,11 @@ func writeD2Node(b *strings.Builder, n model.Node, em emphasis) {
 
 	hasBody := shape != "" || n.Type == "external" || em != emphasisNone || hasDetails
 	if !hasBody {
-		fmt.Fprintf(b, "%s: %s\n", n.ID, d2Quote(label))
+		fmt.Fprintf(b, "%s: %s\n", path, d2Quote(label))
 		return
 	}
 
-	fmt.Fprintf(b, "%s: %s {\n", n.ID, d2Quote(label))
+	fmt.Fprintf(b, "%s: %s {\n", path, d2Quote(label))
 	if shape != "" {
 		fmt.Fprintf(b, "  shape: %s\n", shape)
 	}
@@ -266,12 +299,19 @@ func writeD2Node(b *strings.Builder, n model.Node, em emphasis) {
 	b.WriteString("}\n")
 }
 
-func writeD2Link(b *strings.Builder, l model.Link, em emphasis) {
+func writeD2Link(b *strings.Builder, l model.Link, paths map[string]string, em emphasis) {
 	arrow := "->"
 	if !l.Directed {
 		arrow = "--"
 	}
-	fmt.Fprintf(b, "%s %s %s", l.From, arrow, l.To)
+	from, to := l.From, l.To
+	if p, ok := paths[from]; ok {
+		from = p
+	}
+	if p, ok := paths[to]; ok {
+		to = p
+	}
+	fmt.Fprintf(b, "%s %s %s", from, arrow, to)
 	if l.Label != "" {
 		fmt.Fprintf(b, ": %s", d2Quote(l.Label))
 	}

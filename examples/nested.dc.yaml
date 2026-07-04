@@ -1,0 +1,50 @@
+diagram:
+  title: "Вкладені контейнери: GCP → k8s → namespace → services"
+  purpose: "Демонструє parent-вкладеність (фаза 11, крок 11.5/11.6): контейнер усередині контейнера, з реальними зв'язками між листовими вузлами"
+  audience: engineers
+  version: "0.1"
+
+nodes:
+  - id: gcp
+    type: component
+    label: "GCP Project"
+    description: "Хмарний проєкт верхнього рівня"
+  - id: k8s
+    type: component
+    label: "GKE Cluster"
+    parent: gcp
+  - id: namespace
+    type: component
+    label: "prod namespace"
+    parent: k8s
+  - id: api
+    type: service
+    label: "API service"
+    parent: namespace
+  - id: worker
+    type: service
+    label: "Worker service"
+    parent: namespace
+  - id: cache
+    type: storage
+    label: "Redis"
+    parent: k8s
+  - id: client
+    type: actor
+    label: "Client"
+
+links:
+  - from: client
+    to: api
+    type: request
+    label: "HTTPS"
+  - from: api
+    to: worker
+    type: call
+    label: "enqueue job"
+  - from: api
+    to: cache
+    type: query
+    label: "read/write"
+
+flows: []

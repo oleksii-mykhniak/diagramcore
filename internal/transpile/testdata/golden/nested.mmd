@@ -1,0 +1,14 @@
+flowchart TD
+  subgraph gcp["GCP Project"]
+    subgraph k8s["GKE Cluster"]
+      subgraph namespace["prod namespace"]
+        api["API service"]
+        worker["Worker service"]
+      end
+      cache[("Redis")]
+    end
+  end
+  client(["Client"])
+  client -->|"HTTPS"| api
+  api -->|"enqueue job"| worker
+  api -->|"read/write"| cache

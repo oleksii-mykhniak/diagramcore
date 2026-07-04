@@ -17,15 +17,40 @@ var mermaidShapeBrackets = map[string][2]string{
 
 // ToMermaid renders d as a Mermaid `flowchart TD` diagram. This is a
 // degraded export relative to D2: no guaranteed styling, meant for
-// embedding in GitHub/Notion markdown.
+// embedding in GitHub/Notion markdown. `parent:` (phase 11, step 11.5)
+// nests a node's children inside a `subgraph` block instead of drawing
+// them as siblings.
 func ToMermaid(d *model.Diagram) string {
 	var b strings.Builder
 	b.WriteString("flowchart TD\n")
 
+	ids := make(map[string]bool, len(d.Nodes))
 	for _, n := range d.Nodes {
+		ids[n.ID] = true
+	}
+	childrenOf := map[string][]model.Node{}
+	var topLevel []model.Node
+	for _, n := range d.Nodes {
+		if n.Parent != "" && n.Parent != n.ID && ids[n.Parent] {
+			childrenOf[n.Parent] = append(childrenOf[n.Parent], n)
+		} else {
+			topLevel = append(topLevel, n)
+		}
+	}
+
+	var writeNode func(n model.Node, indent string)
+	writeNode = func(n model.Node, indent string) {
 		label := n.Label
 		if label == "" {
 			label = n.ID
+		}
+		if children := childrenOf[n.ID]; len(children) > 0 {
+			fmt.Fprintf(&b, "%ssubgraph %s[%q]\n", indent, n.ID, label)
+			for _, c := range children {
+				writeNode(c, indent+"  ")
+			}
+			fmt.Fprintf(&b, "%send\n", indent)
+			return
 		}
 		if n.Details != "" {
 			label += detailsMarker
@@ -34,7 +59,10 @@ func ToMermaid(d *model.Diagram) string {
 		if br, ok := mermaidShapeBrackets[n.Type]; ok {
 			open, close = br[0], br[1]
 		}
-		fmt.Fprintf(&b, "  %s%s%q%s\n", n.ID, open, label, close)
+		fmt.Fprintf(&b, "%s%s%s%q%s\n", indent, n.ID, open, label, close)
+	}
+	for _, n := range topLevel {
+		writeNode(n, "  ")
 	}
 	for _, n := range d.Nodes {
 		if n.Details == "" {

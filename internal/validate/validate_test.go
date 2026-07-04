@@ -29,7 +29,6 @@ func TestInvalidFixtures(t *testing.T) {
 	}{
 		{"dc001_duplicate_node_id.dc.yaml", "DC001"},
 		{"dc002_link_bad_node.dc.yaml", "DC002"},
-		{"dc003_unknown_node_type.dc.yaml", "DC003"},
 		{"dc003_unknown_link_type.dc.yaml", "DC003"},
 		{"dc004_flow_no_link.dc.yaml", "DC004"},
 		{"dc005_flow_bad_node.dc.yaml", "DC005"},
@@ -38,6 +37,9 @@ func TestInvalidFixtures(t *testing.T) {
 		{"dc008_branch_no_then.dc.yaml", "DC008"},
 		{"dc009_duplicate_note_id.dc.yaml", "DC009"},
 		{"dc010_note_bad_target.dc.yaml", "DC010"},
+		{"dc011_parent_nonexistent.dc.yaml", "DC011"},
+		{"dc012_parent_cycle.dc.yaml", "DC012"},
+		{"dc012_parent_self.dc.yaml", "DC012"},
 	}
 
 	for _, c := range cases {
@@ -228,6 +230,57 @@ notes:
 	for _, e := range errs {
 		if e.Code == "DC010" {
 			t.Errorf("unexpected DC010 for a note targeting an existing link: %v", errs)
+		}
+	}
+}
+
+// TestArbitraryNodeTypeIsNotAnError covers phase 11 step 11.5's decision:
+// an undeclared node type is no longer DC003 — `custom_types` is now
+// purely optional styling metadata, not a whitelist.
+func TestArbitraryNodeTypeIsNotAnError(t *testing.T) {
+	yamlText := `
+diagram:
+  title: "T"
+nodes:
+  - id: A
+    type: spaceship
+links: []
+`
+	errs, err := ValidateString(yamlText)
+	if err != nil {
+		t.Fatalf("ValidateString failed: %v", err)
+	}
+	for _, e := range errs {
+		if e.Code == "DC003" {
+			t.Errorf("unexpected DC003 for an undeclared node type: %v", errs)
+		}
+	}
+}
+
+// TestValidParentChainIsNotAnError covers the non-cyclic, existing-parent
+// case: a 3-level container nesting should validate cleanly.
+func TestValidParentChainIsNotAnError(t *testing.T) {
+	yamlText := `
+diagram:
+  title: "T"
+nodes:
+  - id: gcp
+    type: component
+  - id: k8s
+    type: component
+    parent: gcp
+  - id: pod
+    type: component
+    parent: k8s
+links: []
+`
+	errs, err := ValidateString(yamlText)
+	if err != nil {
+		t.Fatalf("ValidateString failed: %v", err)
+	}
+	for _, e := range errs {
+		if e.Code == "DC011" || e.Code == "DC012" {
+			t.Errorf("unexpected %s for a valid 3-level parent chain: %v", e.Code, errs)
 		}
 	}
 }

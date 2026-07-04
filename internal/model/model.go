@@ -50,19 +50,26 @@ type DiagramMeta struct {
 	Line        int          `yaml:"-"`
 }
 
-// CustomType is one entry of `diagram.custom_types` (PLAN2.md step 10.7):
-// either a bare scalar name (legacy form, `Shape`/`Color`/`Icon` left
-// zero) or an object `{name, shape?, color?, icon?}`. `Shape`/`Color`/
-// `Icon` are web-only presentation hints — Go only needs `Name` for
-// DC003 (unknown node type) and doesn't validate them further; an
-// unrecognized `Shape` is not an error (falls back to `component` on the
-// web side, per docs/format.md).
+// CustomType is one entry of `diagram.custom_types` (PLAN2.md step 10.7,
+// style fields extended in phase 11 step 11.5): either a bare scalar name
+// (legacy form, everything else left zero) or an object `{name, shape?,
+// color?, icon?, stroke?, strokeWidth?, lineStyle?, rounded?}`. These are
+// all web-only presentation hints — Go only needs `Name` for type
+// resolution and doesn't validate the rest further; an unrecognized value
+// is not an error (falls back to defaults on the web side, per
+// docs/format.md).
 type CustomType struct {
-	Name  string
-	Shape string
-	Color string
-	Icon  string
-	Line  int
+	Name           string
+	Shape          string
+	Color          string
+	Icon           string
+	Stroke         string
+	StrokeWidth    float64
+	HasStrokeWidth bool
+	LineStyle      string
+	Rounded        bool
+	HasRounded     bool
+	Line           int
 }
 
 func (c *CustomType) UnmarshalYAML(value *yaml.Node) error {
@@ -76,10 +83,14 @@ func (c *CustomType) UnmarshalYAML(value *yaml.Node) error {
 		return nil
 	}
 	type raw struct {
-		Name  string `yaml:"name"`
-		Shape string `yaml:"shape"`
-		Color string `yaml:"color"`
-		Icon  string `yaml:"icon"`
+		Name        string   `yaml:"name"`
+		Shape       string   `yaml:"shape"`
+		Color       string   `yaml:"color"`
+		Icon        string   `yaml:"icon"`
+		Stroke      string   `yaml:"stroke"`
+		StrokeWidth *float64 `yaml:"strokeWidth"`
+		LineStyle   string   `yaml:"lineStyle"`
+		Rounded     *bool    `yaml:"rounded"`
 	}
 	var aux raw
 	if err := value.Decode(&aux); err != nil {
@@ -89,6 +100,16 @@ func (c *CustomType) UnmarshalYAML(value *yaml.Node) error {
 	c.Shape = aux.Shape
 	c.Color = aux.Color
 	c.Icon = aux.Icon
+	c.Stroke = aux.Stroke
+	c.LineStyle = aux.LineStyle
+	if aux.StrokeWidth != nil {
+		c.StrokeWidth = *aux.StrokeWidth
+		c.HasStrokeWidth = true
+	}
+	if aux.Rounded != nil {
+		c.Rounded = *aux.Rounded
+		c.HasRounded = true
+	}
 	c.Line = value.Line
 	return nil
 }
@@ -113,7 +134,11 @@ type Node struct {
 	AIContext   string   `yaml:"ai_context"`
 	Tags        []string `yaml:"tags"`
 	Details     string   `yaml:"details"`
-	Line        int      `yaml:"-"`
+	// Parent is the id of the containing node (phase 11, step 11.5) —
+	// draw.io/React Flow's `parentId`, D2's `a.b` nesting, Mermaid's
+	// `subgraph`. Empty means top-level (no container).
+	Parent string `yaml:"parent"`
+	Line   int    `yaml:"-"`
 }
 
 func (n *Node) UnmarshalYAML(value *yaml.Node) error {

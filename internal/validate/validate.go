@@ -27,15 +27,6 @@ func (e Error) String() string {
 	return fmt.Sprintf("%s:%d [%s] %s", e.File, e.Line, e.Code, e.Message)
 }
 
-var baseNodeTypes = map[string]bool{
-	"actor":     true,
-	"service":   true,
-	"storage":   true,
-	"queue":     true,
-	"external":  true,
-	"component": true,
-}
-
 var linkTypes = map[string]bool{
 	"request":  true,
 	"call":     true,
@@ -77,6 +68,7 @@ func ValidateString(yamlText string) ([]Error, error) {
 	errs = append(errs, checkDuplicateNodeIDs(d)...)
 	errs = append(errs, checkLinkNodesExist(d)...)
 	errs = append(errs, checkUnknownTypes(d)...)
+	errs = append(errs, checkParents(d)...)
 	errs = append(errs, checkFlows(d)...)
 	return errs, nil
 }
@@ -86,9 +78,46 @@ func validateDiagram(d *model.Diagram, visited map[string]bool) []Error {
 	errs = append(errs, checkDuplicateNodeIDs(d)...)
 	errs = append(errs, checkLinkNodesExist(d)...)
 	errs = append(errs, checkUnknownTypes(d)...)
+	errs = append(errs, checkParents(d)...)
 	errs = append(errs, checkFlows(d)...)
 	errs = append(errs, checkDetails(d, visited)...)
 	errs = append(errs, checkNotes(d)...)
+	return errs
+}
+
+// checkParents validates `nodes[].parent` (phase 11, step 11.5): a
+// non-empty parent must reference an existing node id (DC011), and
+// following parent chains must never cycle back to a node already seen
+// (DC012) — self-parenting (`parent: <own id>`) is the 1-node case of a
+// cycle and is caught the same way.
+func checkParents(d *model.Diagram) []Error {
+	var errs []Error
+	ids := nodeIDs(d)
+	parentOf := map[string]string{}
+	for _, n := range d.Nodes {
+		if n.Parent != "" {
+			parentOf[n.ID] = n.Parent
+		}
+	}
+	for _, n := range d.Nodes {
+		if n.Parent == "" {
+			continue
+		}
+		if !ids[n.Parent] {
+			errs = append(errs, Error{d.Path, n.Line, "DC011", fmt.Sprintf("node %q has nonexistent parent %q", n.ID, n.Parent)})
+			continue
+		}
+		seen := map[string]bool{n.ID: true}
+		cur := n.Parent
+		for cur != "" {
+			if seen[cur] {
+				errs = append(errs, Error{d.Path, n.Line, "DC012", fmt.Sprintf("node %q parent chain cycles back through %q", n.ID, cur)})
+				break
+			}
+			seen[cur] = true
+			cur = parentOf[cur]
+		}
+	}
 	return errs
 }
 
@@ -163,20 +192,12 @@ func checkLinkNodesExist(d *model.Diagram) []Error {
 	return errs
 }
 
+// checkUnknownTypes flags unknown link types (DC003). Node types are
+// deliberately NOT checked here (phase 11, step 11.5): any string is a
+// valid node type — `custom_types` is now optional styling metadata, not
+// a whitelist.
 func checkUnknownTypes(d *model.Diagram) []Error {
 	var errs []Error
-	allowedNodeTypes := map[string]bool{}
-	for t := range baseNodeTypes {
-		allowedNodeTypes[t] = true
-	}
-	for _, t := range d.Meta.CustomTypes {
-		allowedNodeTypes[t.Name] = true
-	}
-	for _, n := range d.Nodes {
-		if !allowedNodeTypes[n.Type] {
-			errs = append(errs, Error{d.Path, n.Line, "DC003", fmt.Sprintf("unknown node type %q", n.Type)})
-		}
-	}
 	for _, l := range d.Links {
 		if !linkTypes[l.Type] {
 			errs = append(errs, Error{d.Path, l.Line, "DC003", fmt.Sprintf("unknown link type %q", l.Type)})

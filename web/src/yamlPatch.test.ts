@@ -22,6 +22,18 @@ describe('applyPatch', () => {
     expect(doc.nodes.find((n: { id: string }) => n.id === 'User').label).toBe('Кінцевий користувач');
   });
 
+  it('updateNode: sets and clears `parent` (PLAN3.md step 11.5)', () => {
+    const withParent = applyPatch(authSystemYAML, [
+      { op: 'updateNode', id: 'DB', patch: { parent: 'Gateway' } },
+    ]);
+    const doc = parse(withParent);
+    expect(doc.nodes.find((n: { id: string }) => n.id === 'DB').parent).toBe('Gateway');
+
+    const withoutParent = applyPatch(withParent, [{ op: 'updateNode', id: 'DB', patch: { parent: undefined } }]);
+    const doc2 = parse(withoutParent);
+    expect(doc2.nodes.find((n: { id: string }) => n.id === 'DB')).not.toHaveProperty('parent');
+  });
+
   it('removeNode: removes the node by id', () => {
     const out = applyPatch(authSystemYAML, [{ op: 'removeNode', id: 'DB' }]);
     const doc = parse(out);

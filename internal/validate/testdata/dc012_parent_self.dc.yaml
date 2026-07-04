@@ -1,0 +1,10 @@
+diagram:
+  title: "DC012 self"
+
+nodes:
+  - id: A
+    type: component
+    parent: A
+
+links: []
+flows: []

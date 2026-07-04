@@ -1,0 +1,13 @@
+diagram:
+  title: "DC012 cycle"
+
+nodes:
+  - id: A
+    type: component
+    parent: B
+  - id: B
+    type: component
+    parent: A
+
+links: []
+flows: []

@@ -1,0 +1,15 @@
+gcp: "GCP Project"
+gcp.k8s: "GKE Cluster"
+gcp.k8s.namespace: "prod namespace"
+gcp.k8s.namespace.api: "API service"
+gcp.k8s.namespace.worker: "Worker service"
+gcp.k8s.cache: "Redis" {
+  shape: cylinder
+}
+client: "Client" {
+  shape: person
+}
+
+client -> gcp.k8s.namespace.api: "HTTPS"
+gcp.k8s.namespace.api -> gcp.k8s.namespace.worker: "enqueue job"
+gcp.k8s.namespace.api -> gcp.k8s.cache: "read/write"

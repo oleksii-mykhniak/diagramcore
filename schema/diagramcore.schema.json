@@ -28,7 +28,11 @@
                   "name": { "type": "string", "minLength": 1 },
                   "shape": { "type": "string" },
                   "color": { "type": "string" },
-                  "icon": { "type": "string" }
+                  "icon": { "type": "string" },
+                  "stroke": { "type": "string" },
+                  "strokeWidth": { "type": "number" },
+                  "lineStyle": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
+                  "rounded": { "type": "boolean" }
                 }
               }
             ]
@@ -73,7 +77,7 @@
         "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
         "type": {
           "type": "string",
-          "enum": ["actor", "service", "storage", "queue", "external", "component"]
+          "minLength": 1
         },
         "label": { "type": "string" },
         "description": { "type": "string" },
@@ -82,7 +86,8 @@
           "type": "array",
           "items": { "type": "string" }
         },
-        "details": { "type": "string" }
+        "details": { "type": "string" },
+        "parent": { "type": "string" }
       }
     },
     "link": {
