@@ -3,10 +3,50 @@ import { nodeLabel } from './types';
 import type { DiagramLayout, LayoutEdge, LayoutPoint } from './layout';
 import type { LayoutPosition } from './layoutFile';
 import { pairKey } from './flowPlayer';
+import { resolveShape } from './shapes';
 
 export interface FrameHighlight {
   activeStep?: { from: string; to: string };
   visitedStepKeys?: Set<string>;
+}
+
+export interface ThemeColors {
+  nodeFill: string;
+  nodeExternalFill: string;
+  nodeBorder: string;
+  flowActive: string;
+  flowVisited: string;
+  text: string;
+}
+
+/** Static fallback for environments without a live `theme.css` cascade
+ * (vitest/jsdom) — same values as `:root[data-theme='light']` in
+ * `theme.css`; keep the two in sync. */
+const FALLBACK_THEME_COLORS: ThemeColors = {
+  nodeFill: '#ffffff',
+  nodeExternalFill: '#f5f5f5',
+  nodeBorder: '#333333',
+  flowActive: '#e04b4b',
+  flowVisited: '#e08a4b',
+  text: '#1a1a1e',
+};
+
+/** Reads the current theme's colors from computed CSS custom properties
+ * (PLAN.md step 10.6), so the exported SVG always matches whichever
+ * theme is active on screen — falls back to light-theme static values
+ * when `getComputedStyle` can't see a real stylesheet (test environment). */
+export function resolveThemeColors(): ThemeColors {
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return FALLBACK_THEME_COLORS;
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
+  return {
+    nodeFill: read('--dc-node-fill', FALLBACK_THEME_COLORS.nodeFill),
+    nodeExternalFill: read('--dc-node-external-fill', FALLBACK_THEME_COLORS.nodeExternalFill),
+    nodeBorder: read('--dc-node-border', FALLBACK_THEME_COLORS.nodeBorder),
+    flowActive: read('--dc-flow-active', FALLBACK_THEME_COLORS.flowActive),
+    flowVisited: read('--dc-flow-visited', FALLBACK_THEME_COLORS.flowVisited),
+    text: read('--dc-text', FALLBACK_THEME_COLORS.text),
+  };
 }
 
 function esc(s: string): string {
@@ -36,13 +76,14 @@ export function renderDiagramSVGString(
   const labelById = new Map(diagram.nodes.map((n) => [n.id, nodeLabel(n)]));
   const nodeById = new Map(diagram.nodes.map((n) => [n.id, n]));
   const activeKey = highlight.activeStep ? pairKey(highlight.activeStep.from, highlight.activeStep.to) : null;
+  const theme = resolveThemeColors();
 
   const edgesSvg = layout.edges
     .map((e) => {
       const key = pairKey(e.from, e.to);
       const isActive = key === activeKey;
       const isVisited = !isActive && (highlight.visitedStepKeys?.has(key) ?? false);
-      const stroke = isActive ? '#e04b4b' : isVisited ? '#e08a4b' : '#333';
+      const stroke = isActive ? theme.flowActive : isVisited ? theme.flowVisited : theme.nodeBorder;
       const width = isActive ? 3 : isVisited ? 2 : 1.5;
       const points = e.points.map((p) => `${p.x},${p.y}`).join(' ');
       return `<polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="${width}" marker-end="url(#arrow)" />`;
@@ -54,23 +95,26 @@ export function renderDiagramSVGString(
     const activeEdge = edgeForStep(layout.edges, highlight.activeStep);
     if (activeEdge) {
       const reversed = activeEdge.from !== highlight.activeStep.from;
-      markerSvg = `<circle r="5" fill="#e04b4b"><animateMotion dur="1.2s" repeatCount="indefinite" path="${pointsToPath(activeEdge.points, reversed)}" /></circle>`;
+      markerSvg = `<circle r="5" fill="${theme.flowActive}"><animateMotion dur="1.2s" repeatCount="indefinite" path="${pointsToPath(activeEdge.points, reversed)}" /></circle>`;
     }
   }
 
   const nodesSvg = layout.nodes
     .map((n) => {
       const pos = positions[n.id] ?? n;
-      const hasDetails = Boolean(nodeById.get(n.id)?.details);
+      const dcNode = nodeById.get(n.id);
+      const hasDetails = Boolean(dcNode?.details);
       const label = esc(labelById.get(n.id) ?? n.id) + (hasDetails ? ' ⊞' : '');
+      const shape = resolveShape(dcNode?.type ?? 'component');
+      const fill = dcNode?.type === 'external' ? theme.nodeExternalFill : theme.nodeFill;
       const inner = hasDetails
-        ? `<rect x="3" y="3" width="${n.width - 6}" height="${n.height - 6}" rx="4" fill="none" stroke="#333" stroke-width="1" />`
+        ? `<rect x="3" y="3" width="${n.width - 6}" height="${n.height - 6}" rx="4" fill="none" stroke="${theme.nodeBorder}" stroke-width="1" />`
         : '';
       return (
         `<g transform="translate(${pos.x},${pos.y})">` +
-        `<rect width="${n.width}" height="${n.height}" rx="6" fill="#fff" stroke="#333" stroke-width="${hasDetails ? 3 : 1.5}" />` +
+        shape.renderSvgInner(n.width, n.height, { fill, stroke: theme.nodeBorder, strokeWidth: hasDetails ? 3 : 1.5 }) +
         inner +
-        `<text x="${n.width / 2}" y="${n.height / 2}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="system-ui, sans-serif">${label}</text>` +
+        `<text x="${n.width / 2}" y="${n.height / 2}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="system-ui, sans-serif" fill="${theme.text}">${label}</text>` +
         `</g>`
       );
     })
@@ -78,7 +122,7 @@ export function renderDiagramSVGString(
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}">` +
-    `<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333" /></marker></defs>` +
+    `<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="${theme.nodeBorder}" /></marker></defs>` +
     edgesSvg +
     markerSvg +
     nodesSvg +

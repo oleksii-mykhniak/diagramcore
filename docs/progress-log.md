@@ -1178,3 +1178,37 @@
   кратні 10 ✅; налаштування View переживають reload ✅; повна
   e2e-регресія (44 специфікації, включно з новою `view-settings.spec.ts`)
   + `npm test` (41) + `npm run build` + `npm run lint` зелені ✅.
+
+### Крок 10.6 — Єдиний shape-реєстр: канва + експорт малюють однаково
+- Дата: 2026-07-04
+- Виконано: `shapes.ts` — `ShapeSpec{name, renderSvgInner(w,h,style)}`
+  для 6 базових типів (actor→ellipse, service→rounded rect,
+  storage→cylinder path+ellipse cap, queue→dashed rect,
+  external→dotted rect, component→near-square) + hexagon/diamond/
+  ellipse/cloud/parallelogram (під custom types/draw.io, 10.8/10.10);
+  `resolveShape()` — fallback на component для невідомої назви.
+  `rfNodeTypes.tsx`: `NodeShell` фіксованого розміру
+  `NODE_WIDTH×NODE_HEIGHT` (з `layout.ts`), SVG-підкладка через
+  `renderSvgInner`, label/handles/⊞-маркер — шар поверх; активний/
+  visited/selected стан і раніше — колір бордера. `svgExport.ts`:
+  вузли малюються через той самий `resolveShape(...).renderSvgInner`
+  (замість універсального `<rect>`); нова `resolveThemeColors()` читає
+  `--dc-node-fill`/`--dc-node-border`/`--dc-flow-active`/`--dc-flow-
+  visited`/`--dc-node-external-fill`/`--dc-text` з `getComputedStyle`,
+  fallback-об'єкт (значення light-теми) для vitest/jsdom; кольори
+  ребер/маркерів/arrow-marker — теж із теми. `shapes.test.ts` (4 тести)
+  + доповнення `rfNodeTypes.test.tsx` (canvas vs export геометрія,
+  strip-color+self-closing-tag нормалізація для jsdom).
+- Коміт: (цей крок)
+- AC: Unit — 6 базових типів дають відмінний SVG (`shapes.test.ts`) ✅;
+  канва і експорт використовують один `resolveShape(...).renderSvgInner`
+  для одного типу (тест рендерить обидва шляхи, порівнює геометрію
+  після нормалізації кольорів/self-closing тегів) ✅; `exports.spec` —
+  PNG непорожній (без змін, зелений) ✅, вручну перевірено скріншотом:
+  експортований PNG і канва малюють storage-вузол ідентичним
+  cylinder-контуром ✅; `svgExport.ts` без захардкоджених hex поза
+  `FALLBACK_THEME_COLORS`-константою (растеризаційний PNG-фон
+  `#fff` — окремий концерн, параметризується в 10.9, зафіксовано в
+  `docs/deviations.md`) ✅; наявні e2e (44 специфікації) зелені без
+  правок — testid/DOM-структура `NodeShell` збережені ✅; `npm test`
+  (46 тестів) + `npm run build` + `npm run lint` зелені ✅.

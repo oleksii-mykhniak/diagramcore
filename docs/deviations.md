@@ -284,3 +284,31 @@
   (перевіряється в тестах через клас `.react-flow__background`, бо
   бібліотечний компонент не приймає `data-testid`).
 - Дата: 2026-07-04, коміт: (цей крок)
+
+## Крок 10.6 — Єдиний shape-реєстр: канва + експорт малюють однаково
+- Причина: канва (NodeShell) досі "малювала" фігуру виключно CSS-стилями
+  auto-sized `<div>` (borderRadius/border-style), тоді як SVG-експорт
+  завжди малював універсальний `<rect>` для будь-якого типу — геометрично
+  ніколи не збігалися (наприклад, storage на канві виглядав як прямокутник
+  зі скругленим низом, а в експорті — просто прямокутник). Щоб дійсно
+  ділити код, обом шляхам потрібні однакові пікселні розміри вузла —
+  канва раніше покладалась на `minWidth:120`/padding (content-based), а
+  layout/export — на фіксовані `NODE_WIDTH=160`/`NODE_HEIGHT=60`.
+- Рішення: `shapes.ts` — реєстр `ShapeSpec.renderSvgInner(w,h,style)` для
+  6 базових типів + hexagon/diamond/ellipse/cloud/parallelogram (під
+  10.8/10.10). `rfNodeTypes.tsx`: `NodeShell` тепер фіксованого розміру
+  `NODE_WIDTH×NODE_HEIGHT` (з `layout.ts`, той самий розмір, що й
+  auto-layout уже резервував), малює SVG-підкладку через
+  `dangerouslySetInnerHTML={{__html: shape.renderSvgInner(...)}}` з
+  CSS-var кольорами (`var(--dc-node-fill)` тощо — валідно як значення
+  presentation-атрибутів SVG у сучасних браузерах), label/handles/маркер
+  ⊞ — абсолютно позиційований шар поверх. `svgExport.ts`: той самий
+  `resolveShape(type).renderSvgInner` замість `<rect>`, кольори — через
+  нову `resolveThemeColors()` (читає CSS custom properties із
+  `getComputedStyle(document.documentElement)`, статичний fallback-об'єкт
+  для vitest/jsdom, де стилі з `theme.css` не застосовані). PNG-рендер-
+  背景 (`ctx.fillStyle='#fff'` у `svgStringToPngBlob`) — єдиний
+  захардкоджений hex, що лишився в файлі; це растеризаційний фон
+  (окремий концерн від кольорів вузлів/ребер), параметризується в
+  кроці 10.9 (Export dialog).
+- Дата: 2026-07-04, коміт: (цей крок)

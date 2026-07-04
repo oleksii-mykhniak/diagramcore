@@ -175,11 +175,11 @@ near-square) + додаткові фігури під custom types/draw.io: `hex
 `svgExport.test.ts`.
 
 **AC:**
-- [ ] Unit: для кожного з 6 базових типів `renderSvgInner` дає відмінний SVG; канва і експорт для одного типу використовують один spec (тест викликає обидва шляхи і порівнює геометрію).
-- [ ] `exports.spec`: експортований PNG непорожній; SVG містить cylinder-геометрію для storage-вузла.
-- [ ] `svgExport.ts` не містить захардкоджених кольорових hex (усе через resolveThemeColors/параметри).
-- [ ] Наявні e2e зелені (testid/DOM-структура NodeShell збережені).
-- [ ] `npm test` + `npm run build` зелені.
+- [x] Unit: для кожного з 6 базових типів `renderSvgInner` дає відмінний SVG; канва і експорт для одного типу використовують один spec (тест викликає обидва шляхи і порівнює геометрію).
+- [x] `exports.spec`: експортований PNG непорожній; SVG містить cylinder-геометрію для storage-вузла.
+- [x] `svgExport.ts` не містить захардкоджених кольорових hex (усе через resolveThemeColors/параметри).
+- [x] Наявні e2e зелені (testid/DOM-структура NodeShell збережені).
+- [x] `npm test` + `npm run build` зелені.
 
 ## Крок 10.7 — Формат: стильовані `custom_types` (Go + schema + docs + WASM)
 
