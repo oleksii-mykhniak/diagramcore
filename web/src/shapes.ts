@@ -140,6 +140,29 @@ interface DiagramLike {
   };
 }
 
+function escapeXmlText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Draws a container node — a node with `parent:` children (PLAN3.md
+ * step 11.6): a dashed, translucent-fill box with its label in a header
+ * strip at the top-left, distinct from every leaf shape above. Canvas
+ * (`ContainerNode` in `rfNodeTypes.tsx`) and SVG export both call this
+ * one function, so a container never draws differently in the two
+ * places. */
+export function renderContainerSvgInner(
+  w: number,
+  h: number,
+  label: string,
+  style: { stroke: string; strokeWidth?: number },
+): string {
+  const strokeWidth = style.strokeWidth ?? 1.5;
+  return (
+    `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="8" fill="${style.stroke}" fill-opacity="0.06" stroke="${style.stroke}" stroke-width="${strokeWidth}" stroke-dasharray="5,3" />` +
+    `<text x="10" y="18" font-size="12" font-weight="600" font-family="system-ui, sans-serif" fill="${style.stroke}">${escapeXmlText(label)}</text>`
+  );
+}
+
 /** Resolves the shape/color/icon to draw a node of the given type
  * (PLAN.md step 10.8): one of the 6 base types always draws as itself;
  * anything else is looked up in `diagram.custom_types` — a custom type

@@ -13,11 +13,12 @@ import type { Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { Diagram, DiagramNode, DiagramNoteDef } from '../types';
 import { nodeLabel } from '../types';
+import { MIN_NODE_HEIGHT, MIN_NODE_WIDTH } from '../layout';
 import type { DiagramLayout } from '../layout';
 import type { LayoutPosition } from '../layoutFile';
 import { pairKey } from '../flowPlayer';
 import { nodeTypes, resolveNodeType } from './rfNodeTypes';
-import type { DcNodeData, NoteNodeData } from './rfNodeTypes';
+import type { ContainerNodeData, DcNodeData, NoteNodeData } from './rfNodeTypes';
 import { nodeVisual } from '../shapes';
 import type { RenderStyle } from '../shapes';
 import { edgeTypes } from './rfEdgeTypes';
@@ -31,6 +32,13 @@ export interface ActiveStep {
 /** dataTransfer MIME type used by the node palette (PLAN.md step 7.2). */
 export const DND_NODE_TYPE = 'application/dc-node-type';
 
+/** Extra room (PLAN3.md step 11.6) kept between a container's bottom/
+ * right edge and its resize floor beyond its children's own bounding
+ * box — matches the layout engine's own container padding so a
+ * container that hasn't been manually resized doesn't start out
+ * exactly at its resize floor. */
+const CONTAINER_MARGIN = { right: 20, bottom: 20 };
+
 interface Props {
   diagram: Diagram;
   layout: DiagramLayout;
@@ -38,8 +46,12 @@ interface Props {
   /** Committed once per drag gesture, on release — NOT on every
    * mousemove (PLAN3.md step 11.1). Position changes during the drag
    * live only in React Flow's own internal node state; the document
-   * (and thus the rest of the app) only re-renders when the drag ends. */
-  onNodeDragStop?: (id: string, pos: LayoutPosition) => void;
+   * (and thus the rest of the app) only re-renders when the drag ends.
+   * `newParent` (PLAN3.md step 11.6) is passed only when the drag ended
+   * with the node's container assignment changed: a container id if it
+   * now overlaps one, `null` if it was dragged out of its old one —
+   * `undefined` means "unchanged, don't touch `parent:`". */
+  onNodeDragStop?: (id: string, pos: LayoutPosition, newParent?: string | null) => void;
   /** Manually-resized node dimensions (PLAN3.md step 11.4) — like
    * `positions`, only nodes the user actually resized get an entry. */
   sizes?: Record<string, { width: number; height: number }>;
@@ -130,40 +142,91 @@ function FlowCanvasInner({
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeKey = activeStep ? pairKey(activeStep.from, activeStep.to) : null;
 
-  const rfNodes: Node<DcNodeData>[] = useMemo(
+  /** Container geometry (PLAN3.md step 11.6): every node's absolute
+   * position/size (manual override merged over the auto-layout
+   * default), which container ids exist (any node referenced by another
+   * node's resolved `parent`), and each container's children — shared
+   * between building RF nodes (below) and the drag-stop reparent check
+   * (`handleNodeDragStop`). */
+  const geometry = useMemo(() => {
+    const containerIds = new Set<string>();
+    const childrenOf = new Map<string, string[]>();
+    for (const n of layout.nodes) {
+      if (n.parent) {
+        containerIds.add(n.parent);
+        const arr = childrenOf.get(n.parent) ?? [];
+        arr.push(n.id);
+        childrenOf.set(n.parent, arr);
+      }
+    }
+    const absoluteById = new Map(layout.nodes.map((n) => [n.id, positions[n.id] ?? { x: n.x, y: n.y }]));
+    const sizeById = new Map(layout.nodes.map((n) => [n.id, sizes?.[n.id] ?? { width: n.width, height: n.height }]));
+    const layoutNodeById = new Map(layout.nodes.map((n) => [n.id, n]));
+    return { containerIds, childrenOf, absoluteById, sizeById, layoutNodeById };
+  }, [layout.nodes, positions, sizes]);
+
+  const rfNodes: Node<DcNodeData | ContainerNodeData>[] = useMemo(
     () =>
       layout.nodes.map((n) => {
         const dcNode = nodeById.get(n.id);
-        const pos = positions[n.id] ?? n;
-        const size = sizes?.[n.id] ?? { width: n.width, height: n.height };
+        const abs = geometry.absoluteById.get(n.id) ?? n;
+        const size = geometry.sizeById.get(n.id) ?? { width: n.width, height: n.height };
+        const isContainer = geometry.containerIds.has(n.id);
         const type = dcNode?.type ?? 'component';
-        const rfType = resolveNodeType(type);
-        const visual = rfType === 'custom' ? nodeVisual(diagram, type) : null;
+        const rfType = isContainer ? 'container' : resolveNodeType(type);
+        const visual = !isContainer && rfType === 'custom' ? nodeVisual(diagram, type) : null;
+
+        let position = abs;
+        if (n.parent) {
+          const parentAbs = geometry.absoluteById.get(n.parent) ?? { x: 0, y: 0 };
+          position = { x: abs.x - parentAbs.x, y: abs.y - parentAbs.y };
+        }
+
+        let minWidth = MIN_NODE_WIDTH;
+        let minHeight = MIN_NODE_HEIGHT;
+        if (isContainer) {
+          for (const childId of geometry.childrenOf.get(n.id) ?? []) {
+            const cAbs = geometry.absoluteById.get(childId);
+            const cSize = geometry.sizeById.get(childId);
+            if (!cAbs || !cSize) continue;
+            minWidth = Math.max(minWidth, cAbs.x - abs.x + cSize.width + CONTAINER_MARGIN.right);
+            minHeight = Math.max(minHeight, cAbs.y - abs.y + cSize.height + CONTAINER_MARGIN.bottom);
+          }
+        }
+
         return {
           id: n.id,
           type: rfType,
-          position: { x: pos.x, y: pos.y },
+          position,
           width: size.width,
           height: size.height,
-          data: {
-            label: dcNode ? nodeLabel(dcNode) : n.id,
-            hasDetails: Boolean(dcNode?.details),
-            isActive: activeKey !== null && (activeStep?.from === n.id || activeStep?.to === n.id),
-            isVisited: false,
-            isSelected: selectedNodeId === n.id,
-            description: dcNode?.description,
-            showDescription: showDescriptions,
-            renderStyle,
-            onResizeEnd: (nextSize: { width: number; height: number }) => onNodeResizeStop?.(n.id, nextSize),
-            ...(visual ? { customType: type, shape: visual.shape.name, color: visual.color, icon: visual.icon } : {}),
-          },
+          ...(n.parent ? { parentId: n.parent } : {}),
+          data: isContainer
+            ? {
+                label: dcNode ? nodeLabel(dcNode) : n.id,
+                isSelected: selectedNodeId === n.id,
+                minWidth,
+                minHeight,
+                onResizeEnd: (nextSize: { width: number; height: number }) => onNodeResizeStop?.(n.id, nextSize),
+              }
+            : {
+                label: dcNode ? nodeLabel(dcNode) : n.id,
+                hasDetails: Boolean(dcNode?.details),
+                isActive: activeKey !== null && (activeStep?.from === n.id || activeStep?.to === n.id),
+                isVisited: false,
+                isSelected: selectedNodeId === n.id,
+                description: dcNode?.description,
+                showDescription: showDescriptions,
+                renderStyle,
+                onResizeEnd: (nextSize: { width: number; height: number }) => onNodeResizeStop?.(n.id, nextSize),
+                ...(visual ? { customType: type, shape: visual.shape.name, color: visual.color, icon: visual.icon } : {}),
+              },
         };
       }),
     [
       layout.nodes,
       nodeById,
-      positions,
-      sizes,
+      geometry,
       activeStep,
       activeKey,
       selectedNodeId,
@@ -226,9 +289,54 @@ function FlowCanvasInner({
     setNodes(allNodes);
   }, [allNodes, setNodes]);
 
-  const handleNodeDragStop = (id: string, position: LayoutPosition) => {
-    if (noteIds.has(id)) onNoteDrag?.(id, position);
-    else onNodeDragStop?.(id, position);
+  /** True if `candidateId` is `ofId` itself, or a descendant of it —
+   * used to keep a container drag from being reparented into its own
+   * subtree (which would create a cycle). */
+  const isSelfOrDescendant = (candidateId: string, ofId: string): boolean => {
+    let cur: string | undefined = candidateId;
+    while (cur !== undefined) {
+      if (cur === ofId) return true;
+      cur = geometry.layoutNodeById.get(cur)?.parent;
+    }
+    return false;
+  };
+
+  const handleNodeDragStop = (id: string, rfPosition: LayoutPosition) => {
+    if (noteIds.has(id)) {
+      onNoteDrag?.(id, rfPosition);
+      return;
+    }
+    const ln = geometry.layoutNodeById.get(id);
+    const oldParent = ln?.parent;
+    const parentAbs = oldParent ? geometry.absoluteById.get(oldParent) : undefined;
+    const absPosition = parentAbs ? { x: rfPosition.x + parentAbs.x, y: rfPosition.y + parentAbs.y } : rfPosition;
+
+    // Container-crossing check (PLAN3.md step 11.6): does the dragged
+    // node's new center now fall inside a different container? Picks
+    // the smallest-area match so dropping into a nested container picks
+    // the innermost one, not an outer ancestor it also overlaps.
+    const size = geometry.sizeById.get(id) ?? { width: ln?.width ?? 0, height: ln?.height ?? 0 };
+    const centerX = absPosition.x + size.width / 2;
+    const centerY = absPosition.y + size.height / 2;
+    let newParent: string | null = null;
+    let smallestArea = Infinity;
+    for (const containerId of geometry.containerIds) {
+      if (isSelfOrDescendant(containerId, id)) continue;
+      const cAbs = geometry.absoluteById.get(containerId);
+      const cSize = geometry.sizeById.get(containerId);
+      if (!cAbs || !cSize) continue;
+      const within =
+        centerX >= cAbs.x && centerX <= cAbs.x + cSize.width && centerY >= cAbs.y && centerY <= cAbs.y + cSize.height;
+      if (!within) continue;
+      const area = cSize.width * cSize.height;
+      if (area < smallestArea) {
+        smallestArea = area;
+        newParent = containerId;
+      }
+    }
+
+    const parentChanged = newParent !== (oldParent ?? null);
+    onNodeDragStop?.(id, absPosition, parentChanged ? newParent : undefined);
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {

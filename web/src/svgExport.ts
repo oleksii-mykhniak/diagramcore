@@ -3,7 +3,7 @@ import { nodeLabel } from './types';
 import type { DiagramLayout, LayoutEdge, LayoutPoint } from './layout';
 import type { LayoutPosition } from './layoutFile';
 import { pairKey } from './flowPlayer';
-import { nodeVisual } from './shapes';
+import { nodeVisual, renderContainerSvgInner } from './shapes';
 import type { RenderStyle } from './shapes';
 import { sketchLineD } from './sketch';
 
@@ -129,10 +129,23 @@ export function renderDiagramSVGString(
     }
   }
 
+  // Container ids (PLAN3.md step 11.6): any node referenced by another
+  // node's resolved `parent`, drawn via `renderContainerSvgInner`
+  // instead of its own dc-type shape — same function the canvas's
+  // `ContainerNode` uses, so a container never looks different between
+  // the two. `layout.nodes` is already parent-before-child order (see
+  // `layout.ts`'s `collectNodes`), so painting in that order alone
+  // already keeps every container behind its children.
+  const containerIds = new Set(layout.nodes.map((n) => n.parent).filter((p): p is string => Boolean(p)));
+
   const nodesSvg = layout.nodes
     .map((n) => {
       const pos = positions[n.id] ?? n;
       const dcNode = nodeById.get(n.id);
+      if (containerIds.has(n.id)) {
+        const label = labelById.get(n.id) ?? n.id;
+        return `<g transform="translate(${pos.x},${pos.y})">${renderContainerSvgInner(n.width, n.height, label, { stroke: theme.nodeBorder })}</g>`;
+      }
       const hasDetails = Boolean(dcNode?.details);
       const label = esc(labelById.get(n.id) ?? n.id) + (hasDetails ? ' ⊞' : '');
       const visual = nodeVisual(diagram, dcNode?.type ?? 'component');

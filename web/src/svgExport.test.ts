@@ -85,4 +85,29 @@ describe('renderDiagramSVGString', () => {
     const sketchAgain = renderDiagramSVGString(diagram, layout, positions, {}, { renderStyle: 'sketch' });
     expect(sketchAgain).toBe(sketch);
   });
+
+  it('draws a container node as a translucent box with its label, painted before its children (PLAN3.md step 11.6)', () => {
+    const nestedDiagram: Diagram = {
+      diagram: { title: 'Nested' },
+      nodes: [
+        { id: 'gcp', type: 'component', label: 'GCP' },
+        { id: 'svc', type: 'service', label: 'Svc', parent: 'gcp' },
+      ],
+      links: [],
+    };
+    const nestedLayout: DiagramLayout = {
+      nodes: [
+        { id: 'gcp', x: 0, y: 0, width: 300, height: 200 },
+        { id: 'svc', x: 40, y: 60, width: 160, height: 60, parent: 'gcp' },
+      ],
+      edges: [],
+      width: 300,
+      height: 200,
+    };
+    const svg = renderDiagramSVGString(nestedDiagram, nestedLayout, { gcp: { x: 0, y: 0 }, svc: { x: 40, y: 60 } });
+    expect(svg).toContain('GCP');
+    expect(svg).toContain('Svc');
+    expect(svg).toContain('stroke-dasharray="5,3"'); // container's own dashed box
+    expect(svg.indexOf('GCP')).toBeLessThan(svg.indexOf('Svc'));
+  });
 });

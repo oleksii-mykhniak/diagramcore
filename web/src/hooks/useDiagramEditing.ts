@@ -248,14 +248,26 @@ export function useDiagramEditing(
   );
 
   const onNodeDrag = useCallback(
-    (id: string, pos: LayoutPosition) => {
+    (id: string, pos: LayoutPosition, newParent?: string | null) => {
       if (!current) return;
+      // Dragging a node across a container boundary (PLAN3.md step
+      // 11.6) also patches `parent:` in the YAML, through the same
+      // `applyOps` path (and its manualPosition option) `onDropNodeType`
+      // uses — that keeps the position commit and the parent patch as
+      // a single re-derivation of layout/positions instead of two
+      // separate state updates racing each other.
+      if (newParent !== undefined) {
+        void applyOps([{ op: 'updateNode', id, patch: { parent: newParent ?? undefined } }], {
+          manualPosition: { id, pos },
+        });
+        return;
+      }
       updateCurrentLevel({
         positions: { ...current.positions, [id]: pos },
         manualPositionIds: new Set(current.manualPositionIds).add(id),
       });
     },
-    [current, updateCurrentLevel],
+    [current, updateCurrentLevel, applyOps],
   );
 
   /** Node resize (PLAN3.md step 11.4): committed once, on resize-stop —

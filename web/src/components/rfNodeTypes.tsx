@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Handle, NodeResizer, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { MIN_NODE_HEIGHT, MIN_NODE_WIDTH, NODE_WIDTH, NODE_HEIGHT } from '../layout';
-import { resolveShape } from '../shapes';
+import { renderContainerSvgInner, resolveShape } from '../shapes';
 import type { RenderStyle } from '../shapes';
 import { CUSTOM_TYPE_ICONS } from '../customTypeIcons';
 
@@ -241,6 +241,56 @@ export const CustomNode = memo(function CustomNode({ id, data, width, height }: 
   );
 });
 
+export interface ContainerNodeData extends Record<string, unknown> {
+  label: string;
+  isSelected?: boolean;
+  /** Dynamic resize floor (PLAN3.md step 11.6) — the container's
+   * children's bounding box, computed by `FlowCanvas` from their live
+   * positions/sizes, so a container can never be resized smaller than
+   * what it currently holds. */
+  minWidth?: number;
+  minHeight?: number;
+  onResizeEnd?: (size: { width: number; height: number }) => void;
+}
+
+/** A node with `parent:` children (PLAN3.md step 11.6) draws as a
+ * container instead of its own dc-type shape: a dashed, translucent box
+ * with the label in a top-left header, sized to enclose its children.
+ * Resizable (down to `minWidth`/`minHeight`) only while selected, same as
+ * every other node type. Uses the exact same `renderContainerSvgInner`
+ * SVG export draws, so canvas and export never disagree on how a
+ * container looks. */
+export const ContainerNode = memo(function ContainerNode({ id, data, width, height }: NodeProps) {
+  const d = data as ContainerNodeData;
+  const w = width ?? NODE_WIDTH * 2;
+  const h = height ?? NODE_HEIGHT * 2;
+  const stroke = d.isSelected ? 'var(--dc-accent)' : 'var(--dc-node-border)';
+  const svgInner = renderContainerSvgInner(w, h, d.label, { stroke });
+  return (
+    <div
+      data-testid={`rf-node-${id}`}
+      data-node-type="container"
+      data-selected={d.isSelected || undefined}
+      className="rf-node rf-node--container"
+      style={{ position: 'relative', width: w, height: h }}
+    >
+      <NodeResizer
+        isVisible={d.isSelected}
+        minWidth={d.minWidth ?? MIN_NODE_WIDTH}
+        minHeight={d.minHeight ?? MIN_NODE_HEIGHT}
+        onResizeEnd={(_, params) => d.onResizeEnd?.({ width: params.width, height: params.height })}
+      />
+      <svg
+        width={w}
+        height={h}
+        style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: svgInner }}
+      />
+    </div>
+  );
+});
+
 export interface NoteNodeData extends Record<string, unknown> {
   text: string;
 }
@@ -278,6 +328,7 @@ export const nodeTypes = {
   external: ExternalNode,
   component: ComponentNode,
   custom: CustomNode,
+  container: ContainerNode,
   note: NoteNode,
 };
 
