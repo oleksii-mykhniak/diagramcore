@@ -40,6 +40,7 @@ interface AppHeaderProps {
   onToggleSnap: () => void;
   yamlPanelOpen: boolean;
   onToggleYamlPanel: () => void;
+  onImportDrawio: (file: File) => void;
 }
 
 const REPO_URL = 'https://github.com/oleksii-mykhniak/diagramcore';
@@ -104,6 +105,7 @@ export function AppHeader({
   onToggleSnap,
   yamlPanelOpen,
   onToggleYamlPanel,
+  onImportDrawio,
 }: AppHeaderProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -136,7 +138,26 @@ export function AppHeader({
             </label>
           ),
         },
-        { label: 'Import draw.io…', disabled: true },
+        {
+          label: 'Import draw.io…',
+          render: (close) => (
+            <label style={{ display: 'block', padding: 'var(--dc-space-2) var(--dc-space-3)', cursor: 'pointer' }}>
+              Import draw.io…
+              <input
+                type="file"
+                accept=".drawio,.xml,.svg"
+                data-testid="drawio-input"
+                style={{ display: 'block' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onImportDrawio(file);
+                  e.target.value = '';
+                  close();
+                }}
+              />
+            </label>
+          ),
+        },
         { label: 'Export image…', testId: 'export-png', onSelect: onExportImage, disabled: !current },
         { label: 'Export layout', testId: 'export-layout', onSelect: onExportLayout, disabled: !current },
         {

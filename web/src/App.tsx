@@ -10,6 +10,8 @@ import { useDiagramEditing } from './hooks/useDiagramEditing';
 import { useDiagramExports } from './hooks/useDiagramExports';
 import { useViewSettings } from './hooks/useViewSettings';
 import { useExportSettings } from './hooks/useExportSettings';
+import { importDrawio } from './drawioImport';
+import { validateDiagram } from './wasmValidate';
 
 export default function App() {
   const [theme, , toggleTheme] = useTheme();
@@ -79,6 +81,33 @@ export default function App() {
   const { shareUrl, shareError, onExportLayout, onExportImage, onExportFlowStepsZip, onExportContext, onShare } =
     useDiagramExports(current);
 
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+
+  /** File → "Import draw.io…" (PLAN.md step 10.10): parses the file, then
+   * always WASM-validates the generated YAML before opening it — a
+   * broken import surfaces as an error message, never a silently-open
+   * document with hidden problems. */
+  const onImportDrawio = async (file: File) => {
+    setImportNotice(null);
+    let result;
+    try {
+      result = await importDrawio(file);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    const errors = await validateDiagram(result.yamlText);
+    if (errors.length > 0) {
+      setLoadError(
+        `Import produced ${errors.length} validation error${errors.length === 1 ? '' : 's'}: ` +
+          errors.map((e) => `[${e.code}] ${e.message}`).join('; '),
+      );
+      return;
+    }
+    await openTextAsDiagram(result.fileName, result.yamlText, result.positions);
+    setImportNotice(result.summary);
+  };
+
   return (
     <div onDrop={onDrop} onDragOver={onDragOver} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <AppHeader
@@ -114,10 +143,12 @@ export default function App() {
         onToggleSnap={view.toggleSnap}
         yamlPanelOpen={view.yamlPanelOpen}
         onToggleYamlPanel={view.toggleYamlPanel}
+        onImportDrawio={(file) => void onImportDrawio(file)}
       />
       <EditorWorkspace
         loadError={loadError}
         drillError={drillError}
+        importNotice={importNotice}
         current={current}
         onSelectProblem={onSelectProblem}
         onFlowPlayerChange={onFlowPlayerChange}

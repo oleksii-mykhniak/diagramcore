@@ -1317,3 +1317,53 @@
   адаптований `exports.spec.ts` + повна e2e-регресія (49 специфікацій)
   + `npm test` (50) + `npm run build` (без регресії розміру — 2 файли,
   2.4MB) зелені ✅.
+
+### Крок 10.10 — Імпорт draw.io
+- Дата: 2026-07-04
+- Виконано: `src/drawioImport.ts` — `importDrawio(file: File):
+  Promise<DrawioImportResult>`. Приймає `.drawio`/`.xml` напряму, і
+  `.svg` з вбудованим mxfile (атрибут `content` кореневого `<svg>`) —
+  generic SVG чесно відхиляється з повідомленням "Only draw.io-exported
+  SVG is supported". Розпакування: нестиснений `<diagram>` має
+  `<mxGraphModel>` дочірнім ЕЛЕМЕНТОМ (не текстом) —
+  `XMLSerializer().serializeToString()`; стиснений — текстовий
+  base64-вузол → `atob` → fflate `inflateSync` (raw deflate, без
+  zlib/gzip-заголовка — те, що використовує draw.io) → UTF-8 decode →
+  `decodeURIComponent` (деталі й баг, знайдений і виправлений під час
+  розробки — `docs/deviations.md`, крок 10.10). Мапінг mxCell: style-
+  рядок → key/value парсер; евристики (у порядку пріоритету)
+  `shape=cylinder*|*couchdb*`→storage, `shape=actor|umlActor`→actor,
+  `shape=cloud`→external, `dashed=1`→queue, `rounded=1`→service, решта
+  → component (`fillColor` ігнорується в v1). Vertex: label = value без
+  HTML-тегів + decode HTML-сутностей (через `<textarea>`-трюк), id
+  санітизується до `[A-Za-z][A-Za-z0-9_]*` (мапа старий→новий,
+  унікальність через suffix-лічильник); geometry (`mxGeometry` x/y) →
+  позиції. Edges → `links` type `request`, label з value; edges на
+  відсутні вузли відкидаються, лічильник — у підсумковому рядку
+  "Imported N nodes, M links, skipped K". YAML — через бібліотеку
+  `yaml` (`stringify`). `hooks/useDiagramStack.ts`:
+  `openTextAsDiagram` отримав необов'язковий третій параметр
+  `positions` (manual, не auto-layout) — вже безпечно, бо опціональний,
+  інші виклики не змінились. `App.tsx`: `onImportDrawio` — парсить →
+  ОБОВ'ЯЗКОВО прогонить через WASM `validateDiagram` → якщо помилки,
+  показує їх через існуючий `load-error` канал і НЕ відкриває діаграму;
+  якщо 0 помилок — відкриває через `openTextAsDiagram` + показує
+  `import-notice` з підсумком. File-меню: "Import draw.io…"
+  (`drawio-input`, прихований file input, як і `layout-input`).
+  Фікстури: `web/testdata/drawio/{uncompressed.drawio, compressed.drawio,
+  with-mxfile.svg, not-drawio.svg}` (останній — для error-path тесту).
+  `src/drawioImport.test.ts` (6 unit-тестів); нова
+  `e2e/drawio-import.spec.ts` (3 тести).
+- Коміт: (цей крок)
+- AC: Unit — усі 3 валідні фікстури парсяться (нестиснена/стиснена/SVG),
+  усі евристики shape→type покриті одним тестом (6 базових типів),
+  id-санітизація зберігає зв'язність links, позиції з mxGeometry
+  зберігаються ✅; Playwright — імпорт нестисненої фікстури: вузли на
+  позиціях з файлу, `yaml-source` містить очікувані nodes/links (усі 6
+  типів + label ребра), Problems — OK ✅; імпортована діаграма
+  редагується як звичайна (додати вузол, undo — працює, перевірено) ✅;
+  чужий SVG (без mxfile) → людське повідомлення через `load-error`,
+  жодних page errors ✅; `npm test` (56) + `npm run build` + повна
+  e2e-регресія (52 специфікації) + `npm run lint` зелені ✅. Вручну
+  перевірено скріншотом: коректні фігури (ellipse/cylinder/dashed) і
+  summary-рядок над канвою.

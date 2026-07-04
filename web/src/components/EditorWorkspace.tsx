@@ -21,6 +21,7 @@ import type { DiagramLevel } from '../hooks/useDiagramStack';
 interface EditorWorkspaceProps {
   loadError: string | null;
   drillError: string | null;
+  importNotice: string | null;
   current: DiagramLevel | null;
   onSelectProblem: (error: ValidationError) => void;
   onFlowPlayerChange: (state: FlowPlayerState) => void;
@@ -79,6 +80,7 @@ function readRightDockCollapsed(): boolean {
 export function EditorWorkspace({
   loadError,
   drillError,
+  importNotice,
   current,
   onSelectProblem,
   onFlowPlayerChange,
@@ -159,6 +161,7 @@ export function EditorWorkspace({
           {drillError}
         </p>
       )}
+      {importNotice && <p data-testid="import-notice">{importNotice}</p>}
       {current && (
         <>
           <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>

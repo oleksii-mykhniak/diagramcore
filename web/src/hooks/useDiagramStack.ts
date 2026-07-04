@@ -148,16 +148,23 @@ export function useDiagramStack() {
     [buildLevel, resetHistory],
   );
 
-  /** Opens an in-memory diagram (a bundled example, or a blank "New
-   * diagram" template — PLAN.md step 8.3) the same way `openFiles` opens
-   * a File: no native handle, so Save falls back to download. */
+  /** Opens an in-memory diagram (a bundled example, "New diagram" template
+   * — PLAN.md step 8.3 — or a draw.io import — step 10.10) the same way
+   * `openFiles` opens a File: no native handle, so Save falls back to
+   * download. `positions`, when given, seeds manual (not auto-layout)
+   * node positions — used by the draw.io importer to place nodes where
+   * they were in the source diagram. */
   const openTextAsDiagram = useCallback(
-    async (fileName: string, text: string) => {
+    async (fileName: string, text: string, positions?: Record<string, LayoutPosition>) => {
       setLoadError(null);
       setDrillError(null);
       try {
         setVirtualFS({ [fileName]: text });
         const level = await buildLevel(fileName, text);
+        if (positions) {
+          level.positions = { ...level.positions, ...positions };
+          level.manualPositionIds = new Set(Object.keys(positions));
+        }
         levelRef.current = level;
         resetHistory();
         setStack([level]);
