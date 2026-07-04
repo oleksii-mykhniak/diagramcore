@@ -28,9 +28,12 @@ export function LinksPanel({ links, hoveredLinkIndex, onHoverLink, onUpdateLink,
     .filter(({ link }) => !nodeFilter || link.from === nodeFilter || link.to === nodeFilter);
 
   return (
-    <aside data-testid="links-panel" style={{ padding: 12, borderLeft: '1px solid #ccc', minWidth: 260 }}>
-      <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>Links</h3>
-      <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+    <aside
+      data-testid="links-panel"
+      style={{ padding: 'var(--dc-space-3)', borderLeft: '1px solid var(--dc-border)', minWidth: 260, color: 'var(--dc-text)' }}
+    >
+      <h3 style={{ fontSize: 'var(--dc-font-size-base)', margin: `0 0 var(--dc-space-2)` }}>Links</h3>
+      <div style={{ marginBottom: 'var(--dc-space-2)', display: 'flex', gap: 'var(--dc-space-2)' }}>
         <select data-testid="links-filter-type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="">all types</option>
           {LINK_TYPES.map((t) => (

@@ -25,8 +25,8 @@ export function StartScreen({ onOpenExample, onNewDiagram }: Props) {
   const [showTour, setShowTour] = useState(false);
 
   return (
-    <div data-testid="start-screen" style={{ padding: 16 }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+    <div data-testid="start-screen" style={{ padding: 'var(--dc-space-4)', color: 'var(--dc-text)' }}>
+      <div style={{ display: 'flex', gap: 'var(--dc-space-2)', marginBottom: 'var(--dc-space-4)' }}>
         <button type="button" data-testid="new-diagram" onClick={() => onNewDiagram(BLANK_TEMPLATE)}>
           New diagram
         </button>
@@ -34,18 +34,26 @@ export function StartScreen({ onOpenExample, onNewDiagram }: Props) {
           Show tour
         </button>
       </div>
-      <h2 style={{ fontSize: 16 }}>Examples</h2>
-      <div data-testid="example-gallery" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <h2 style={{ fontSize: 'var(--dc-font-size-lg)' }}>Examples</h2>
+      <div data-testid="example-gallery" style={{ display: 'flex', gap: 'var(--dc-space-4)', flexWrap: 'wrap' }}>
         {examples.map((ex) => (
           <button
             key={ex.fileName}
             type="button"
             data-testid={`example-${ex.fileName}`}
             onClick={() => onOpenExample(ex.fileName, ex.text)}
-            style={{ border: '1px solid #ccc', padding: 8, background: '#fff', cursor: 'pointer', width: 180 }}
+            style={{
+              border: '1px solid var(--dc-border)',
+              borderRadius: 'var(--dc-radius-md)',
+              padding: 'var(--dc-space-2)',
+              background: 'var(--dc-surface)',
+              color: 'var(--dc-text)',
+              cursor: 'pointer',
+              width: 180,
+            }}
           >
             <img src={ex.previewUrl} alt={ex.fileName} style={{ width: '100%', height: 100, objectFit: 'contain' }} />
-            <div style={{ fontSize: 12, marginTop: 4 }}>{ex.fileName}</div>
+            <div style={{ fontSize: 'var(--dc-font-size-sm)', marginTop: 'var(--dc-space-1)' }}>{ex.fileName}</div>
           </button>
         ))}
       </div>

@@ -14,7 +14,22 @@ export function Tour({ onClose }: { onClose: () => void }) {
   const [index, setIndex] = useState(0);
 
   return (
-    <div data-testid="tour" style={{ position: 'fixed', bottom: 16, right: 16, border: '1px solid #333', background: '#fff', padding: 12, maxWidth: 320 }}>
+    <div
+      data-testid="tour"
+      style={{
+        position: 'fixed',
+        bottom: 'var(--dc-space-4)',
+        right: 'var(--dc-space-4)',
+        border: '1px solid var(--dc-border)',
+        borderRadius: 'var(--dc-radius-md)',
+        boxShadow: 'var(--dc-shadow)',
+        background: 'var(--dc-surface)',
+        color: 'var(--dc-text)',
+        padding: 'var(--dc-space-3)',
+        maxWidth: 320,
+        zIndex: 100,
+      }}
+    >
       <p data-testid="tour-tip">{TIPS[index]}</p>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <span>

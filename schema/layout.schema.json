@@ -9,6 +9,11 @@
     "views": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/view" }
+    },
+    "renderStyle": {
+      "type": "string",
+      "enum": ["clean", "sketch"],
+      "description": "Diagram style preset (phase 10, step 10.12) — top-level, not per-view."
     }
   },
   "$defs": {
@@ -20,6 +25,11 @@
         "positions": {
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/position" }
+        },
+        "notePositions": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/position" },
+          "description": "Note positions (phase 10, step 10.11) — notes aren't diagram nodes, so kept separate from positions."
         }
       }
     },

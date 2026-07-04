@@ -71,7 +71,15 @@ export function FlowPlayer({ diagram, state, onChange }: Props) {
   const currentNote = flow && state.currentIndex >= 0 ? steps[state.currentIndex]?.note : undefined;
 
   return (
-    <div data-testid="flow-player" style={{ marginBottom: 16, padding: 8, border: '1px solid #ccc' }}>
+    <div
+      data-testid="flow-player"
+      style={{
+        marginBottom: 'var(--dc-space-4)',
+        padding: 'var(--dc-space-2)',
+        border: '1px solid var(--dc-border)',
+        color: 'var(--dc-text)',
+      }}
+    >
       <label>
         Flow:{' '}
         <select

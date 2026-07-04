@@ -18,11 +18,19 @@ type Position struct {
 // View holds the positions for one named view. v0 only uses "default".
 type View struct {
 	Positions map[string]Position `json:"positions"`
+	// NotePositions holds free-text annotation positions (phase 10, step
+	// 10.11) — written by the web editor, not by this package's Save;
+	// round-tripped so `dc render --write-layout` doesn't clobber them.
+	NotePositions map[string]Position `json:"notePositions,omitempty"`
 }
 
 // File is the decoded contents of a <name>.layout.json file.
 type File struct {
 	Views map[string]View `json:"views"`
+	// RenderStyle is the diagram style preset (phase 10, step 10.12),
+	// written by the web editor. Round-tripped for the same reason as
+	// NotePositions above; unused by `dc render`.
+	RenderStyle string `json:"renderStyle,omitempty"`
 }
 
 // DefaultView is the only view name used in v0.
@@ -77,11 +85,22 @@ func (f *File) UnknownNodeWarnings(view string, knownNodeIDs map[string]bool) []
 	return warnings
 }
 
-// Save writes positions as the DefaultView of a layout file at path.
+// Save writes positions as the DefaultView of a layout file at path,
+// preserving any web-editor-only fields (NotePositions, RenderStyle)
+// already present in an existing file at that path rather than clobbering
+// them — `dc render --write-layout` only ever computes node positions.
 func Save(path string, positions map[string]Position) error {
 	f := File{Views: map[string]View{
 		DefaultView: {Positions: positions},
 	}}
+	if existing, err := Load(path); err != nil {
+		return err
+	} else if existing != nil {
+		f.RenderStyle = existing.RenderStyle
+		if v, ok := existing.Views[DefaultView]; ok {
+			f.Views[DefaultView] = View{Positions: positions, NotePositions: v.NotePositions}
+		}
+	}
 	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode layout: %w", err)

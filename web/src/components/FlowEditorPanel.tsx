@@ -41,7 +41,15 @@ export function FlowEditorPanel({
   onDeleteStep,
 }: Props) {
   return (
-    <div data-testid="flow-editor-panel" style={{ marginBottom: 16, padding: 8, border: '1px solid #ccc' }}>
+    <div
+      data-testid="flow-editor-panel"
+      style={{
+        marginBottom: 'var(--dc-space-4)',
+        padding: 'var(--dc-space-2)',
+        border: '1px solid var(--dc-border)',
+        color: 'var(--dc-text)',
+      }}
+    >
       <button type="button" data-testid="new-flow" onClick={onNewFlow}>
         New flow
       </button>{' '}

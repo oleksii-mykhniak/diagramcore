@@ -17,9 +17,12 @@ interface Props {
 export function PropertiesPanel({ node, diagram, onUpdate, onDelete }: Props) {
   const customTypeNames = normalizeCustomTypes(diagram.diagram).map((t) => t.name);
   return (
-    <aside data-testid="properties-panel" style={{ padding: 12, borderLeft: '1px solid #ccc', minWidth: 220 }}>
-      <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>Node: {node.id}</h3>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+    <aside
+      data-testid="properties-panel"
+      style={{ padding: 'var(--dc-space-3)', borderLeft: '1px solid var(--dc-border)', minWidth: 220, color: 'var(--dc-text)' }}
+    >
+      <h3 style={{ fontSize: 'var(--dc-font-size-base)', margin: `0 0 var(--dc-space-2)` }}>Node: {node.id}</h3>
+      <label style={{ display: 'block', marginBottom: 'var(--dc-space-2)' }}>
         Label
         <input
           data-testid="prop-label"
@@ -28,7 +31,7 @@ export function PropertiesPanel({ node, diagram, onUpdate, onDelete }: Props) {
           style={{ display: 'block', width: '100%' }}
         />
       </label>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+      <label style={{ display: 'block', marginBottom: 'var(--dc-space-2)' }}>
         Type
         <select
           data-testid="prop-type"
@@ -48,7 +51,7 @@ export function PropertiesPanel({ node, diagram, onUpdate, onDelete }: Props) {
           ))}
         </select>
       </label>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+      <label style={{ display: 'block', marginBottom: 'var(--dc-space-2)' }}>
         Description
         <textarea
           data-testid="prop-description"
@@ -57,7 +60,7 @@ export function PropertiesPanel({ node, diagram, onUpdate, onDelete }: Props) {
           style={{ display: 'block', width: '100%' }}
         />
       </label>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+      <label style={{ display: 'block', marginBottom: 'var(--dc-space-2)' }}>
         Tags (comma-separated)
         <input
           data-testid="prop-tags"

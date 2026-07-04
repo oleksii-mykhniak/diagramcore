@@ -14,8 +14,8 @@ commit.
 New or touched components use **CSS classes and `var(--dc-*)` tokens only**.
 Never write a hex/rgb literal in a component's inline `style` or in new CSS.
 Enforced by `grep -rn "style={{[^}]*#[0-9a-fA-F]" web/src` — must stay empty
-(checked in step 10.13's final AC; partial coverage from 10.1 onward as each
-component is touched).
+(cleared as of step 10.13's final AC — the whole tree is tokenized, not
+just newly-touched components; keep it that way).
 
 The only place raw colors are allowed to originate is `theme.css` itself
 (the token definitions) and `svgExport.ts`'s `resolveThemeColors()` fallback
@@ -74,9 +74,10 @@ not the pixel value, in new styles (`padding: var(--dc-space-2)`, not `8px`).
 
 ## Typography
 
-`--dc-font-sans` — system font stack, used everywhere (no custom fonts in
-`clean` style; `sketch` style in step 10.12 adds a self-hosted handwritten
-subset, kept separate from this token).
+`--dc-font-sans` — system font stack, used everywhere including `sketch`
+style (step 10.12 roughens node/edge *geometry* only; a handwritten font
+for sketch text was descoped — see `docs/deviations.md`, step 10.12 — so
+both presets share this one token).
 `--dc-font-size-sm` (11px — edge labels, secondary text),
 `--dc-font-size-base` (13px — default UI/node text),
 `--dc-font-size-lg` (18px — headings).

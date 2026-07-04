@@ -1,6 +1,8 @@
 package layout
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -50,6 +52,44 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 		if gotPos != wantPos {
 			t.Errorf("position for %q = %+v, want %+v", id, gotPos, wantPos)
 		}
+	}
+}
+
+func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "auth-system.layout.json")
+	seed := File{
+		Views: map[string]View{
+			DefaultView: {
+				Positions:     map[string]Position{"User": {X: 0, Y: 0}},
+				NotePositions: map[string]Position{"note1": {X: 40, Y: 40}},
+			},
+		},
+		RenderStyle: "sketch",
+	}
+	data, err := json.MarshalIndent(seed, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal seed: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+
+	if err := Save(path, map[string]Position{"User": {X: 200, Y: 50}}); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	f, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if f.RenderStyle != "sketch" {
+		t.Errorf("RenderStyle = %q, want preserved %q", f.RenderStyle, "sketch")
+	}
+	if got := f.Views[DefaultView].NotePositions["note1"]; got != (Position{X: 40, Y: 40}) {
+		t.Errorf("NotePositions[note1] = %+v, want preserved {40 40}", got)
+	}
+	if got := f.Positions(DefaultView)["User"]; got != (Position{X: 200, Y: 50}) {
+		t.Errorf("Positions[User] = %+v, want the newly-saved {200 50}", got)
 	}
 }
 

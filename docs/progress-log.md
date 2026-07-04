@@ -1454,3 +1454,47 @@
   custom-types — custom shapes успадковують sketch без окремого коду)
   ✅; `npm test` (63) + `npm run build` (бандл +9.4KB gzip, в межах
   очікуваного) + `npm run lint` зелені.
+
+### Крок 10.13 — Полірування, StartScreen/Tour, фінальна регресія
+- Дата: 2026-07-04
+- Виконано: grep-чистка усіх залишкових inline-hex кольорів у
+  `web/src` (6 файлів: `PropertiesPanel.tsx`, `FlowEditorPanel.tsx`,
+  `Tour.tsx`, `FlowPlayer.tsx`, `LinksPanel.tsx`, `StartScreen.tsx` —
+  переведені на `var(--dc-*)` токени; `Tour`/`StartScreen`'s example
+  cards заразом отримали surface/border/radius-токени замість голих
+  значень). Нові e2e: `e2e/tour.spec.ts` (Tour через Help-меню — усі
+  тіпси до "Done"; і через `StartScreen`'s "Show tour" — "Skip");
+  `theme.spec.ts` доповнено smoke-тестом основного workflow
+  (відкрити/редагувати/note/sketch-стиль/export-діалог) під темною
+  темою — раніше вся e2e-регресія ганяла лише світлу.
+  Побічно виявлено і виправлено під час grep/regression-проходу
+  (не окремий крок плану, тому без нового запису в progress-log, лише
+  тут): (1) `schema/layout.schema.json` не встигав за форматом
+  layout-файлу — не мав `notePositions` (з 10.11) і `renderStyle` (з
+  10.12), а `additionalProperties: false` означав, що зовнішній
+  валідатор проти цієї схеми відхилив би цілком коректний
+  web-експортований layout-файл; схему доповнено. (2) Go
+  `internal/layout.Save` (використовується `dc render --write-layout`
+  і MCP `edit_diagram`) перезаписував увесь layout-файл лише з
+  `positions`, тихо відкидаючи `notePositions`/`renderStyle`, якщо вони
+  вже були у файлі (записані web-редактором) — виправлено: `Save`
+  тепер читає існуючий файл і зберігає ці поля, якщо вони були
+  (`TestSavePreservesWebEditorOnlyFields`, нова). `docs/format.md` і
+  `.claude/skills/design/SKILL.md` оновлені (renderStyle в описі
+  layout-файлу; SKILL.md's inline-hex правило позначене як "виконано
+  для всього дерева", прибрано застаріле згадування рукописного шрифту
+  для sketch-тексту). `docs/deviations.md` — Mermaid/generic-SVG імпорт
+  зафіксовані як свідомий descope фази (кандидати на майбутнє).
+- Коміт: (цей крок)
+- AC: `grep -rn "style={{[^}]*#[0-9a-fA-F]" web/src` — порожньо ✅;
+  Tour end-to-end (Playwright, 2 тести) ✅; повна регресія — `go test
+  ./...` + `go vet ./...` + `make wasm && make wasm-test` +
+  `./dc validate examples/*.dc.yaml` + `npm test` (63) + `npm run build`
+  + `npm run lint` + повний `npm run test:e2e` (59 специфікацій,
+  включно зі smoke-тестом у темній темі) — усе зелене ✅;
+  `.claude/skills/design/SKILL.md` синхронізовано з поточним станом
+  токенів/пресетів ✅.
+
+**Фаза 10 «Production-ready UI/UX» завершена** (кроки 10.1–10.13).
+Свідомі descope на майбутнє: Mermaid-імпорт, generic SVG-імпорт,
+рукописний шрифт для sketch-стилю (усі три — `docs/deviations.md`).
