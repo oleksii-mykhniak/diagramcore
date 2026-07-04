@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openDock } from './helpers/dock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
@@ -12,6 +13,7 @@ const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system
 // reliable). The OAuth flow's matching step then has no backing link
 // (DC004).
 async function deleteAuthServiceToOAuthProviderLink(page: import('@playwright/test').Page) {
+  await openDock(page, 'yaml');
   await page.waitForFunction(() => {
     const el = document.querySelector('[data-testid="yaml-panel"]') as unknown as { __cmView?: unknown };
     return Boolean(el?.__cmView);

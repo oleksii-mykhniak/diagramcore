@@ -58,13 +58,7 @@ interface EditorWorkspaceProps {
   onNewDiagram: (text: string) => void;
   grid: boolean;
   snap: boolean;
-  yamlPanelOpen: boolean;
-  onToggleYamlPanel: () => void;
-  yamlPanelHeight: number;
-  onYamlPanelHeightChange: (height: number) => void;
 }
-
-const YAML_PANEL_COLLAPSED_HEIGHT = 33;
 
 const RIGHT_DOCK_STORAGE_KEY = 'dc.ui.rightDock';
 
@@ -121,10 +115,6 @@ export function EditorWorkspace({
   onNewDiagram,
   grid,
   snap,
-  yamlPanelOpen,
-  onToggleYamlPanel,
-  yamlPanelHeight,
-  onYamlPanelHeightChange,
 }: EditorWorkspaceProps) {
   const highlight = current ? computeFlowHighlight(current.diagram, current.flowPlayerState) : null;
   const selectedNode = current?.diagram.nodes.find((n) => n.id === selectedNodeId) ?? null;
@@ -141,21 +131,6 @@ export function EditorWorkspace({
     setRightDockTab('properties');
     setRightDockCollapsed(false);
   }, [selectedNodeId]);
-
-  const onResizeHandleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const startY = e.clientY;
-    const startHeight = yamlPanelHeight;
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      onYamlPanelHeightChange(startHeight - (moveEvent.clientY - startY));
-    };
-    const onMouseUp = () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  };
 
   return (
     <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -243,6 +218,16 @@ export function EditorWorkspace({
                   />
                 </>
               }
+              yamlContent={
+                <div style={{ height: '100%', padding: 'var(--dc-space-2) var(--dc-space-3)' }}>
+                  <YamlPanel
+                    text={current.rawText}
+                    onCommit={onCommitYamlText}
+                    focusLine={focusRequest?.kind === 'line' ? focusRequest.line : null}
+                    focusNonce={focusRequest?.nonce}
+                  />
+                </div>
+              }
             />
           </div>
           <StatusBar
@@ -252,56 +237,6 @@ export function EditorWorkspace({
             linkCount={current.diagram.links.length}
           />
         </>
-      )}
-      {current && (
-        <div
-          style={{
-            flex: '0 0 auto',
-            height: yamlPanelOpen ? yamlPanelHeight : YAML_PANEL_COLLAPSED_HEIGHT,
-            borderTop: '1px solid var(--dc-border)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
-        >
-          {yamlPanelOpen && (
-            <div
-              data-testid="yaml-panel-resize-handle"
-              onMouseDown={onResizeHandleMouseDown}
-              style={{ height: 4, cursor: 'row-resize', background: 'var(--dc-border)', flex: '0 0 auto' }}
-            />
-          )}
-          <button
-            type="button"
-            data-testid="yaml-panel-toggle"
-            onClick={onToggleYamlPanel}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--dc-space-2)',
-              background: 'var(--dc-surface)',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 'var(--dc-space-1) var(--dc-space-3)',
-              fontSize: 'var(--dc-font-size-base)',
-              fontWeight: 600,
-              color: 'var(--dc-text)',
-              flex: '0 0 auto',
-            }}
-          >
-            {yamlPanelOpen ? '▾' : '▸'} YAML
-          </button>
-          {yamlPanelOpen && (
-            <div style={{ flex: 1, minHeight: 0, padding: '0 var(--dc-space-3) var(--dc-space-2)' }}>
-              <YamlPanel
-                text={current.rawText}
-                onCommit={onCommitYamlText}
-                focusLine={focusRequest?.kind === 'line' ? focusRequest.line : null}
-                focusNonce={focusRequest?.nonce}
-              />
-            </div>
-          )}
-        </div>
       )}
       {current && (
         <textarea

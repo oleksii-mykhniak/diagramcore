@@ -149,8 +149,6 @@ export default function App() {
         onToggleShowDescriptions={view.toggleShowDescriptions}
         renderStyle={current?.renderStyle ?? 'clean'}
         onToggleRenderStyle={() => setRenderStyle(current?.renderStyle === 'sketch' ? 'clean' : 'sketch')}
-        yamlPanelOpen={view.yamlPanelOpen}
-        onToggleYamlPanel={view.toggleYamlPanel}
         onImportDrawio={(file) => void onImportDrawio(file)}
       />
       <EditorWorkspace
@@ -193,10 +191,6 @@ export default function App() {
         onNewDiagram={(text) => void openTextAsDiagram('untitled.dc.yaml', text)}
         grid={view.grid}
         snap={view.snap}
-        yamlPanelOpen={view.yamlPanelOpen}
-        onToggleYamlPanel={view.toggleYamlPanel}
-        yamlPanelHeight={view.yamlPanelHeight}
-        onYamlPanelHeightChange={view.setYamlPanelHeight}
       />
       {showTour && <Tour onClose={() => setShowTour(false)} />}
       {showExportDialog && (

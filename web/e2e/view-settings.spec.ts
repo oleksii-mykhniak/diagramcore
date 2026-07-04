@@ -2,32 +2,29 @@ import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openMenu } from './helpers/menu';
+import { openDock } from './helpers/dock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
 
-test('collapsing the YAML panel shrinks it and grows the canvas; state and content survive reload', async ({ page }) => {
+test('the YAML dock tab is hidden until selected, then shows the document; collapsing the whole dock grows the canvas', async ({
+  page,
+}) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  const openHeight = (await page.getByTestId('reactflow-canvas').boundingBox())!.height;
-  await expect(page.getByTestId('yaml-panel')).toBeVisible();
-
-  await page.getByTestId('yaml-panel-toggle').click();
   await expect(page.getByTestId('yaml-panel')).not.toBeVisible();
-  const collapsedHeight = (await page.getByTestId('reactflow-canvas').boundingBox())!.height;
-  expect(collapsedHeight).toBeGreaterThan(openHeight);
-
-  await page.reload();
-  await page.getByTestId('file-input').setInputFiles(authSystemPath);
-  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
-  await expect(page.getByTestId('yaml-panel')).not.toBeVisible();
-
-  await page.getByTestId('yaml-panel-toggle').click();
+  await openDock(page, 'yaml');
   await expect(page.getByTestId('yaml-panel')).toBeVisible();
   const text = await page.getByTestId('yaml-panel').locator('.cm-content').innerText();
   expect(text).toContain('id: User');
+
+  const openWidth = (await page.getByTestId('reactflow-canvas').boundingBox())!.width;
+  await page.getByTestId('right-dock-toggle').click();
+  await expect(page.getByTestId('yaml-panel')).not.toBeVisible();
+  const collapsedWidth = (await page.getByTestId('reactflow-canvas').boundingBox())!.width;
+  expect(collapsedWidth).toBeGreaterThan(openWidth);
 });
 
 test('View > Grid off removes the background dots; settings survive reload', async ({ page }) => {

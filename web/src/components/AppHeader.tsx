@@ -42,8 +42,6 @@ interface AppHeaderProps {
   onToggleShowDescriptions: () => void;
   renderStyle: 'clean' | 'sketch';
   onToggleRenderStyle: () => void;
-  yamlPanelOpen: boolean;
-  onToggleYamlPanel: () => void;
   onImportDrawio: (file: File) => void;
 }
 
@@ -111,8 +109,6 @@ export function AppHeader({
   onToggleShowDescriptions,
   renderStyle,
   onToggleRenderStyle,
-  yamlPanelOpen,
-  onToggleYamlPanel,
   onImportDrawio,
 }: AppHeaderProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -210,11 +206,6 @@ export function AppHeader({
           label: showDescriptions ? 'Show descriptions: on' : 'Show descriptions: off',
           testId: 'menu-show-descriptions-toggle',
           onSelect: onToggleShowDescriptions,
-        },
-        {
-          label: yamlPanelOpen ? 'YAML panel: shown' : 'YAML panel: hidden',
-          testId: 'menu-yaml-panel-toggle',
-          onSelect: onToggleYamlPanel,
         },
         {
           label: `Diagram style: ${renderStyle === 'sketch' ? 'Sketch' : 'Clean'}`,

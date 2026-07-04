@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openDock } from './helpers/dock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
@@ -52,6 +53,7 @@ test('a visual edit and a YAML-panel edit undo in the correct order through one 
   // Text edit #2 in the YAML panel: add a second node via a precise
   // CodeMirror transaction (see problems-panel.spec.ts for why not
   // simulated keystrokes).
+  await openDock(page, 'yaml');
   await page.waitForFunction(() => {
     const el = document.querySelector('[data-testid="yaml-panel"]') as unknown as { __cmView?: unknown };
     return Boolean(el?.__cmView);

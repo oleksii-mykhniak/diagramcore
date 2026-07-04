@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openDock } from './helpers/dock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
@@ -14,6 +15,7 @@ test('typing a new node into the YAML panel adds it to the canvas without reload
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
+  await openDock(page, 'yaml');
   await expect(page.getByTestId('yaml-panel')).toBeVisible();
 
   // Click at the end of the first node's "type: actor" line and insert a
@@ -44,11 +46,16 @@ links: []
   const file = { name: 'commented.dc.yaml', mimeType: 'application/x-yaml', buffer: Buffer.from(withComment) };
   await page.getByTestId('file-input').setInputFiles(file);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
+  await openDock(page, 'yaml');
   await expect(page.getByTestId('yaml-panel')).toBeVisible();
 
   await dropPaletteItem(page, 'storage');
   await expect(page.getByTestId('rf-node-storage1')).toBeVisible();
 
+  // Dropping a node selects it, which switches the dock to Properties
+  // (as it should — see view.spec's node-selection behavior); switch back
+  // to inspect the YAML.
+  await openDock(page, 'yaml');
   const panelText = await page.getByTestId('yaml-panel').locator('.cm-content').innerText();
   expect(panelText).toContain('keep me');
   expect(panelText).toContain('storage1');
@@ -74,6 +81,7 @@ test('typing syntactically broken YAML keeps the canvas on the previous state an
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
+  await openDock(page, 'yaml');
 
   const nodeCountBefore = await page.locator('[data-testid^="rf-node-"]').count();
 

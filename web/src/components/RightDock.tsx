@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 
-export type RightDockTab = 'properties' | 'links' | 'flows';
+export type RightDockTab = 'properties' | 'links' | 'flows' | 'yaml';
 
 const TABS: { id: RightDockTab; label: string }[] = [
   { id: 'properties', label: 'Properties' },
   { id: 'links', label: 'Links' },
   { id: 'flows', label: 'Flows' },
+  { id: 'yaml', label: 'YAML' },
 ];
 
 interface RightDockProps {
@@ -16,6 +17,7 @@ interface RightDockProps {
   propertiesContent: ReactNode;
   linksContent: ReactNode;
   flowsContent: ReactNode;
+  yamlContent: ReactNode;
 }
 
 /** Right-hand dock (PLAN.md step 10.4): tabbed Properties/Links/Flows,
@@ -28,12 +30,13 @@ export function RightDock({
   propertiesContent,
   linksContent,
   flowsContent,
+  yamlContent,
 }: RightDockProps) {
   return (
     <aside
       data-testid="right-dock"
       style={{
-        width: collapsed ? 'auto' : 300,
+        width: collapsed ? 'auto' : tab === 'yaml' ? 420 : 300,
         borderLeft: '1px solid var(--dc-border)',
         background: 'var(--dc-surface)',
         color: 'var(--dc-text)',
@@ -86,6 +89,7 @@ export function RightDock({
           {tab === 'properties' && propertiesContent}
           {tab === 'links' && linksContent}
           {tab === 'flows' && flowsContent}
+          {tab === 'yaml' && yamlContent}
         </div>
       )}
     </aside>

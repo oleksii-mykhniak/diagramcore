@@ -39,3 +39,27 @@
   `npx playwright test` (59/59, включно з `drag-layout.spec.ts` і
   `notes.spec.ts`) — усе зелене.
 - Commit: `phase11-step1: перф — некеровані вузли RF, коміт позиції на dragStop`.
+
+## phase11-step2 — YAML у правий док — 2026-07-04
+
+- `RightDock` отримав 4-ту вкладку `yaml` (тип `RightDockTab` розширено);
+  ширший (420px замість 300) коли активна ця вкладка — CodeMirror
+  потребує більше простору, ніж списки Properties/Links/Flows.
+- Нижня панель у `EditorWorkspace` (toggle-кнопка, resize-handle,
+  висота, `yamlPanelOpen/Height` державні пропси) повністю видалена;
+  `YamlPanel` тепер рендериться як `yamlContent` дока. Відповідний стан
+  (`dc.ui.yamlPanel`, `dc.ui.yamlPanelHeight`) прибрано з
+  `useViewSettings`; View-пункт меню "YAML panel: shown/hidden" видалено
+  з `AppHeader` (керування — тільки через клік по вкладці/колапс дока,
+  як і Links/Flows).
+- Вибір вузла (клік по канві чи Problems-панель) як і раніше перемикає
+  док на Properties — це коректно "виштовхує" з вкладки YAML при
+  створенні/виборі вузла (підтверджено в e2e).
+- e2e: доданий `'yaml'` у `helpers/dock.ts`; усі спеки, що раніше читали
+  `yaml-panel` напряму (`yaml-panel.spec.ts`, `undo-redo.spec.ts`,
+  `problems-panel.spec.ts`), тепер спершу викликають
+  `openDock(page, 'yaml')`. Тест колапсу нижньої панелі в
+  `view-settings.spec.ts` замінено на тест вкладки+колапсу дока.
+- Регресія: `npm test` (64/64), `npm run build`, повний
+  `npx playwright test` (59/59).
+- Commit: `phase11-step2: YAML-панель у правий док`.
