@@ -1,7 +1,7 @@
 import { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, NodeResizer, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import { NODE_WIDTH, NODE_HEIGHT } from '../layout';
+import { MIN_NODE_HEIGHT, MIN_NODE_WIDTH, NODE_WIDTH, NODE_HEIGHT } from '../layout';
 import { resolveShape } from '../shapes';
 import type { RenderStyle } from '../shapes';
 import { CUSTOM_TYPE_ICONS } from '../customTypeIcons';
@@ -22,6 +22,9 @@ export interface DcNodeData extends Record<string, unknown> {
   showDescription?: boolean;
   /** View → "Diagram style" (PLAN.md step 10.12). */
   renderStyle?: RenderStyle;
+  /** Fires once, on resize release (mirrors `onNodeDragStop`'s
+   * single-commit-per-gesture pattern from step 11.1). */
+  onResizeEnd?: (size: { width: number; height: number }) => void;
 }
 
 interface ShellProps {
@@ -30,6 +33,12 @@ interface ShellProps {
   nodeType: string;
   shapeName: string;
   className: string;
+  /** Effective size (PLAN3.md step 11.4) — the manually-resized size if
+   * any, else the base default; a top-level `Node.width/height` field
+   * (not `data`), since that's what React Flow's own `NodeResizer`
+   * writes to live during a drag (see `FlowCanvas.tsx`). */
+  width: number;
+  height: number;
 }
 
 /** Shared shell for all node types (PLAN.md step 6.1, geometry unified in
@@ -43,7 +52,7 @@ interface ShellProps {
  * custom type with a `shape:` override). Label, handles, the details
  * marker and an optional icon sit on top as an absolutely-positioned
  * overlay. */
-function NodeShell({ id, data, nodeType, shapeName, className }: ShellProps) {
+function NodeShell({ id, data, nodeType, shapeName, className, width, height }: ShellProps) {
   const shape = resolveShape(shapeName);
   const stroke = data.isActive
     ? 'var(--dc-flow-active)'
@@ -54,7 +63,7 @@ function NodeShell({ id, data, nodeType, shapeName, className }: ShellProps) {
         : 'var(--dc-node-border)';
   const fill = data.color ?? (nodeType === 'external' ? 'var(--dc-node-external-fill)' : 'var(--dc-node-fill)');
   const strokeWidth = data.hasDetails ? 3 : 1.5;
-  const svgInner = shape.renderSvgInner(NODE_WIDTH, NODE_HEIGHT, { fill, stroke, strokeWidth, renderStyle: data.renderStyle });
+  const svgInner = shape.renderSvgInner(width, height, { fill, stroke, strokeWidth, renderStyle: data.renderStyle });
   const IconComponent = data.icon ? CUSTOM_TYPE_ICONS[data.icon] : null;
 
   return (
@@ -66,11 +75,17 @@ function NodeShell({ id, data, nodeType, shapeName, className }: ShellProps) {
       data-visited={data.isVisited || undefined}
       data-selected={data.isSelected || undefined}
       className={`rf-node ${className}`}
-      style={{ position: 'relative', width: NODE_WIDTH, height: NODE_HEIGHT }}
+      style={{ position: 'relative', width, height }}
     >
+      <NodeResizer
+        isVisible={data.isSelected}
+        minWidth={MIN_NODE_WIDTH}
+        minHeight={MIN_NODE_HEIGHT}
+        onResizeEnd={(_, params) => data.onResizeEnd?.({ width: params.width, height: params.height })}
+      />
       <svg
-        width={NODE_WIDTH}
-        height={NODE_HEIGHT}
+        width={width}
+        height={height}
         style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: svgInner }}
@@ -122,38 +137,108 @@ function NodeShell({ id, data, nodeType, shapeName, className }: ShellProps) {
   );
 }
 
-export const ActorNode = memo(function ActorNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="actor" shapeName="actor" className="rf-node--actor" />;
+export const ActorNode = memo(function ActorNode({ id, data, width, height }: NodeProps) {
+  return (
+    <NodeShell
+      id={id}
+      data={data as DcNodeData}
+      nodeType="actor"
+      shapeName="actor"
+      className="rf-node--actor"
+      width={width ?? NODE_WIDTH}
+      height={height ?? NODE_HEIGHT}
+    />
+  );
 });
 
-export const ServiceNode = memo(function ServiceNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="service" shapeName="service" className="rf-node--service" />;
+export const ServiceNode = memo(function ServiceNode({ id, data, width, height }: NodeProps) {
+  return (
+    <NodeShell
+      id={id}
+      data={data as DcNodeData}
+      nodeType="service"
+      shapeName="service"
+      className="rf-node--service"
+      width={width ?? NODE_WIDTH}
+      height={height ?? NODE_HEIGHT}
+    />
+  );
 });
 
-export const StorageNode = memo(function StorageNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="storage" shapeName="storage" className="rf-node--storage" />;
+export const StorageNode = memo(function StorageNode({ id, data, width, height }: NodeProps) {
+  return (
+    <NodeShell
+      id={id}
+      data={data as DcNodeData}
+      nodeType="storage"
+      shapeName="storage"
+      className="rf-node--storage"
+      width={width ?? NODE_WIDTH}
+      height={height ?? NODE_HEIGHT}
+    />
+  );
 });
 
-export const QueueNode = memo(function QueueNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="queue" shapeName="queue" className="rf-node--queue" />;
+export const QueueNode = memo(function QueueNode({ id, data, width, height }: NodeProps) {
+  return (
+    <NodeShell
+      id={id}
+      data={data as DcNodeData}
+      nodeType="queue"
+      shapeName="queue"
+      className="rf-node--queue"
+      width={width ?? NODE_WIDTH}
+      height={height ?? NODE_HEIGHT}
+    />
+  );
 });
 
-export const ExternalNode = memo(function ExternalNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="external" shapeName="external" className="rf-node--external" />;
+export const ExternalNode = memo(function ExternalNode({ id, data, width, height }: NodeProps) {
+  return (
+    <NodeShell
+      id={id}
+      data={data as DcNodeData}
+      nodeType="external"
+      shapeName="external"
+      className="rf-node--external"
+      width={width ?? NODE_WIDTH}
+      height={height ?? NODE_HEIGHT}
+    />
+  );
 });
 
-export const ComponentNode = memo(function ComponentNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="component" shapeName="component" className="rf-node--component" />;
+export const ComponentNode = memo(function ComponentNode({ id, data, width, height }: NodeProps) {
+  return (
+    <NodeShell
+      id={id}
+      data={data as DcNodeData}
+      nodeType="component"
+      shapeName="component"
+      className="rf-node--component"
+      width={width ?? NODE_WIDTH}
+      height={height ?? NODE_HEIGHT}
+    />
+  );
 });
 
 /** Renders any custom (non-base-six) type — PLAN.md step 10.8. The real
  * dc type name and resolved shape/color/icon are precomputed by
  * `FlowCanvas` (which has the diagram's `custom_types`) and threaded
  * through `data`. */
-export const CustomNode = memo(function CustomNode({ id, data }: NodeProps) {
+export const CustomNode = memo(function CustomNode({ id, data, width, height }: NodeProps) {
   const d = data as DcNodeData;
   const type = d.customType ?? 'component';
-  return <NodeShell id={id} data={d} nodeType={type} shapeName={d.shape ?? 'component'} className="rf-node--custom" />;
+  return (
+    <NodeShell
+      id={id}
+      data={d}
+      nodeType={type}
+      shapeName={d.shape ?? 'component'}
+      className="rf-node--custom"
+      width={width ?? NODE_WIDTH}
+      height={height ?? NODE_HEIGHT}
+    />
+  );
 });
 
 export interface NoteNodeData extends Record<string, unknown> {

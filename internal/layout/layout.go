@@ -15,6 +15,13 @@ type Position struct {
 	Y float64 `json:"y"`
 }
 
+// Size is a node's manually-resized width/height (phase 11, step 11.4),
+// in the same SVG/D2 canvas units as Position.
+type Size struct {
+	Width  float64 `json:"w"`
+	Height float64 `json:"h"`
+}
+
 // View holds the positions for one named view. v0 only uses "default".
 type View struct {
 	Positions map[string]Position `json:"positions"`
@@ -22,6 +29,9 @@ type View struct {
 	// 10.11) — written by the web editor, not by this package's Save;
 	// round-tripped so `dc render --write-layout` doesn't clobber them.
 	NotePositions map[string]Position `json:"notePositions,omitempty"`
+	// Sizes holds manually-resized node dimensions (phase 11, step 11.4)
+	// — same round-tripping rule as NotePositions above.
+	Sizes map[string]Size `json:"sizes,omitempty"`
 }
 
 // File is the decoded contents of a <name>.layout.json file.
@@ -98,7 +108,7 @@ func Save(path string, positions map[string]Position) error {
 	} else if existing != nil {
 		f.RenderStyle = existing.RenderStyle
 		if v, ok := existing.Views[DefaultView]; ok {
-			f.Views[DefaultView] = View{Positions: positions, NotePositions: v.NotePositions}
+			f.Views[DefaultView] = View{Positions: positions, NotePositions: v.NotePositions, Sizes: v.Sizes}
 		}
 	}
 	data, err := json.MarshalIndent(f, "", "  ")

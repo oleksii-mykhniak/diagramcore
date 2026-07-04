@@ -6,7 +6,7 @@ import type { ValidationError } from '../wasmValidate';
 import { computeLayout } from '../layout';
 import type { DiagramLayout } from '../layout';
 import type { Diagram, DiagramNode } from '../types';
-import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from '../layoutFile';
+import { buildLayoutFile, downloadLayoutFile, fromLayoutSizes, layoutFileName, parseLayoutFile, toLayoutSizes } from '../layoutFile';
 import type { LayoutPosition, RenderStyle } from '../layoutFile';
 import { initialFlowPlayerState } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
@@ -32,6 +32,10 @@ export interface DiagramLevel {
    * since notes aren't diagram nodes and have no auto-layout; every note
    * has an entry, defaulted on load if the layout file didn't have one. */
   notePositions: Record<string, LayoutPosition>;
+  /** Manually-resized node dimensions (PLAN3.md step 11.4) — like
+   * `positions`, only nodes the user actually resized get an entry;
+   * everything else keeps the auto-layout default size. */
+  sizes: Record<string, { width: number; height: number }>;
   /** Diagram style preset (PLAN.md step 10.12), persisted in the layout
    * file/share link — see `layoutFile.ts`'s `RenderStyle`. */
   renderStyle: RenderStyle;
@@ -138,6 +142,7 @@ export function useDiagramStack() {
       notePositions: Object.fromEntries(
         (parsed.notes ?? []).map((note, i) => [note.id, { x: 40 + i * 30, y: 40 + i * 30 }]),
       ),
+      sizes: {},
       renderStyle: 'clean',
       savedRawText: text,
     };
@@ -272,6 +277,7 @@ export function useDiagramStack() {
           level.positions = { ...level.positions, ...importedPositions };
           level.manualPositionIds = new Set(Object.keys(importedPositions));
           level.notePositions = { ...level.notePositions, ...(imported.views.default?.notePositions ?? {}) };
+          level.sizes = { ...level.sizes, ...fromLayoutSizes(imported.views.default?.sizes) };
           if (imported.renderStyle) level.renderStyle = imported.renderStyle;
         }
         levelRef.current = level;
@@ -295,7 +301,10 @@ export function useDiagramStack() {
   const onSave = useCallback(async () => {
     if (!current) return;
     const hasLayoutToSave =
-      current.manualPositionIds.size > 0 || Boolean(current.diagram.notes?.length) || current.renderStyle !== 'clean';
+      current.manualPositionIds.size > 0 ||
+      Boolean(current.diagram.notes?.length) ||
+      current.renderStyle !== 'clean' ||
+      Object.keys(current.sizes).length > 0;
     // A real Save makes any pending/stored local autosave draft moot
     // (PLAN3.md step 11.3) — cancel the debounced write and clear
     // whatever's already in IndexedDB for this file.
@@ -306,7 +315,7 @@ export function useDiagramStack() {
       if (hasLayoutToSave) {
         downloadLayoutFile(
           layoutFileName(current.fileName),
-          buildLayoutFile(current.positions, current.notePositions, current.renderStyle),
+          buildLayoutFile(current.positions, current.notePositions, current.renderStyle, toLayoutSizes(current.sizes)),
         );
       }
       updateCurrentLevel({ savedRawText: current.rawText });
@@ -321,7 +330,11 @@ export function useDiagramStack() {
       if (layoutHandle) {
         await writeTextToHandle(
           layoutHandle,
-          JSON.stringify(buildLayoutFile(current.positions, current.notePositions, current.renderStyle), null, 2),
+          JSON.stringify(
+            buildLayoutFile(current.positions, current.notePositions, current.renderStyle, toLayoutSizes(current.sizes)),
+            null,
+            2,
+          ),
         );
       }
     }
@@ -353,6 +366,7 @@ export function useDiagramStack() {
       positions: current.positions,
       notePositions: current.notePositions,
       renderStyle: current.renderStyle,
+      sizes: current.sizes,
     });
   }, [current]);
 
@@ -367,6 +381,7 @@ export function useDiagramStack() {
     level.positions = { ...level.positions, ...record.positions };
     level.manualPositionIds = new Set(Object.keys(record.positions));
     level.notePositions = { ...level.notePositions, ...record.notePositions };
+    level.sizes = { ...level.sizes, ...record.sizes };
     level.renderStyle = record.renderStyle;
     levelRef.current = level;
     resetHistory();
@@ -395,6 +410,7 @@ export function useDiagramStack() {
         level.positions = { ...level.positions, ...importedPositions };
         level.manualPositionIds = new Set(Object.keys(importedPositions));
         level.notePositions = { ...level.notePositions, ...(shared.layout.views.default?.notePositions ?? {}) };
+        level.sizes = { ...level.sizes, ...fromLayoutSizes(shared.layout.views.default?.sizes) };
         if (shared.layout.renderStyle) level.renderStyle = shared.layout.renderStyle;
       }
       levelRef.current = level;

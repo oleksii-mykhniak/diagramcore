@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { generateContext } from '../wasmValidate';
-import { buildLayoutFile, downloadLayoutFile, layoutFileName } from '../layoutFile';
+import { buildLayoutFile, downloadLayoutFile, layoutFileName, toLayoutSizes } from '../layoutFile';
+import { applyNodeSizes } from '../layout';
 import { computeFlowHighlight, flowStepFrames, resolveFlowSteps } from '../flowPlayer';
 import { downloadBlob, renderDiagramSVGString, svgStringToRasterBlob } from '../svgExport';
 import { zipSync } from 'fflate';
@@ -33,20 +34,23 @@ export function useDiagramExports(current: DiagramLevel | null) {
     if (!current) return;
     downloadLayoutFile(
       layoutFileName(current.fileName),
-      buildLayoutFile(current.positions, current.notePositions, current.renderStyle),
+      buildLayoutFile(current.positions, current.notePositions, current.renderStyle, toLayoutSizes(current.sizes)),
     );
   }, [current]);
 
   /** File → Export image… (PLAN.md step 10.9): PNG/JPG rasterize the SVG
    * at `settings.scale`; SVG downloads the string directly (`viewBox`
-   * untouched by scale — that only affects the raster canvas size). */
+   * untouched by scale — that only affects the raster canvas size).
+   * `applyNodeSizes` (PLAN3.md step 11.4) folds in any manually-resized
+   * node dimensions the same way the canvas draws them. */
   const onExportImage = useCallback(
     async (settings: ExportSettings) => {
       if (!current) return;
       const highlight = computeFlowHighlight(current.diagram, current.flowPlayerState);
+      const layout = applyNodeSizes(current.layout, current.sizes, current.positions);
       const svg = renderDiagramSVGString(
         current.diagram,
-        current.layout,
+        layout,
         current.positions,
         { activeStep: highlight.activeStep ?? undefined, visitedStepKeys: highlight.visitedStepKeys },
         { includeGrid: settings.includeGrid, includeDescriptions: settings.includeDescriptions, renderStyle: current.renderStyle },
@@ -58,7 +62,7 @@ export function useDiagramExports(current: DiagramLevel | null) {
         downloadBlob(`${base}.svg`, new Blob([svg], { type: 'image/svg+xml' }));
         return;
       }
-      const blob = await svgStringToRasterBlob(svg, current.layout.width, current.layout.height, {
+      const blob = await svgStringToRasterBlob(svg, layout.width, layout.height, {
         scale: settings.scale,
         background: settings.background,
         mime: rasterMime(settings.format),
@@ -76,11 +80,12 @@ export function useDiagramExports(current: DiagramLevel | null) {
       const { steps } = resolveFlowSteps(flow, current.flowPlayerState.choices);
       const frames = flowStepFrames(steps);
       const ext = extensionFor(settings.format);
+      const layout = applyNodeSizes(current.layout, current.sizes, current.positions);
       const zipInput: Record<string, Uint8Array> = {};
       for (const frame of frames) {
         const svg = renderDiagramSVGString(
           current.diagram,
-          current.layout,
+          layout,
           current.positions,
           { activeStep: frame.activeStep, visitedStepKeys: frame.visitedStepKeys },
           { includeGrid: settings.includeGrid, includeDescriptions: settings.includeDescriptions, renderStyle: current.renderStyle },
@@ -91,7 +96,7 @@ export function useDiagramExports(current: DiagramLevel | null) {
           zipInput[`${frame.name}.svg`] = new TextEncoder().encode(svg);
           continue;
         }
-        const blob = await svgStringToRasterBlob(svg, current.layout.width, current.layout.height, {
+        const blob = await svgStringToRasterBlob(svg, layout.width, layout.height, {
           scale: settings.scale,
           background: settings.background,
           mime: rasterMime(settings.format),
@@ -113,8 +118,11 @@ export function useDiagramExports(current: DiagramLevel | null) {
   const onShare = useCallback(() => {
     if (!current) return;
     const layout =
-      current.manualPositionIds.size > 0 || (current.diagram.notes?.length ?? 0) > 0 || current.renderStyle !== 'clean'
-        ? buildLayoutFile(current.positions, current.notePositions, current.renderStyle)
+      current.manualPositionIds.size > 0 ||
+      (current.diagram.notes?.length ?? 0) > 0 ||
+      current.renderStyle !== 'clean' ||
+      Object.keys(current.sizes).length > 0
+        ? buildLayoutFile(current.positions, current.notePositions, current.renderStyle, toLayoutSizes(current.sizes))
         : null;
     const { fragment, size } = encodeShareState({ fileName: current.fileName, yaml: current.rawText, layout });
     if (size > SHARE_URL_SIZE_LIMIT) {

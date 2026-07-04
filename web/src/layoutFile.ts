@@ -7,6 +7,13 @@ export interface LayoutPosition {
   y: number;
 }
 
+/** A manually-resized node's dimensions (PLAN3.md step 11.4) — mirrors
+ * `internal/layout.Size` (Go), keys `w`/`h` to match its JSON tags. */
+export interface LayoutSize {
+  w: number;
+  h: number;
+}
+
 export type RenderStyle = 'clean' | 'sketch';
 
 export interface LayoutFile {
@@ -16,6 +23,10 @@ export interface LayoutFile {
       /** Note positions (PLAN.md step 10.11) — separate from `positions`
        * since notes aren't diagram nodes. */
       notePositions?: Record<string, LayoutPosition>;
+      /** Manually-resized node dimensions (PLAN3.md step 11.4) — only
+       * nodes the user actually resized get an entry; everything else
+       * keeps the auto-layout default size. */
+      sizes?: Record<string, LayoutSize>;
     };
   };
   /** Diagram style preset (PLAN.md step 10.12) — top-level, not per-view,
@@ -30,13 +41,29 @@ export function buildLayoutFile(
   positions: Record<string, LayoutPosition>,
   notePositions?: Record<string, LayoutPosition>,
   renderStyle?: RenderStyle,
+  sizes?: Record<string, LayoutSize>,
 ): LayoutFile {
   return {
     views: {
-      [DEFAULT_VIEW]: notePositions ? { positions, notePositions } : { positions },
+      [DEFAULT_VIEW]: {
+        positions,
+        ...(notePositions ? { notePositions } : {}),
+        ...(sizes && Object.keys(sizes).length > 0 ? { sizes } : {}),
+      },
     },
     ...(renderStyle && renderStyle !== 'clean' ? { renderStyle } : {}),
   };
+}
+
+/** `DiagramLevel.sizes` (`{width,height}`) <-> `LayoutFile`'s `{w,h}` —
+ * the level keeps the verbose, self-documenting shape; the file keeps
+ * the terse one `internal/layout.Size` (Go) already committed to. */
+export function toLayoutSizes(sizes: Record<string, { width: number; height: number }>): Record<string, LayoutSize> {
+  return Object.fromEntries(Object.entries(sizes).map(([id, s]) => [id, { w: s.width, h: s.height }]));
+}
+
+export function fromLayoutSizes(sizes?: Record<string, LayoutSize>): Record<string, { width: number; height: number }> {
+  return Object.fromEntries(Object.entries(sizes ?? {}).map(([id, s]) => [id, { width: s.w, height: s.h }]));
 }
 
 export function parseLayoutFile(text: string): LayoutFile {

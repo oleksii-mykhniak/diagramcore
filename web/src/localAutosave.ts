@@ -10,6 +10,9 @@ export interface AutosaveData {
   positions: Record<string, LayoutPosition>;
   notePositions: Record<string, LayoutPosition>;
   renderStyle: RenderStyle;
+  /** Manually-resized node dimensions (PLAN3.md step 11.4). Optional so
+   * records written before this field existed still decode. */
+  sizes?: Record<string, { width: number; height: number }>;
 }
 
 export interface AutosaveRecord extends AutosaveData {

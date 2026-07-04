@@ -40,6 +40,12 @@ interface Props {
    * live only in React Flow's own internal node state; the document
    * (and thus the rest of the app) only re-renders when the drag ends. */
   onNodeDragStop?: (id: string, pos: LayoutPosition) => void;
+  /** Manually-resized node dimensions (PLAN3.md step 11.4) — like
+   * `positions`, only nodes the user actually resized get an entry. */
+  sizes?: Record<string, { width: number; height: number }>;
+  /** Committed once per resize gesture, on release (same single-commit
+   * pattern as `onNodeDragStop`). */
+  onNodeResizeStop?: (id: string, size: { width: number; height: number }) => void;
   visitedStepKeys?: Set<string>;
   activeStep?: ActiveStep;
   onNodeDoubleClick?: (node: DiagramNode) => void;
@@ -80,6 +86,8 @@ function FlowCanvasInner({
   layout,
   positions,
   onNodeDragStop,
+  sizes,
+  onNodeResizeStop,
   visitedStepKeys,
   activeStep,
   onNodeDoubleClick,
@@ -127,6 +135,7 @@ function FlowCanvasInner({
       layout.nodes.map((n) => {
         const dcNode = nodeById.get(n.id);
         const pos = positions[n.id] ?? n;
+        const size = sizes?.[n.id] ?? { width: n.width, height: n.height };
         const type = dcNode?.type ?? 'component';
         const rfType = resolveNodeType(type);
         const visual = rfType === 'custom' ? nodeVisual(diagram, type) : null;
@@ -134,6 +143,8 @@ function FlowCanvasInner({
           id: n.id,
           type: rfType,
           position: { x: pos.x, y: pos.y },
+          width: size.width,
+          height: size.height,
           data: {
             label: dcNode ? nodeLabel(dcNode) : n.id,
             hasDetails: Boolean(dcNode?.details),
@@ -143,11 +154,24 @@ function FlowCanvasInner({
             description: dcNode?.description,
             showDescription: showDescriptions,
             renderStyle,
+            onResizeEnd: (nextSize: { width: number; height: number }) => onNodeResizeStop?.(n.id, nextSize),
             ...(visual ? { customType: type, shape: visual.shape.name, color: visual.color, icon: visual.icon } : {}),
           },
         };
       }),
-    [layout.nodes, nodeById, positions, activeStep, activeKey, selectedNodeId, diagram, showDescriptions, renderStyle],
+    [
+      layout.nodes,
+      nodeById,
+      positions,
+      sizes,
+      activeStep,
+      activeKey,
+      selectedNodeId,
+      diagram,
+      showDescriptions,
+      renderStyle,
+      onNodeResizeStop,
+    ],
   );
 
   const rfNoteNodes: Node<NoteNodeData>[] = useMemo(

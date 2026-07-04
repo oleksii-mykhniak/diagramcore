@@ -6,7 +6,7 @@ import { validateDiagram } from '../wasmValidate';
 import type { ValidationError } from '../wasmValidate';
 import { computeLayout } from '../layout';
 import type { Diagram, DiagramNode, DiagramLink, DiagramNoteDef } from '../types';
-import { parseLayoutFile } from '../layoutFile';
+import { fromLayoutSizes, parseLayoutFile } from '../layoutFile';
 import type { LayoutPosition } from '../layoutFile';
 import type { FlowPlayerState } from '../flowPlayer';
 import { applyPatch } from '../yamlPatch';
@@ -55,7 +55,7 @@ export function useDiagramEditing(
         const newText = applyPatch(level.rawText, ops);
         const newDiagram = parseDiagram(newText);
         const newErrors = await validateDiagram(newText);
-        const recomputed = await computeLayout(newDiagram);
+        const recomputed = await computeLayout(newDiagram, level.sizes);
         const manualPositionIds = new Set(level.manualPositionIds);
         const positions: Record<string, LayoutPosition> = {};
         for (const n of recomputed.nodes) {
@@ -101,7 +101,7 @@ export function useDiagramEditing(
           return;
         }
         const newErrors = await validateDiagram(text);
-        const recomputed = await computeLayout(newDiagram);
+        const recomputed = await computeLayout(newDiagram, level.sizes);
         const manualPositionIds = new Set(level.manualPositionIds);
         const positions: Record<string, LayoutPosition> = {};
         for (const n of recomputed.nodes) {
@@ -258,6 +258,16 @@ export function useDiagramEditing(
     [current, updateCurrentLevel],
   );
 
+  /** Node resize (PLAN3.md step 11.4): committed once, on resize-stop —
+   * same pattern as `onNodeDrag`'s single commit at drag-stop. */
+  const onNodeResizeStop = useCallback(
+    (id: string, size: { width: number; height: number }) => {
+      if (!current) return;
+      updateCurrentLevel({ sizes: { ...current.sizes, [id]: size } });
+    },
+    [current, updateCurrentLevel],
+  );
+
   const recordingFlow =
     current?.flowPlayerState.flowIndex != null ? current.diagram.flows?.[current.flowPlayerState.flowIndex] ?? null : null;
 
@@ -349,7 +359,7 @@ export function useDiagramEditing(
 
   const onRelayout = useCallback(async () => {
     if (!current) return;
-    const recomputed = await computeLayout(current.diagram);
+    const recomputed = await computeLayout(current.diagram, current.sizes);
     const positions = { ...current.positions };
     for (const n of recomputed.nodes) {
       if (!current.manualPositionIds.has(n.id)) {
@@ -364,7 +374,7 @@ export function useDiagramEditing(
    * a fresh auto-layout coordinate. */
   const onRelayoutAll = useCallback(async () => {
     if (!current) return;
-    const recomputed = await computeLayout(current.diagram);
+    const recomputed = await computeLayout(current.diagram, current.sizes);
     const positions: Record<string, LayoutPosition> = {};
     for (const n of recomputed.nodes) {
       positions[n.id] = { x: n.x, y: n.y };
@@ -386,6 +396,7 @@ export function useDiagramEditing(
             positions: { ...current.positions, ...importedPositions },
             manualPositionIds,
             notePositions: { ...current.notePositions, ...(imported.views.default?.notePositions ?? {}) },
+            sizes: { ...current.sizes, ...fromLayoutSizes(imported.views.default?.sizes) },
             ...(imported.renderStyle ? { renderStyle: imported.renderStyle } : {}),
           });
         } catch (err) {
@@ -423,6 +434,7 @@ export function useDiagramEditing(
     onUpdateLink,
     onDeleteLink,
     onNodeDrag,
+    onNodeResizeStop,
     onNewFlow,
     onToggleRecording,
     onAddBranch,

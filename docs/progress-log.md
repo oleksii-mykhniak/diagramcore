@@ -101,3 +101,43 @@
   `npx playwright test` (59 passed + 3 skipped — прихований
   draw.io-імпорт).
 - Commit: `phase11-step3: сховати draw.io import за флагом, локальний автосейв IndexedDB`.
+
+## phase11-step4 — Resize вузлів — 2026-07-04
+
+- Формат: `internal/layout.Size{W,H}` (Go) + `View.Sizes` (JSON `sizes`,
+  `omitempty`), round-трипиться в `Save` як `NotePositions`. Web-дзеркало
+  — `LayoutSize{w,h}` у `layoutFile.ts` + `toLayoutSizes`/`fromLayoutSizes`
+  конвертери до/від `DiagramLevel.sizes: Record<id,{width,height}>`
+  (та сама модель, що й `positions`/`manualPositionIds`).
+- `layout.ts`: `computeLayout(diagram, sizes?)` резервує фактичні
+  розміри в ELK-графі замість базових `NODE_WIDTH/HEIGHT`; новий
+  `applyNodeSizes(layout, sizes, positions?)` — єдина точка, де і канва,
+  і SVG-експорт підміняють розмір вузла на ручний оверрайд, заразом
+  розширюючи `width`/`height` полотна, якщо збільшений вузол виходить за
+  межі auto-layout. `MIN_NODE_WIDTH/HEIGHT` = половина базового (як у
+  плані).
+- Канва: RF-вузли (`FlowCanvas.tsx`) отримують розмір як **top-level**
+  `Node.width/height` (не в `data`) — саме туди пише `NodeResizer` під
+  час драгу, тож ресайз плавний (без комітів у документ до
+  `onResizeEnd`, той самий патерн одного коміту на жест, що й крок
+  11.1). `NodeShell` (`rfNodeTypes.tsx`) малює `renderSvgInner`/handle-и
+  на фактичний розмір; `<NodeResizer isVisible={selected}>` показується
+  лише для виділеного вузла.
+- `onNodeResizeStop` (нове в `useDiagramEditing.ts`) комітить
+  `current.sizes` один раз на кінець ресайзу — той самий шлях, що
+  `onNodeDrag`. `onRelayout`/`onRelayoutAll`/`applyOps`/
+  `applyTextReplace` передають `sizes` у `computeLayout`, тож
+  Re-layout не стискає збільшені вузли. Export (SVG/PNG/zip),
+  Export layout, Share, локальний автосейв і Save — усі проведені
+  через `sizes`/`applyNodeSizes`.
+- Тести: `layout.test.ts` (резервація розміру в ELK, `applyNodeSizes`
+  підміна+розширення бордерів, no-op на порожніх sizes); новий
+  `e2e/resize.spec.ts` (3 сценарії: ресайз хендлом росте і переживає
+  Save→Open+export-layout; SVG-експорт малює вузол у новому розмірі;
+  імпорт layout відновлює розмір, Re-layout далі його не чіпає).
+- Регресія: `go build/vet/test ./...` зелені, `./dc validate
+  examples/*.dc.yaml` — 3/3 OK (WASM не зачеплений — `cmd/wasm` не
+  імпортує `internal/layout`, тож `make wasm-test` для цього кроку не
+  був потрібен); `npm test` (70/70), `npm run build`, повний
+  `npx playwright test` (62 passed + 3 skipped — прихований draw.io).
+- Commit: `phase11-step4: resize вузлів (layout-файл, канва, SVG-експорт)`.
