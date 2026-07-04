@@ -1007,3 +1007,29 @@
 
 **Фаза 9 завершена. Весь PLAN.md виконано.**
 
+## Фаза 10 — Production-ready UI/UX веб-редактора (PLAN2.md)
+
+### Крок 10.1 — Дизайн-токени, теми light/dark, design-skill
+- Дата: 2026-07-04
+- Виконано: `web/src/theme.css` — токени кольору (bg/surface/border/text/
+  accent/danger/flow-active/flow-visited/node-*), spacing (`--dc-space-1..6`),
+  радіуси, типографіка на `:root[data-theme=light]` (дефолт) і
+  `[data-theme=dark]`; `web/src/hooks/useTheme.ts` (localStorage `dc.theme`,
+  `[theme, setTheme, toggleTheme]`) + unit-тести; тимчасовий
+  `data-testid="theme-toggle"` у шапці `App.tsx` (переїде у View-меню в
+  10.3). `index.css`: прибрано авто `color-scheme: light dark`, явний
+  `color-scheme: light`/`dark` за `data-theme`. Захардкоджені hex у
+  `rfNodeTypes.tsx`/`rfEdgeTypes.tsx`/`App.tsx` (шапка, breadcrumbs) →
+  токени. `.claude/skills/design/SKILL.md` — палітра обох тем, spacing,
+  типографіка, правило "нуль inline-hex", компонентні правила,
+  testid-стабільність, патерн розширення render-style пресетів (10.12).
+- Коміт: (цей крок)
+- AC: `useTheme.test.ts` (4 тести) — дефолт `light` без збереженого
+  значення, перемикання `data-theme` + persist, toggle, читання
+  збереженого значення ✅; `e2e/theme.spec.ts` — клік по перемикачу міняє
+  computed `background-color` body, після reload тема збережена ✅;
+  `grep -rn "#e04b4b\|#e08a4b\|#0066cc" web/src --include="*.tsx"` —
+  порожній ✅; `npm test` (41 тест) + `npm run build` зелені; повна
+  e2e-регресія (37 специфікацій, включно з новою `theme.spec.ts`) зелена
+  без правок наявних спек ✅.
+

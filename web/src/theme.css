@@ -1,0 +1,64 @@
+/* Design tokens — see .claude/skills/design/SKILL.md for full palette
+   and usage rules. New components must use these classes/vars, never
+   inline hex. */
+
+:root[data-theme='light'] {
+  --dc-bg: #f7f7f8;
+  --dc-surface: #ffffff;
+  --dc-surface-muted: #f5f5f5;
+  --dc-border: #d0d0d5;
+  --dc-border-strong: #333333;
+  --dc-text: #1a1a1e;
+  --dc-text-muted: #6b6b70;
+  --dc-accent: #0066cc;
+  --dc-accent-hover: #0052a3;
+  --dc-danger: #e04b4b;
+  --dc-flow-active: #e04b4b;
+  --dc-flow-visited: #e08a4b;
+  --dc-node-fill: #ffffff;
+  --dc-node-border: #333333;
+  --dc-node-external-fill: #f5f5f5;
+  --dc-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+:root[data-theme='dark'] {
+  --dc-bg: #1e1e22;
+  --dc-surface: #2a2a2f;
+  --dc-surface-muted: #232327;
+  --dc-border: #46464e;
+  --dc-border-strong: #cfcfd6;
+  --dc-text: #e8e8ea;
+  --dc-text-muted: #9a9aa2;
+  --dc-accent: #4da3ff;
+  --dc-accent-hover: #6fb5ff;
+  --dc-danger: #ff6b6b;
+  --dc-flow-active: #ff6b6b;
+  --dc-flow-visited: #f0a15c;
+  --dc-node-fill: #2a2a2f;
+  --dc-node-border: #cfcfd6;
+  --dc-node-external-fill: #232327;
+  --dc-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+:root {
+  --dc-space-1: 4px;
+  --dc-space-2: 8px;
+  --dc-space-3: 12px;
+  --dc-space-4: 16px;
+  --dc-space-5: 24px;
+  --dc-space-6: 32px;
+
+  --dc-radius-sm: 2px;
+  --dc-radius-md: 6px;
+  --dc-radius-lg: 12px;
+
+  --dc-font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --dc-font-size-sm: 11px;
+  --dc-font-size-base: 13px;
+  --dc-font-size-lg: 18px;
+}
+
+body {
+  background: var(--dc-bg);
+  color: var(--dc-text);
+}

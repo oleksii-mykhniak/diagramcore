@@ -28,6 +28,7 @@ import { findNodeDependents } from './dependents';
 import { isNativeFsSupported, openDiagramFiles, pickSaveHandle, writeTextToHandle } from './nativeFile';
 import { decodeShareState, encodeShareState, SHARE_URL_SIZE_LIMIT } from './shareLink';
 import { StartScreen } from './components/StartScreen';
+import { useTheme } from './hooks/useTheme';
 
 interface DiagramLevel {
   fileName: string;
@@ -67,6 +68,7 @@ function detailsBasename(details: string): string {
 }
 
 export default function App() {
+  const [theme, , toggleTheme] = useTheme();
   const [virtualFS, setVirtualFS] = useState<Record<string, string>>({});
   const [stack, setStack] = useState<DiagramLevel[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -808,8 +810,11 @@ export default function App() {
       onDragOver={onDragOver}
       style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
     >
-      <header style={{ padding: '8px 16px', borderBottom: '1px solid #ccc' }}>
-        <h1 style={{ fontSize: 18, margin: '0 0 8px' }}>DiagramCore</h1>
+      <header style={{ padding: 'var(--dc-space-2) var(--dc-space-4)', borderBottom: '1px solid var(--dc-border)', background: 'var(--dc-surface)', color: 'var(--dc-text)' }}>
+        <h1 style={{ fontSize: 'var(--dc-font-size-lg)', margin: '0 0 8px' }}>DiagramCore</h1>
+        <button type="button" data-testid="theme-toggle" onClick={toggleTheme}>
+          {theme === 'light' ? 'Dark mode' : 'Light mode'}
+        </button>{' '}
         <input
           ref={fileInputRef}
           type="file"
@@ -887,7 +892,7 @@ export default function App() {
                     type="button"
                     data-testid={`breadcrumb-${i}`}
                     onClick={() => goToLevel(i)}
-                    style={{ background: 'none', border: 'none', color: '#06c', cursor: 'pointer', padding: 0 }}
+                    style={{ background: 'none', border: 'none', color: 'var(--dc-accent)', cursor: 'pointer', padding: 0 }}
                   >
                     {level.diagram.diagram.title}
                   </button>

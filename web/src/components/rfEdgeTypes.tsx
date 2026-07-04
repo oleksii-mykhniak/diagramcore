@@ -32,7 +32,13 @@ export function DcEdge({
   const isActive = edgeData?.isActive ?? false;
   const isVisited = edgeData?.isVisited ?? false;
   const isHovered = edgeData?.isHovered ?? false;
-  const stroke = isActive ? '#e04b4b' : isVisited ? '#e08a4b' : isHovered ? '#0066cc' : '#333';
+  const stroke = isActive
+    ? 'var(--dc-flow-active)'
+    : isVisited
+      ? 'var(--dc-flow-visited)'
+      : isHovered
+        ? 'var(--dc-accent)'
+        : 'var(--dc-node-border)';
 
   return (
     <>
@@ -48,7 +54,7 @@ export function DcEdge({
         style={{ stroke, strokeWidth: isActive ? 3 : isVisited || isHovered ? 2.5 : 1.5 }}
       />
       {isActive && (
-        <circle r={5} fill="#e04b4b" data-testid={`rf-flow-marker-${id}`}>
+        <circle r={5} fill="var(--dc-flow-active)" data-testid={`rf-flow-marker-${id}`}>
           <animateMotion dur="1.2s" repeatCount="indefinite" path={path} />
         </circle>
       )}
@@ -58,8 +64,9 @@ export function DcEdge({
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              fontSize: 11,
-              background: '#fff',
+              fontSize: 'var(--dc-font-size-sm)',
+              background: 'var(--dc-surface)',
+              color: 'var(--dc-text)',
               padding: '0 2px',
               pointerEvents: 'none',
             }}

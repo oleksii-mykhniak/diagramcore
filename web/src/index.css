@@ -1,6 +1,10 @@
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+  font-family: var(--dc-font-sans);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 * {

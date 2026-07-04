@@ -31,10 +31,11 @@ function NodeShell({ id, data, nodeType, className, style }: ShellProps) {
       data-selected={data.isSelected || undefined}
       className={`rf-node ${className}`}
       style={{
-        padding: '8px 14px',
-        border: `${data.hasDetails ? 3 : 1.5}px solid ${data.isActive ? '#e04b4b' : data.isVisited ? '#e08a4b' : data.isSelected ? '#0066cc' : '#333'}`,
-        background: '#fff',
-        fontSize: 13,
+        padding: 'var(--dc-space-2) var(--dc-space-3)',
+        border: `${data.hasDetails ? 3 : 1.5}px solid ${data.isActive ? 'var(--dc-flow-active)' : data.isVisited ? 'var(--dc-flow-visited)' : data.isSelected ? 'var(--dc-accent)' : 'var(--dc-node-border)'}`,
+        background: 'var(--dc-node-fill)',
+        color: 'var(--dc-text)',
+        fontSize: 'var(--dc-font-size-base)',
         textAlign: 'center',
         minWidth: 120,
         ...style,
@@ -71,7 +72,7 @@ export function StorageNode({ id, data }: NodeProps) {
       data={data as DcNodeData}
       nodeType="storage"
       className="rf-node--storage"
-      style={{ borderRadius: '0 0 12px 12px', borderTop: '3px double #333' }}
+      style={{ borderRadius: '0 0 12px 12px', borderTop: '3px double var(--dc-node-border)' }}
     />
   );
 }
@@ -95,7 +96,7 @@ export function ExternalNode({ id, data }: NodeProps) {
       data={data as DcNodeData}
       nodeType="external"
       className="rf-node--external"
-      style={{ borderRadius: 6, borderStyle: 'dotted', background: '#f5f5f5' }}
+      style={{ borderRadius: 6, borderStyle: 'dotted', background: 'var(--dc-node-external-fill)' }}
     />
   );
 }
