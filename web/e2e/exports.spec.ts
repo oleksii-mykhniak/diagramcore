@@ -18,8 +18,11 @@ test('exporting PNG downloads a non-empty file', async ({ page }) => {
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
   await openMenu(page, 'file');
-  const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-png').click();
+  await expect(page.getByTestId('export-dialog')).toBeVisible();
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByTestId('export-confirm').click();
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe('auth-system.png');

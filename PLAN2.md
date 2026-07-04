@@ -235,10 +235,10 @@ disabled); "include grid" (SVG `<pattern>` із крапками, як на ка
 "Export flow steps (zip)" використовує ті самі налаштування.
 
 **AC:**
-- [ ] Playwright: діалог → SVG → скачаний файл починається з `<svg`, містить фігури вузлів; PNG 2x має подвоєні піксельні розміри (decoded image size).
-- [ ] PNG з transparent background має альфу; JPG скачується, опція transparent для JPG заблокована.
-- [ ] Grid on додає pattern у SVG; off — ні (unit).
-- [ ] Адаптований `exports.spec` + повна регресія + `npm test` + `npm run build` зелені.
+- [x] Playwright: діалог → SVG → скачаний файл починається з `<svg`, містить фігури вузлів; PNG 2x має подвоєні піксельні розміри (decoded image size).
+- [x] PNG з transparent background має альфу; JPG скачується, опція transparent для JPG заблокована.
+- [x] Grid on додає pattern у SVG; off — ні (unit).
+- [x] Адаптований `exports.spec` + повна регресія + `npm test` + `npm run build` зелені.
 
 ## Крок 10.10 — Імпорт draw.io
 

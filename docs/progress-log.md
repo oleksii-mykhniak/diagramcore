@@ -1279,3 +1279,41 @@
   рендериться як component без падінь (окремий тест) ✅; `npm test`
   (49) + `npm run build` (2.4MB, без регресії розміру) + повна
   e2e-регресія (46 специфікацій) зелені ✅.
+
+### Крок 10.9 — Діалог експорту зображення (PNG/JPG/SVG + налаштування)
+- Дата: 2026-07-04
+- Виконано: `svgExport.ts` — `svgStringToPngBlob` узагальнено в
+  `svgStringToRasterBlob(svg, w, h, {scale, background, mime, quality})`
+  (`background: 'transparent'|'white'|'theme'`; JPG + transparent →
+  автоматично 'white', бо JPEG без альфа-каналу); `renderDiagramSVGString`
+  отримав `RenderOptions.includeGrid` — малює SVG `<pattern>` з крапками
+  (як `<Background/>` на канві) у `<defs>` + `<rect fill="url(#dc-grid)">`.
+  `hooks/useExportSettings.ts` — `{format, scale, background,
+  includeGrid}`, персист `dc.ui.exportSettings`. `components/
+  ExportDialog.tsx` — модалка (testid `export-dialog`): формат
+  (`export-format`: png/jpg/svg), scale (`export-scale`: 1x/2x/4x,
+  disabled для SVG — viewBox не змінюється), background
+  (`export-background`, опція transparent `disabled` для jpg),
+  "include grid" (`export-include-grid`), `export-cancel`/
+  `export-confirm`. `hooks/useDiagramExports.ts`: `onExportPng` →
+  `onExportImage(settings)` — SVG качає рядок напряму, PNG/JPG через
+  `svgStringToRasterBlob`; `onExportFlowStepsZip(settings)` тепер теж
+  приймає ті самі налаштування (scale/background/grid/формат — розширення
+  `.svg`/`.png`/`.jpg` за форматом). File-меню: `export-png` (testid
+  збережено) тепер відкриває діалог замість прямого скачування;
+  експорт відбувається кліком по `export-confirm`. Оновлено
+  `exports.spec.ts` (PNG-тест: клік по export-png → діалог → confirm);
+  нова `e2e/export-dialog.spec.ts` (3 тести): SVG-експорт, 2x-масштаб
+  (перевірка decoded PNG IHDR width/height), transparent-альфа (PNG
+  color-type byte) + JPG-transparent-disabled. Новий unit-тест у
+  `svgExport.test.ts` для `includeGrid`.
+- Коміт: (цей крок)
+- AC: Playwright — SVG-файл починається з `<svg`, містить фігури
+  вузлів (`<ellipse>`) ✅; PNG 2x — decoded width/height рівно вдвічі
+  більші за 1x (парсинг PNG IHDR chunk) ✅; PNG transparent має альфу
+  (PNG color-type 6/4), JPG-експорт качається, опція transparent
+  задизейблена для JPG (перевірено через DOM-властивість `disabled`) ✅;
+  Grid on/off у SVG — unit-тест (`<pattern>` присутній/відсутній) ✅;
+  адаптований `exports.spec.ts` + повна e2e-регресія (49 специфікацій)
+  + `npm test` (50) + `npm run build` (без регресії розміру — 2 файли,
+  2.4MB) зелені ✅.

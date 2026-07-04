@@ -2,18 +2,27 @@ import { useCallback, useState } from 'react';
 import { generateContext } from '../wasmValidate';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName } from '../layoutFile';
 import { computeFlowHighlight, flowStepFrames, resolveFlowSteps } from '../flowPlayer';
-import { downloadBlob, renderDiagramSVGString, svgStringToPngBlob } from '../svgExport';
+import { downloadBlob, renderDiagramSVGString, svgStringToRasterBlob } from '../svgExport';
 import { zipSync } from 'fflate';
 import { encodeShareState, SHARE_URL_SIZE_LIMIT } from '../shareLink';
 import type { DiagramLevel } from './useDiagramStack';
+import type { ExportSettings } from './useExportSettings';
 
 /** <file.dc.yaml> -> <file>, for naming exported PNG/zip/markdown files. */
 function baseName(fileName: string): string {
   return fileName.replace(/\.dc\.yaml$/, '').replace(/\.ya?ml$/, '');
 }
 
-/** Every "produce a file/link from the current level" action: PNG,
- * flow-steps zip, AI-context markdown, layout export, and the
+function rasterMime(format: ExportSettings['format']): 'image/png' | 'image/jpeg' {
+  return format === 'jpg' ? 'image/jpeg' : 'image/png';
+}
+
+function extensionFor(format: ExportSettings['format']): string {
+  return format === 'jpg' ? 'jpg' : format === 'svg' ? 'svg' : 'png';
+}
+
+/** Every "produce a file/link from the current level" action: image
+ * export, flow-steps zip, AI-context markdown, layout export, and the
  * share-link. All read-only over `current` — none of them mutate the
  * document, so unlike the editing hook they need no queueing. */
 export function useDiagramExports(current: DiagramLevel | null) {
@@ -25,35 +34,68 @@ export function useDiagramExports(current: DiagramLevel | null) {
     downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFile(current.positions));
   }, [current]);
 
-  const onExportPng = useCallback(async () => {
-    if (!current) return;
-    const highlight = computeFlowHighlight(current.diagram, current.flowPlayerState);
-    const svg = renderDiagramSVGString(current.diagram, current.layout, current.positions, {
-      activeStep: highlight.activeStep ?? undefined,
-      visitedStepKeys: highlight.visitedStepKeys,
-    });
-    const blob = await svgStringToPngBlob(svg, current.layout.width, current.layout.height);
-    downloadBlob(`${baseName(current.fileName)}.png`, blob);
-  }, [current]);
-
-  const onExportFlowStepsZip = useCallback(async () => {
-    if (!current || current.flowPlayerState.flowIndex === null) return;
-    const flow = current.diagram.flows?.[current.flowPlayerState.flowIndex];
-    if (!flow) return;
-    const { steps } = resolveFlowSteps(flow, current.flowPlayerState.choices);
-    const frames = flowStepFrames(steps);
-    const zipInput: Record<string, Uint8Array> = {};
-    for (const frame of frames) {
-      const svg = renderDiagramSVGString(current.diagram, current.layout, current.positions, {
-        activeStep: frame.activeStep,
-        visitedStepKeys: frame.visitedStepKeys,
+  /** File → Export image… (PLAN.md step 10.9): PNG/JPG rasterize the SVG
+   * at `settings.scale`; SVG downloads the string directly (`viewBox`
+   * untouched by scale — that only affects the raster canvas size). */
+  const onExportImage = useCallback(
+    async (settings: ExportSettings) => {
+      if (!current) return;
+      const highlight = computeFlowHighlight(current.diagram, current.flowPlayerState);
+      const svg = renderDiagramSVGString(
+        current.diagram,
+        current.layout,
+        current.positions,
+        { activeStep: highlight.activeStep ?? undefined, visitedStepKeys: highlight.visitedStepKeys },
+        { includeGrid: settings.includeGrid },
+      );
+      const base = baseName(current.fileName);
+      if (settings.format === 'svg') {
+        downloadBlob(`${base}.svg`, new Blob([svg], { type: 'image/svg+xml' }));
+        return;
+      }
+      const blob = await svgStringToRasterBlob(svg, current.layout.width, current.layout.height, {
+        scale: settings.scale,
+        background: settings.background,
+        mime: rasterMime(settings.format),
       });
-      const blob = await svgStringToPngBlob(svg, current.layout.width, current.layout.height);
-      zipInput[`${frame.name}.png`] = new Uint8Array(await blob.arrayBuffer());
-    }
-    const zipped = zipSync(zipInput);
-    downloadBlob(`${baseName(current.fileName)}-${flow.name}-steps.zip`, new Blob([zipped as BlobPart]));
-  }, [current]);
+      downloadBlob(`${base}.${extensionFor(settings.format)}`, blob);
+    },
+    [current],
+  );
+
+  const onExportFlowStepsZip = useCallback(
+    async (settings: ExportSettings) => {
+      if (!current || current.flowPlayerState.flowIndex === null) return;
+      const flow = current.diagram.flows?.[current.flowPlayerState.flowIndex];
+      if (!flow) return;
+      const { steps } = resolveFlowSteps(flow, current.flowPlayerState.choices);
+      const frames = flowStepFrames(steps);
+      const ext = extensionFor(settings.format);
+      const zipInput: Record<string, Uint8Array> = {};
+      for (const frame of frames) {
+        const svg = renderDiagramSVGString(
+          current.diagram,
+          current.layout,
+          current.positions,
+          { activeStep: frame.activeStep, visitedStepKeys: frame.visitedStepKeys },
+          { includeGrid: settings.includeGrid },
+        );
+        if (settings.format === 'svg') {
+          zipInput[`${frame.name}.svg`] = new TextEncoder().encode(svg);
+          continue;
+        }
+        const blob = await svgStringToRasterBlob(svg, current.layout.width, current.layout.height, {
+          scale: settings.scale,
+          background: settings.background,
+          mime: rasterMime(settings.format),
+        });
+        zipInput[`${frame.name}.${ext}`] = new Uint8Array(await blob.arrayBuffer());
+      }
+      const zipped = zipSync(zipInput);
+      downloadBlob(`${baseName(current.fileName)}-${flow.name}-steps.zip`, new Blob([zipped as BlobPart]));
+    },
+    [current],
+  );
 
   const onExportContext = useCallback(async () => {
     if (!current) return;
@@ -82,7 +124,7 @@ export function useDiagramExports(current: DiagramLevel | null) {
     shareUrl,
     shareError,
     onExportLayout,
-    onExportPng,
+    onExportImage,
     onExportFlowStepsZip,
     onExportContext,
     onShare,

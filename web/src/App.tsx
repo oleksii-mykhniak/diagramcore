@@ -2,17 +2,21 @@ import { useState } from 'react';
 import { AppHeader } from './components/AppHeader';
 import { EditorWorkspace } from './components/EditorWorkspace';
 import { Tour } from './components/Tour';
+import { ExportDialog } from './components/ExportDialog';
 import { useTheme } from './hooks/useTheme';
 import { useDiagramStack } from './hooks/useDiagramStack';
 import { useHistory } from './hooks/useHistory';
 import { useDiagramEditing } from './hooks/useDiagramEditing';
 import { useDiagramExports } from './hooks/useDiagramExports';
 import { useViewSettings } from './hooks/useViewSettings';
+import { useExportSettings } from './hooks/useExportSettings';
 
 export default function App() {
   const [theme, , toggleTheme] = useTheme();
   const [showTour, setShowTour] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const view = useViewSettings();
+  const exportSettings = useExportSettings();
 
   const {
     stack,
@@ -72,7 +76,7 @@ export default function App() {
     onFlowPlayerChange,
   } = useDiagramEditing(current, levelRef, runMutation, updateCurrentLevel, pushHistory, setLoadError);
 
-  const { shareUrl, shareError, onExportLayout, onExportPng, onExportFlowStepsZip, onExportContext, onShare } =
+  const { shareUrl, shareError, onExportLayout, onExportImage, onExportFlowStepsZip, onExportContext, onShare } =
     useDiagramExports(current);
 
   return (
@@ -88,8 +92,8 @@ export default function App() {
         onSave={() => void onSave()}
         onExportLayout={onExportLayout}
         onImportLayout={onImportLayout}
-        onExportPng={() => void onExportPng()}
-        onExportFlowStepsZip={() => void onExportFlowStepsZip()}
+        onExportImage={() => setShowExportDialog(true)}
+        onExportFlowStepsZip={() => void onExportFlowStepsZip(exportSettings.settings)}
         onExportContext={() => void onExportContext()}
         onShare={onShare}
         shareUrl={shareUrl}
@@ -152,6 +156,17 @@ export default function App() {
         onYamlPanelHeightChange={view.setYamlPanelHeight}
       />
       {showTour && <Tour onClose={() => setShowTour(false)} />}
+      {showExportDialog && (
+        <ExportDialog
+          settings={exportSettings.settings}
+          onChange={exportSettings.update}
+          onCancel={() => setShowExportDialog(false)}
+          onExport={() => {
+            void onExportImage(exportSettings.settings);
+            setShowExportDialog(false);
+          }}
+        />
+      )}
     </div>
   );
 }

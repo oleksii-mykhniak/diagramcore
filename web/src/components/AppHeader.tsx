@@ -18,7 +18,7 @@ interface AppHeaderProps {
   onSave: () => void;
   onExportLayout: () => void;
   onImportLayout: (e: ChangeEvent<HTMLInputElement>) => void;
-  onExportPng: () => void;
+  onExportImage: () => void;
   onExportFlowStepsZip: () => void;
   onExportContext: () => void;
   onShare: () => void;
@@ -82,7 +82,7 @@ export function AppHeader({
   onSave,
   onExportLayout,
   onImportLayout,
-  onExportPng,
+  onExportImage,
   onExportFlowStepsZip,
   onExportContext,
   onShare,
@@ -137,7 +137,7 @@ export function AppHeader({
           ),
         },
         { label: 'Import draw.io…', disabled: true },
-        { label: 'Export image…', testId: 'export-png', onSelect: onExportPng, disabled: !current },
+        { label: 'Export image…', testId: 'export-png', onSelect: onExportImage, disabled: !current },
         { label: 'Export layout', testId: 'export-layout', onSelect: onExportLayout, disabled: !current },
         {
           label: 'Export flow steps (zip)',

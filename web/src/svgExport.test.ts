@@ -50,4 +50,13 @@ describe('renderDiagramSVGString', () => {
     });
     expect(withHighlight).toContain('animateMotion');
   });
+
+  it('includes a grid pattern only when requested (PLAN.md step 10.9)', () => {
+    const withoutGrid = renderDiagramSVGString(diagram, layout, positions, {}, { includeGrid: false });
+    expect(withoutGrid).not.toContain('<pattern');
+
+    const withGrid = renderDiagramSVGString(diagram, layout, positions, {}, { includeGrid: true });
+    expect(withGrid).toContain('<pattern');
+    expect(withGrid).toContain('url(#dc-grid)');
+  });
 });

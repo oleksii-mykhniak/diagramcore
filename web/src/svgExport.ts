@@ -10,6 +10,12 @@ export interface FrameHighlight {
   visitedStepKeys?: Set<string>;
 }
 
+export interface RenderOptions {
+  /** Draws the same dotted background pattern the canvas shows when
+   * View → Grid is on (PLAN.md step 10.9's "include grid" export option). */
+  includeGrid?: boolean;
+}
+
 export interface ThemeColors {
   nodeFill: string;
   nodeExternalFill: string;
@@ -72,11 +78,19 @@ export function renderDiagramSVGString(
   layout: DiagramLayout,
   positions: Record<string, LayoutPosition>,
   highlight: FrameHighlight = {},
+  options: RenderOptions = {},
 ): string {
   const labelById = new Map(diagram.nodes.map((n) => [n.id, nodeLabel(n)]));
   const nodeById = new Map(diagram.nodes.map((n) => [n.id, n]));
   const activeKey = highlight.activeStep ? pairKey(highlight.activeStep.from, highlight.activeStep.to) : null;
   const theme = resolveThemeColors();
+
+  const gridPatternDef = options.includeGrid
+    ? `<pattern id="dc-grid" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="${theme.nodeBorder}" opacity="0.35" /></pattern>`
+    : '';
+  const gridRect = options.includeGrid
+    ? `<rect width="${layout.width}" height="${layout.height}" fill="url(#dc-grid)" />`
+    : '';
 
   const edgesSvg = layout.edges
     .map((e) => {
@@ -123,7 +137,8 @@ export function renderDiagramSVGString(
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}">` +
-    `<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="${theme.nodeBorder}" /></marker></defs>` +
+    `<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="${theme.nodeBorder}" /></marker>${gridPatternDef}</defs>` +
+    gridRect +
     edgesSvg +
     markerSvg +
     nodesSvg +
@@ -131,32 +146,62 @@ export function renderDiagramSVGString(
   );
 }
 
-/** Rasterizes an SVG string to a PNG Blob via an offscreen <canvas>. */
-export async function svgStringToPngBlob(svgString: string, width: number, height: number): Promise<Blob> {
+export type RasterBackground = 'transparent' | 'white' | 'theme';
+
+export interface RasterOptions {
+  scale?: number;
+  background?: RasterBackground;
+  mime?: 'image/png' | 'image/jpeg';
+  quality?: number;
+}
+
+/** Rasterizes an SVG string to a Blob via an offscreen `<canvas>`
+ * (PLAN.md step 10.9 — generalized from the PNG-only `svgStringToPngBlob`
+ * to also support JPG, a scale multiplier, and a configurable
+ * background). `viewBox` is left untouched — only the canvas pixel size
+ * changes, so `scale: 2` doubles the decoded image's width/height. JPEG
+ * has no alpha channel, so a `'transparent'` background falls back to
+ * white for it. */
+export async function svgStringToRasterBlob(
+  svgString: string,
+  width: number,
+  height: number,
+  options: RasterOptions = {},
+): Promise<Blob> {
+  const scale = options.scale ?? 1;
+  const mime = options.mime ?? 'image/png';
+  let background = options.background ?? 'white';
+  if (mime === 'image/jpeg' && background === 'transparent') background = 'white';
+
   const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(svgBlob);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const image = new Image();
       image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error('failed to rasterize SVG for PNG export'));
+      image.onerror = () => reject(new Error('failed to rasterize SVG for image export'));
       image.src = url;
     });
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(width));
-    canvas.height = Math.max(1, Math.round(height));
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('canvas 2D context unavailable');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (background !== 'transparent') {
+      ctx.fillStyle = background === 'theme' ? resolveThemeColors().nodeFill : '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) throw new Error('canvas.toBlob produced no PNG data');
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, mime, options.quality ?? 0.92),
+    );
+    if (!blob) throw new Error('canvas.toBlob produced no image data');
     return blob;
   } finally {
     URL.revokeObjectURL(url);
   }
 }
+
 
 export function downloadBlob(fileName: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
