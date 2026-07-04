@@ -6,10 +6,10 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
-  applyNodeChanges,
+  useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import type { Node, NodeChange } from '@xyflow/react';
+import type { Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { Diagram, DiagramNode, DiagramNoteDef } from '../types';
 import { nodeLabel } from '../types';
@@ -35,7 +35,11 @@ interface Props {
   diagram: Diagram;
   layout: DiagramLayout;
   positions: Record<string, LayoutPosition>;
-  onNodeDrag?: (id: string, pos: LayoutPosition) => void;
+  /** Committed once per drag gesture, on release — NOT on every
+   * mousemove (PLAN3.md step 11.1). Position changes during the drag
+   * live only in React Flow's own internal node state; the document
+   * (and thus the rest of the app) only re-renders when the drag ends. */
+  onNodeDragStop?: (id: string, pos: LayoutPosition) => void;
   visitedStepKeys?: Set<string>;
   activeStep?: ActiveStep;
   onNodeDoubleClick?: (node: DiagramNode) => void;
@@ -75,7 +79,7 @@ function FlowCanvasInner({
   diagram,
   layout,
   positions,
-  onNodeDrag,
+  onNodeDragStop,
   visitedStepKeys,
   activeStep,
   onNodeDoubleClick,
@@ -186,15 +190,21 @@ function FlowCanvasInner({
   const noteIds = useMemo(() => new Set((notes ?? []).map((n) => n.id)), [notes]);
   const allNodes = useMemo(() => [...rfNodes, ...rfNoteNodes] as Node[], [rfNodes, rfNoteNodes]);
 
-  const handleNodesChange = (changes: NodeChange<Node>[]) => {
-    const next = applyNodeChanges(changes, allNodes);
-    for (const change of changes) {
-      if (change.type === 'position' && change.position) {
-        if (noteIds.has(change.id)) onNoteDrag?.(change.id, change.position);
-        else onNodeDrag?.(change.id, change.position);
-      }
-    }
-    void next;
+  // Positions during an in-progress drag live entirely in React Flow's own
+  // node state (`useNodesState`); the parent-owned `positions`/`layout`
+  // props (and thus `allNodes`) only change on real external events (load,
+  // undo, relayout, or the single commit at drag end below) — never once
+  // per mousemove. That keeps this sync effect from firing mid-drag, so a
+  // drag no longer forces `App`/`EditorWorkspace` to re-render on every
+  // frame (PLAN3.md step 11.1).
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(allNodes);
+  useEffect(() => {
+    setNodes(allNodes);
+  }, [allNodes, setNodes]);
+
+  const handleNodeDragStop = (id: string, position: LayoutPosition) => {
+    if (noteIds.has(id)) onNoteDrag?.(id, position);
+    else onNodeDragStop?.(id, position);
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -224,11 +234,12 @@ function FlowCanvasInner({
       onDrop={handleDrop}
     >
       <ReactFlow
-        nodes={allNodes}
+        nodes={nodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        onNodesChange={handleNodesChange}
+        onNodesChange={onNodesChange}
+        onNodeDragStop={(_, node) => handleNodeDragStop(node.id, node.position)}
         onNodeDoubleClick={(_, node) => {
           if (clickTimer.current) {
             clearTimeout(clickTimer.current);

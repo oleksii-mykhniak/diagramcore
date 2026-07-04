@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { NODE_WIDTH, NODE_HEIGHT } from '../layout';
@@ -121,39 +122,39 @@ function NodeShell({ id, data, nodeType, shapeName, className }: ShellProps) {
   );
 }
 
-export function ActorNode({ id, data }: NodeProps) {
+export const ActorNode = memo(function ActorNode({ id, data }: NodeProps) {
   return <NodeShell id={id} data={data as DcNodeData} nodeType="actor" shapeName="actor" className="rf-node--actor" />;
-}
+});
 
-export function ServiceNode({ id, data }: NodeProps) {
+export const ServiceNode = memo(function ServiceNode({ id, data }: NodeProps) {
   return <NodeShell id={id} data={data as DcNodeData} nodeType="service" shapeName="service" className="rf-node--service" />;
-}
+});
 
-export function StorageNode({ id, data }: NodeProps) {
+export const StorageNode = memo(function StorageNode({ id, data }: NodeProps) {
   return <NodeShell id={id} data={data as DcNodeData} nodeType="storage" shapeName="storage" className="rf-node--storage" />;
-}
+});
 
-export function QueueNode({ id, data }: NodeProps) {
+export const QueueNode = memo(function QueueNode({ id, data }: NodeProps) {
   return <NodeShell id={id} data={data as DcNodeData} nodeType="queue" shapeName="queue" className="rf-node--queue" />;
-}
+});
 
-export function ExternalNode({ id, data }: NodeProps) {
+export const ExternalNode = memo(function ExternalNode({ id, data }: NodeProps) {
   return <NodeShell id={id} data={data as DcNodeData} nodeType="external" shapeName="external" className="rf-node--external" />;
-}
+});
 
-export function ComponentNode({ id, data }: NodeProps) {
+export const ComponentNode = memo(function ComponentNode({ id, data }: NodeProps) {
   return <NodeShell id={id} data={data as DcNodeData} nodeType="component" shapeName="component" className="rf-node--component" />;
-}
+});
 
 /** Renders any custom (non-base-six) type — PLAN.md step 10.8. The real
  * dc type name and resolved shape/color/icon are precomputed by
  * `FlowCanvas` (which has the diagram's `custom_types`) and threaded
  * through `data`. */
-export function CustomNode({ id, data }: NodeProps) {
+export const CustomNode = memo(function CustomNode({ id, data }: NodeProps) {
   const d = data as DcNodeData;
   const type = d.customType ?? 'component';
   return <NodeShell id={id} data={d} nodeType={type} shapeName={d.shape ?? 'component'} className="rf-node--custom" />;
-}
+});
 
 export interface NoteNodeData extends Record<string, unknown> {
   text: string;
@@ -162,7 +163,7 @@ export interface NoteNodeData extends Record<string, unknown> {
 /** Free-text annotation (PLAN.md step 10.11) — borderless, draggable,
  * no handles (notes don't participate in links). Double-click to edit
  * (see `EditorWorkspace`'s `onNoteDoubleClick`). */
-export function NoteNode({ id, data }: NodeProps) {
+export const NoteNode = memo(function NoteNode({ id, data }: NodeProps) {
   const d = data as NoteNodeData;
   return (
     <div
@@ -182,7 +183,7 @@ export function NoteNode({ id, data }: NodeProps) {
       {d.text}
     </div>
   );
-}
+});
 
 export const nodeTypes = {
   actor: ActorNode,

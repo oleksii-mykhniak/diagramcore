@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
 import { sketchEdgeD } from '../sketch';
@@ -13,7 +14,7 @@ export interface DcEdgeData extends Record<string, unknown> {
   renderStyle?: RenderStyle;
 }
 
-export function DcEdge({
+export const DcEdge = memo(function DcEdge({
   id,
   sourceX,
   sourceY,
@@ -82,6 +83,6 @@ export function DcEdge({
       )}
     </>
   );
-}
+});
 
 export const edgeTypes = { 'dc-edge': DcEdge };

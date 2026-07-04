@@ -36,7 +36,7 @@ interface EditorWorkspaceProps {
   onUpdateFlowStepNote: (atIndex: number, note: string) => void;
   onDeleteStep: (atIndex: number) => void;
   selectedNodeId: string | null;
-  onNodeDrag: (id: string, pos: LayoutPosition) => void;
+  onNodeDragStop: (id: string, pos: LayoutPosition) => void;
   onNodeDoubleClick: (node: DiagramNode) => void;
   onNodeClick: (node: DiagramNode) => void;
   onDropNodeType: (type: string, pos: LayoutPosition) => void;
@@ -99,7 +99,7 @@ export function EditorWorkspace({
   onUpdateFlowStepNote,
   onDeleteStep,
   selectedNodeId,
-  onNodeDrag,
+  onNodeDragStop,
   onNodeDoubleClick,
   onNodeClick,
   onDropNodeType,
@@ -179,7 +179,7 @@ export function EditorWorkspace({
                 diagram={current.diagram}
                 layout={current.layout}
                 positions={current.positions}
-                onNodeDrag={onNodeDrag}
+                onNodeDragStop={onNodeDragStop}
                 onNodeDoubleClick={onNodeDoubleClick}
                 onNodeClick={onNodeClick}
                 selectedNodeId={selectedNodeId}
