@@ -2,6 +2,7 @@ import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { NODE_WIDTH, NODE_HEIGHT } from '../layout';
 import { resolveShape } from '../shapes';
+import { CUSTOM_TYPE_ICONS } from '../customTypeIcons';
 
 export interface DcNodeData extends Record<string, unknown> {
   label: string;
@@ -9,24 +10,34 @@ export interface DcNodeData extends Record<string, unknown> {
   isActive: boolean;
   isVisited: boolean;
   isSelected?: boolean;
+  /** Only set for custom (non-base-six) types — PLAN.md step 10.8. */
+  customType?: string;
+  shape?: string;
+  color?: string;
+  icon?: string;
 }
 
 interface ShellProps {
   id: string;
   data: DcNodeData;
   nodeType: string;
+  shapeName: string;
   className: string;
 }
 
-/** Shared shell for all custom node types (PLAN.md step 6.1, geometry
- * unified in step 10.6): the outline is drawn by the same
- * `renderSvgInner` that `svgExport.ts` uses for the same node type, sized
- * to the same `NODE_WIDTH`/`NODE_HEIGHT` the auto-layout engine reserves
- * — so canvas and export can never draw a type differently. Label,
- * handles and the details marker sit on top as an absolutely-positioned
+/** Shared shell for all node types (PLAN.md step 6.1, geometry unified in
+ * step 10.6, custom-type color/icon added in step 10.8): the outline is
+ * drawn by the same `renderSvgInner` that `svgExport.ts` uses for the
+ * same shape, sized to the same `NODE_WIDTH`/`NODE_HEIGHT` the
+ * auto-layout engine reserves — so canvas and export can never draw a
+ * type differently. `nodeType` is the semantic dc type (shown in
+ * `data-node-type`/className); `shapeName` is the shape-registry key to
+ * draw (equal to `nodeType` for the base six, but can differ for a
+ * custom type with a `shape:` override). Label, handles, the details
+ * marker and an optional icon sit on top as an absolutely-positioned
  * overlay. */
-function NodeShell({ id, data, nodeType, className }: ShellProps) {
-  const shape = resolveShape(nodeType);
+function NodeShell({ id, data, nodeType, shapeName, className }: ShellProps) {
+  const shape = resolveShape(shapeName);
   const stroke = data.isActive
     ? 'var(--dc-flow-active)'
     : data.isVisited
@@ -34,9 +45,10 @@ function NodeShell({ id, data, nodeType, className }: ShellProps) {
       : data.isSelected
         ? 'var(--dc-accent)'
         : 'var(--dc-node-border)';
-  const fill = nodeType === 'external' ? 'var(--dc-node-external-fill)' : 'var(--dc-node-fill)';
+  const fill = data.color ?? (nodeType === 'external' ? 'var(--dc-node-external-fill)' : 'var(--dc-node-fill)');
   const strokeWidth = data.hasDetails ? 3 : 1.5;
   const svgInner = shape.renderSvgInner(NODE_WIDTH, NODE_HEIGHT, { fill, stroke, strokeWidth });
+  const IconComponent = data.icon ? CUSTOM_TYPE_ICONS[data.icon] : null;
 
   return (
     <div
@@ -66,12 +78,18 @@ function NodeShell({ id, data, nodeType, className }: ShellProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: 'var(--dc-space-1)',
           textAlign: 'center',
           padding: '0 var(--dc-space-2)',
           fontSize: 'var(--dc-font-size-base)',
           color: 'var(--dc-text)',
         }}
       >
+        {IconComponent && (
+          <span data-testid={`rf-node-icon-${id}`} style={{ display: 'inline-flex' }}>
+            <IconComponent size={14} />
+          </span>
+        )}
         {data.label}
         {data.hasDetails && <span data-testid={`rf-details-marker-${id}`}> ⊞</span>}
       </div>
@@ -81,27 +99,37 @@ function NodeShell({ id, data, nodeType, className }: ShellProps) {
 }
 
 export function ActorNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="actor" className="rf-node--actor" />;
+  return <NodeShell id={id} data={data as DcNodeData} nodeType="actor" shapeName="actor" className="rf-node--actor" />;
 }
 
 export function ServiceNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="service" className="rf-node--service" />;
+  return <NodeShell id={id} data={data as DcNodeData} nodeType="service" shapeName="service" className="rf-node--service" />;
 }
 
 export function StorageNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="storage" className="rf-node--storage" />;
+  return <NodeShell id={id} data={data as DcNodeData} nodeType="storage" shapeName="storage" className="rf-node--storage" />;
 }
 
 export function QueueNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="queue" className="rf-node--queue" />;
+  return <NodeShell id={id} data={data as DcNodeData} nodeType="queue" shapeName="queue" className="rf-node--queue" />;
 }
 
 export function ExternalNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="external" className="rf-node--external" />;
+  return <NodeShell id={id} data={data as DcNodeData} nodeType="external" shapeName="external" className="rf-node--external" />;
 }
 
 export function ComponentNode({ id, data }: NodeProps) {
-  return <NodeShell id={id} data={data as DcNodeData} nodeType="component" className="rf-node--component" />;
+  return <NodeShell id={id} data={data as DcNodeData} nodeType="component" shapeName="component" className="rf-node--component" />;
+}
+
+/** Renders any custom (non-base-six) type — PLAN.md step 10.8. The real
+ * dc type name and resolved shape/color/icon are precomputed by
+ * `FlowCanvas` (which has the diagram's `custom_types`) and threaded
+ * through `data`. */
+export function CustomNode({ id, data }: NodeProps) {
+  const d = data as DcNodeData;
+  const type = d.customType ?? 'component';
+  return <NodeShell id={id} data={d} nodeType={type} shapeName={d.shape ?? 'component'} className="rf-node--custom" />;
 }
 
 export const nodeTypes = {
@@ -111,10 +139,14 @@ export const nodeTypes = {
   queue: QueueNode,
   external: ExternalNode,
   component: ComponentNode,
+  custom: CustomNode,
 };
 
-/** Any node type not in the base six (custom_types) falls back to the
- * generic component shape. */
+const BASE_TYPES = ['actor', 'service', 'storage', 'queue', 'external', 'component'];
+
+/** Any node type not in the base six (custom_types) renders via the
+ * generic `CustomNode` instead of silently collapsing into `component`
+ * (PLAN.md step 10.8 — the previous fallback lived here). */
 export function resolveNodeType(type: string): keyof typeof nodeTypes {
-  return type in nodeTypes ? (type as keyof typeof nodeTypes) : 'component';
+  return (BASE_TYPES.includes(type) ? type : 'custom') as keyof typeof nodeTypes;
 }

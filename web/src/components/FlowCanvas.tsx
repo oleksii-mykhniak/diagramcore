@@ -18,6 +18,7 @@ import type { LayoutPosition } from '../layoutFile';
 import { pairKey } from '../flowPlayer';
 import { nodeTypes, resolveNodeType } from './rfNodeTypes';
 import type { DcNodeData } from './rfNodeTypes';
+import { nodeVisual } from '../shapes';
 import { edgeTypes } from './rfEdgeTypes';
 import type { DcEdgeData } from './rfEdgeTypes';
 
@@ -98,9 +99,12 @@ function FlowCanvasInner({
       layout.nodes.map((n) => {
         const dcNode = nodeById.get(n.id);
         const pos = positions[n.id] ?? n;
+        const type = dcNode?.type ?? 'component';
+        const rfType = resolveNodeType(type);
+        const visual = rfType === 'custom' ? nodeVisual(diagram, type) : null;
         return {
           id: n.id,
-          type: resolveNodeType(dcNode?.type ?? 'component'),
+          type: rfType,
           position: { x: pos.x, y: pos.y },
           data: {
             label: dcNode ? nodeLabel(dcNode) : n.id,
@@ -108,10 +112,11 @@ function FlowCanvasInner({
             isActive: activeKey !== null && (activeStep?.from === n.id || activeStep?.to === n.id),
             isVisited: false,
             isSelected: selectedNodeId === n.id,
+            ...(visual ? { customType: type, shape: visual.shape.name, color: visual.color, icon: visual.icon } : {}),
           },
         };
       }),
-    [layout.nodes, nodeById, positions, activeStep, activeKey, selectedNodeId],
+    [layout.nodes, nodeById, positions, activeStep, activeKey, selectedNodeId, diagram],
   );
 
   const rfEdges = useMemo(

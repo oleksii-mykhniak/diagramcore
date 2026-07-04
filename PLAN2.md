@@ -216,10 +216,10 @@ Web-сторона кроку 10.7: `parseDiagram.ts`/`types.ts` — `custom_typ
 селект type включає custom types.
 
 **AC:**
-- [ ] Unit: діаграма з `custom_types: [{name: cache, shape: hexagon, color: "#f5a623"}]` → вузол типу cache рендериться hexagon із цим кольором і на канві, і в `renderDiagramSVGString`.
-- [ ] Playwright: відкрити фікстуру з custom type → у палітрі з'явився пункт; drag на канву створює вузол цього типу, у YAML з'явився `type: cache`, валідація — 0 помилок.
-- [ ] Custom type без стилю рендериться як component (fallback-тест, нічого не ламається).
-- [ ] `npm test` + `npm run build` + повна e2e-регресія зелені.
+- [x] Unit: діаграма з `custom_types: [{name: cache, shape: hexagon, color: "#f5a623"}]` → вузол типу cache рендериться hexagon із цим кольором і на канві, і в `renderDiagramSVGString`.
+- [x] Playwright: відкрити фікстуру з custom type → у палітрі з'явився пункт; drag на канву створює вузол цього типу, у YAML з'явився `type: cache`, валідація — 0 помилок.
+- [x] Custom type без стилю рендериться як component (fallback-тест, нічого не ламається).
+- [x] `npm test` + `npm run build` + повна e2e-регресія зелені.
 
 ## Крок 10.9 — Діалог експорту зображення (PNG/JPG/SVG + налаштування)
 

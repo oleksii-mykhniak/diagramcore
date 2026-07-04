@@ -1244,3 +1244,38 @@
   make wasm-test` зелений, включно з новою перевіркою object-форми
   через `globalThis.validate` ✅; `npm test` (46) + `npm run build`
   зелені (web-сторона цього кроку не чіпалась, окрім test-wasm.cjs) ✅.
+
+### Крок 10.8 — Візуали custom_types на канві, в експорті та палітрі
+- Дата: 2026-07-04
+- Виконано: `types.ts` — `CustomTypeDef` + `normalizeCustomTypes()`
+  (уніфікує скалярну/об'єктну форми `custom_types` для web). `shapes.ts`
+  — `nodeVisual(diagram, nodeType)`: для базових 6 типів — сам тип;
+  для custom — шукає визначення в `custom_types`, `shape` (fallback на
+  component) + `color`/`icon`. `rfNodeTypes.tsx`: `NodeShell` розділяє
+  `nodeType` (семантичний dc-тип, для data-атрибутів/className) і
+  `shapeName` (ключ shape-реєстру для геометрії) — різні для custom
+  типу зі стилем; нова `CustomNode` — генерик-компонент для будь-якого
+  типу поза базовими 6, реєструється в `nodeTypes['custom']`.
+  `resolveNodeType` тепер мапить невідомий тип на `'custom'` (не одразу
+  на `component`, як раніше — falback на component стається вже
+  всередині `nodeVisual`, якщо стилю нема). `svgExport.ts`: вузли
+  малюються через `nodeVisual` (замість прямого `resolveShape`), тож
+  колір/фігура custom-типу застосовуються і в PNG/SVG-експорті; іконка
+  — свідомий descope в експорті (тільки канва/палітра, зафіксовано в
+  плані). `Palette.tsx`: секція "Custom" зі списком `custom_types`
+  поточної діаграми, drag створює вузол цього типу.
+  `PropertiesPanel.tsx`: select `type` включає custom-типи. Курований
+  `customTypeIcons.ts` замість `lucide-react`'s `DynamicIcon` — деталі
+  й причина (вибух білду до 1740 файлів) в `docs/deviations.md`, крок
+  10.8. Нові тести: `shapes.customType.test.ts` (3), розширення
+  `rfNodeTypes.test.tsx`; нова `e2e/custom-types.spec.ts` (2 тести).
+- Коміт: (цей крок)
+- AC: Unit — діаграма з `custom_types:[{name:cache,shape:hexagon,
+  color:"#f5a623"}]` рендерить hexagon цим кольором і на канві
+  (`nodeVisual`+`NodeShell`), і в `renderDiagramSVGString` ✅; Playwright
+  — фікстура `testdata/styled-custom-type.dc.yaml` відкривається →
+  `palette-item-cache` з'являється, drag створює вузол `cache1`,
+  `type: cache` в YAML, Problems — OK ✅; custom type без стилю
+  рендериться як component без падінь (окремий тест) ✅; `npm test`
+  (49) + `npm run build` (2.4MB, без регресії розміру) + повна
+  e2e-регресія (46 специфікацій) зелені ✅.

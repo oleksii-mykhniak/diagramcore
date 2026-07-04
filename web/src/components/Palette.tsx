@@ -1,4 +1,6 @@
 import { DND_NODE_TYPE } from './FlowCanvas';
+import { normalizeCustomTypes } from '../types';
+import type { Diagram } from '../types';
 
 const BASE_TYPES = ['actor', 'service', 'storage', 'queue', 'external', 'component'];
 
@@ -15,11 +17,18 @@ const PREVIEW_STYLE: Record<string, React.CSSProperties> = {
   component: { borderRadius: 'var(--dc-radius-sm)' },
 };
 
+interface Props {
+  diagram?: Diagram;
+}
+
 /** Drag source for node CRUD (PLAN.md step 7.2): dragging one of these
  * onto the canvas creates a node of that type via `FlowCanvas`'s
  * onDropNodeType. Vertical list with a shape preview, in the left sidebar
- * since PLAN.md step 10.4. */
-export function Palette() {
+ * since PLAN.md step 10.4; a "Custom" section for the current diagram's
+ * `custom_types` was added in step 10.8. */
+export function Palette({ diagram }: Props) {
+  const customTypes = diagram ? normalizeCustomTypes(diagram.diagram) : [];
+
   return (
     <div
       data-testid="palette"
@@ -31,6 +40,7 @@ export function Palette() {
         width: 96,
         borderRight: '1px solid var(--dc-border)',
         background: 'var(--dc-surface)',
+        overflowY: 'auto',
       }}
     >
       {BASE_TYPES.map((type) => (
@@ -65,6 +75,54 @@ export function Palette() {
           <span style={{ fontSize: 'var(--dc-font-size-sm)', color: 'var(--dc-text)' }}>{type}</span>
         </div>
       ))}
+      {customTypes.length > 0 && (
+        <>
+          <div
+            style={{
+              borderTop: '1px solid var(--dc-border)',
+              paddingTop: 'var(--dc-space-2)',
+              marginTop: 'var(--dc-space-1)',
+              fontSize: 'var(--dc-font-size-sm)',
+              color: 'var(--dc-text-muted)',
+              textAlign: 'center',
+            }}
+          >
+            Custom
+          </div>
+          {customTypes.map((ct) => (
+            <div
+              key={ct.name}
+              data-testid={`palette-item-${ct.name}`}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DND_NODE_TYPE, ct.name);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 'var(--dc-space-1)',
+                padding: 'var(--dc-space-1)',
+                borderRadius: 'var(--dc-radius-md)',
+                cursor: 'grab',
+                userSelect: 'none',
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 24,
+                  border: '1.5px solid var(--dc-node-border)',
+                  background: ct.color ?? 'var(--dc-node-fill)',
+                  borderRadius: 'var(--dc-radius-sm)',
+                }}
+              />
+              <span style={{ fontSize: 'var(--dc-font-size-sm)', color: 'var(--dc-text)' }}>{ct.name}</span>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }

@@ -86,3 +86,30 @@ export const shapeRegistry: Record<string, ShapeSpec> = { ...baseShapes, ...extr
 export function resolveShape(name: string): ShapeSpec {
   return shapeRegistry[name] ?? baseShapes.component;
 }
+
+export interface NodeVisual {
+  shape: ShapeSpec;
+  color?: string;
+  icon?: string;
+}
+
+interface DiagramLike {
+  diagram: {
+    custom_types?: (string | { name: string; shape?: string; color?: string; icon?: string })[];
+  };
+}
+
+/** Resolves the shape/color/icon to draw a node of the given type
+ * (PLAN.md step 10.8): one of the 6 base types always draws as itself;
+ * anything else is looked up in `diagram.custom_types` — a custom type
+ * with a `shape` uses it (falling back to `component` for an unknown
+ * shape name, not an error), a custom type without a style still falls
+ * back to `component` with no color override. */
+export function nodeVisual(diagram: DiagramLike, nodeType: string): NodeVisual {
+  if (nodeType in baseShapes) return { shape: baseShapes[nodeType] };
+  const def = diagram.diagram.custom_types
+    ?.map((t) => (typeof t === 'string' ? { name: t } : t))
+    .find((t) => t.name === nodeType);
+  if (!def) return { shape: baseShapes.component };
+  return { shape: def.shape ? resolveShape(def.shape) : baseShapes.component, color: def.color, icon: def.icon };
+}

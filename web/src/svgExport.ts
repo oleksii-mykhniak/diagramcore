@@ -3,7 +3,7 @@ import { nodeLabel } from './types';
 import type { DiagramLayout, LayoutEdge, LayoutPoint } from './layout';
 import type { LayoutPosition } from './layoutFile';
 import { pairKey } from './flowPlayer';
-import { resolveShape } from './shapes';
+import { nodeVisual } from './shapes';
 
 export interface FrameHighlight {
   activeStep?: { from: string; to: string };
@@ -105,8 +105,9 @@ export function renderDiagramSVGString(
       const dcNode = nodeById.get(n.id);
       const hasDetails = Boolean(dcNode?.details);
       const label = esc(labelById.get(n.id) ?? n.id) + (hasDetails ? ' ⊞' : '');
-      const shape = resolveShape(dcNode?.type ?? 'component');
-      const fill = dcNode?.type === 'external' ? theme.nodeExternalFill : theme.nodeFill;
+      const visual = nodeVisual(diagram, dcNode?.type ?? 'component');
+      const shape = visual.shape;
+      const fill = visual.color ?? (dcNode?.type === 'external' ? theme.nodeExternalFill : theme.nodeFill);
       const inner = hasDetails
         ? `<rect x="3" y="3" width="${n.width - 6}" height="${n.height - 6}" rx="4" fill="none" stroke="${theme.nodeBorder}" stroke-width="1" />`
         : '';

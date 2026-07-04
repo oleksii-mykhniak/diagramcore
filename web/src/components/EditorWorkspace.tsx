@@ -162,7 +162,7 @@ export function EditorWorkspace({
       {current && (
         <>
           <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-            <Palette />
+            <Palette diagram={current.diagram} />
             <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
               <FlowCanvas
                 diagram={current.diagram}
@@ -192,7 +192,7 @@ export function EditorWorkspace({
               onToggleCollapsed={() => setRightDockCollapsed((c) => !c)}
               propertiesContent={
                 selectedNode ? (
-                  <PropertiesPanel node={selectedNode} onUpdate={onUpdateSelectedNode} onDelete={onDeleteSelectedNode} />
+                  <PropertiesPanel node={selectedNode} diagram={current.diagram} onUpdate={onUpdateSelectedNode} onDelete={onDeleteSelectedNode} />
                 ) : (
                   <p data-testid="properties-empty" style={{ padding: 'var(--dc-space-3)', color: 'var(--dc-text-muted)' }}>
                     Select a node to edit its properties.

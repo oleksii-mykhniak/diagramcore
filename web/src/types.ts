@@ -1,12 +1,28 @@
 // Mirrors the subset of internal/model (Go) needed by the web editor.
 // See docs/format.md for the authoritative format definition.
 
+export interface CustomTypeDef {
+  name: string;
+  shape?: string;
+  color?: string;
+  icon?: string;
+}
+
 export interface DiagramMeta {
   title: string;
   purpose?: string;
   audience?: string;
   version?: string;
-  custom_types?: string[];
+  /** Each raw entry is a bare string (legacy) or a `{name, shape?,
+   * color?, icon?}` object (PLAN.md step 10.7) — use
+   * `normalizeCustomTypes` to get a uniform `CustomTypeDef[]`. */
+  custom_types?: (string | CustomTypeDef)[];
+}
+
+/** Normalizes `diagram.custom_types` to a uniform `CustomTypeDef[]`,
+ * regardless of which raw form each entry used. */
+export function normalizeCustomTypes(meta: DiagramMeta): CustomTypeDef[] {
+  return (meta.custom_types ?? []).map((t) => (typeof t === 'string' ? { name: t } : t));
 }
 
 export interface DiagramNode {

@@ -1,17 +1,21 @@
-import type { DiagramNode } from '../types';
+import { normalizeCustomTypes } from '../types';
+import type { Diagram, DiagramNode } from '../types';
 
 const BASE_TYPES = ['actor', 'service', 'storage', 'queue', 'external', 'component'];
 
 interface Props {
   node: DiagramNode;
+  diagram: Diagram;
   onUpdate: (patch: Partial<DiagramNode>) => void;
   onDelete: () => void;
 }
 
 /** Node properties panel (PLAN.md step 7.2): edits label/type/description/
  * tags on the selected node, each field committing a `updateNode` patch
- * immediately (App.tsx re-derives the diagram from the patched YAML). */
-export function PropertiesPanel({ node, onUpdate, onDelete }: Props) {
+ * immediately (App.tsx re-derives the diagram from the patched YAML). The
+ * type select includes the diagram's `custom_types` since step 10.8. */
+export function PropertiesPanel({ node, diagram, onUpdate, onDelete }: Props) {
+  const customTypeNames = normalizeCustomTypes(diagram.diagram).map((t) => t.name);
   return (
     <aside data-testid="properties-panel" style={{ padding: 12, borderLeft: '1px solid #ccc', minWidth: 220 }}>
       <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>Node: {node.id}</h3>
@@ -33,6 +37,11 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: Props) {
           style={{ display: 'block', width: '100%' }}
         >
           {BASE_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+          {customTypeNames.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
