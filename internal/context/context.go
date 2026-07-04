@@ -75,6 +75,18 @@ func generate(d *model.Diagram, deep bool, visited map[string]bool, depth int) (
 		fmt.Fprintln(&b)
 	}
 
+	if len(d.Notes) > 0 {
+		fmt.Fprintf(&b, "### Notes\n\n")
+		for _, note := range d.Notes {
+			if note.Target != "" {
+				fmt.Fprintf(&b, "- (%s) %s\n", note.Target, note.Text)
+			} else {
+				fmt.Fprintf(&b, "- %s\n", note.Text)
+			}
+		}
+		fmt.Fprintln(&b)
+	}
+
 	if deep {
 		for _, n := range d.Nodes {
 			if n.Details == "" {

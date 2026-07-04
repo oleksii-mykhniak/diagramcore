@@ -9,6 +9,7 @@ package validate
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/oleksii94/diagramcore/internal/model"
 	"github.com/oleksii94/diagramcore/internal/parser"
@@ -87,7 +88,44 @@ func validateDiagram(d *model.Diagram, visited map[string]bool) []Error {
 	errs = append(errs, checkUnknownTypes(d)...)
 	errs = append(errs, checkFlows(d)...)
 	errs = append(errs, checkDetails(d, visited)...)
+	errs = append(errs, checkNotes(d)...)
 	return errs
+}
+
+// checkNotes validates the top-level `notes` section (PLAN2.md step
+// 10.11): ids must be unique (DC009), and a non-empty `target` must
+// reference either an existing node id or an existing link, written as
+// "<from>-><to>" (DC010).
+func checkNotes(d *model.Diagram) []Error {
+	var errs []Error
+	ids := nodeIDs(d)
+	links := map[string]bool{}
+	for _, l := range d.Links {
+		links[linkPairKey(l.From, l.To)] = true
+	}
+	seen := map[string]bool{}
+	for _, note := range d.Notes {
+		if seen[note.ID] {
+			errs = append(errs, Error{d.Path, note.Line, "DC009", fmt.Sprintf("duplicate note id %q", note.ID)})
+		}
+		seen[note.ID] = true
+		if note.Target == "" {
+			continue
+		}
+		if ids[note.Target] {
+			continue
+		}
+		if from, to, ok := splitLinkTarget(note.Target); ok && links[linkPairKey(from, to)] {
+			continue
+		}
+		errs = append(errs, Error{d.Path, note.Line, "DC010", fmt.Sprintf("note %q target %q references a nonexistent node or link", note.ID, note.Target)})
+	}
+	return errs
+}
+
+func splitLinkTarget(target string) (from, to string, ok bool) {
+	before, after, found := strings.Cut(target, "->")
+	return before, after, found
 }
 
 func checkDuplicateNodeIDs(d *model.Diagram) []Error {

@@ -101,6 +101,16 @@ export function ExportDialog({ settings, onChange, onCancel, onExport }: ExportD
           Include grid
         </label>
 
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--dc-space-2)' }}>
+          <input
+            type="checkbox"
+            data-testid="export-include-descriptions"
+            checked={settings.includeDescriptions}
+            onChange={(e) => onChange({ includeDescriptions: e.target.checked })}
+          />
+          Include descriptions
+        </label>
+
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--dc-space-2)' }}>
           <button type="button" data-testid="export-cancel" onClick={onCancel}>
             Cancel

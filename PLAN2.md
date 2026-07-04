@@ -286,11 +286,11 @@ View → "Show descriptions" — під label вузла показується 
 descriptions".
 
 **AC:**
-- [ ] Go unit: notes парсяться, валідація target/унікальності id працює; `dc context` містить текст notes; наявні examples валідні.
-- [ ] `go test ./...` + `go vet ./...` + `make wasm && make wasm-test` зелені; `./dc validate examples/*.dc.yaml` — 0 помилок.
-- [ ] Playwright: додати note з палітри → з'явився в YAML (`yaml-source`), перетягнути → позиція в layout.json, текст редагується; undo працює.
-- [ ] Note присутній в SVG-експорті; "Show descriptions" показує/ховає описи на канві та в експорті.
-- [ ] `npm test` + `npm run build` + повна регресія зелені.
+- [x] Go unit: notes парсяться, валідація target/унікальності id працює; `dc context` містить текст notes; наявні examples валідні.
+- [x] `go test ./...` + `go vet ./...` + `make wasm && make wasm-test` зелені; `./dc validate examples/*.dc.yaml` — 0 помилок.
+- [x] Playwright: додати note з палітри → з'явився в YAML (`yaml-source`), перетягнути → позиція в layout.json, текст редагується; undo працює.
+- [x] Note присутній в SVG-експорті; "Show descriptions" показує/ховає описи на канві та в експорті.
+- [x] `npm test` + `npm run build` + повна регресія зелені.
 
 ## Крок 10.12 — Пресети стилю рендерингу (clean / sketch)
 

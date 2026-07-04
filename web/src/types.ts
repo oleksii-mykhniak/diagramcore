@@ -68,11 +68,18 @@ export interface Flow {
   steps: FlowStepOrBranch[];
 }
 
+export interface DiagramNoteDef {
+  id: string;
+  text: string;
+  target?: string;
+}
+
 export interface Diagram {
   diagram: DiagramMeta;
   nodes: DiagramNode[];
   links: DiagramLink[];
   flows?: Flow[];
+  notes?: DiagramNoteDef[];
 }
 
 export function nodeLabel(node: DiagramNode): string {

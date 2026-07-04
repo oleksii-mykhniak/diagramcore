@@ -6,7 +6,7 @@ import type { DiagramLayout } from './layout';
 const diagram: Diagram = {
   diagram: { title: 'Test' },
   nodes: [
-    { id: 'A', type: 'actor', label: 'Alpha' },
+    { id: 'A', type: 'actor', label: 'Alpha', description: 'The alpha node' },
     { id: 'B', type: 'service', label: 'Beta', details: './beta-detail.dc.yaml' },
   ],
   links: [{ from: 'A', to: 'B', type: 'request' }],
@@ -58,5 +58,19 @@ describe('renderDiagramSVGString', () => {
     const withGrid = renderDiagramSVGString(diagram, layout, positions, {}, { includeGrid: true });
     expect(withGrid).toContain('<pattern');
     expect(withGrid).toContain('url(#dc-grid)');
+  });
+
+  it('draws notes at their position, and node descriptions only when requested (PLAN.md step 10.11)', () => {
+    const withoutDescriptions = renderDiagramSVGString(diagram, layout, positions, {}, { includeDescriptions: false });
+    expect(withoutDescriptions).not.toContain('The alpha node');
+
+    const withDescriptions = renderDiagramSVGString(diagram, layout, positions, {}, { includeDescriptions: true });
+    expect(withDescriptions).toContain('The alpha node');
+
+    const withNotes = renderDiagramSVGString(diagram, layout, positions, {}, {}, [{ id: 'note1', text: 'Trigger refresh' }], {
+      note1: { x: 20, y: 30 },
+    });
+    expect(withNotes).toContain('Trigger refresh');
+    expect(withNotes).toContain('x="20"');
   });
 });

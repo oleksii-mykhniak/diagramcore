@@ -11,10 +11,33 @@ type Diagram struct {
 	Nodes []Node      `yaml:"nodes"`
 	Links []Link      `yaml:"links"`
 	Flows []Flow      `yaml:"flows"`
+	Notes []Note      `yaml:"notes"`
 
 	// Path is the absolute, canonical path of the file this diagram was
 	// parsed from. Set by the parser; used for details-reference traversal.
 	Path string `yaml:"-"`
+}
+
+// Note is one entry of the top-level `notes` section (PLAN2.md step
+// 10.11): a free-text annotation, optionally anchored to a node (`target`
+// = node id) or a link (`target` = "<from>-><to>"). Positions live in the
+// layout file, not here — this is semantic content only.
+type Note struct {
+	ID     string `yaml:"id"`
+	Text   string `yaml:"text"`
+	Target string `yaml:"target"`
+	Line   int    `yaml:"-"`
+}
+
+func (n *Note) UnmarshalYAML(value *yaml.Node) error {
+	type raw Note
+	var aux raw
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	*n = Note(aux)
+	n.Line = value.Line
+	return nil
 }
 
 // DiagramMeta holds the `diagram` section.

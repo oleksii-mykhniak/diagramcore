@@ -84,3 +84,32 @@ links: []
 		t.Errorf("unexpected second entry: %+v", d.Meta.CustomTypes[1])
 	}
 }
+
+func TestNotesParseWithAndWithoutTarget(t *testing.T) {
+	d, err := parser.ParseString([]byte(`
+diagram:
+  title: "T"
+nodes:
+  - id: A
+    type: component
+links: []
+notes:
+  - id: note1
+    text: "Trigger refresh"
+    target: A
+  - id: note2
+    text: "Freestanding note"
+`))
+	if err != nil {
+		t.Fatalf("ParseString: %v", err)
+	}
+	if len(d.Notes) != 2 {
+		t.Fatalf("expected 2 notes, got %d", len(d.Notes))
+	}
+	if d.Notes[0].Target != "A" || d.Notes[0].Text != "Trigger refresh" {
+		t.Errorf("unexpected note[0]: %+v", d.Notes[0])
+	}
+	if d.Notes[1].Target != "" || d.Notes[1].Text != "Freestanding note" {
+		t.Errorf("unexpected note[1]: %+v", d.Notes[1])
+	}
+}

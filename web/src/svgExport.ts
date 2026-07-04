@@ -1,4 +1,4 @@
-import type { Diagram } from './types';
+import type { Diagram, DiagramNoteDef } from './types';
 import { nodeLabel } from './types';
 import type { DiagramLayout, LayoutEdge, LayoutPoint } from './layout';
 import type { LayoutPosition } from './layoutFile';
@@ -14,6 +14,10 @@ export interface RenderOptions {
   /** Draws the same dotted background pattern the canvas shows when
    * View → Grid is on (PLAN.md step 10.9's "include grid" export option). */
   includeGrid?: boolean;
+  /** Draws each node's `description` as a second, muted line under its
+   * label — mirrors View → "Show descriptions" on the canvas (PLAN.md
+   * step 10.11's "include descriptions" export option). */
+  includeDescriptions?: boolean;
 }
 
 export interface ThemeColors {
@@ -79,6 +83,8 @@ export function renderDiagramSVGString(
   positions: Record<string, LayoutPosition>,
   highlight: FrameHighlight = {},
   options: RenderOptions = {},
+  notes: DiagramNoteDef[] = [],
+  notePositions: Record<string, LayoutPosition> = {},
 ): string {
   const labelById = new Map(diagram.nodes.map((n) => [n.id, nodeLabel(n)]));
   const nodeById = new Map(diagram.nodes.map((n) => [n.id, n]));
@@ -125,13 +131,30 @@ export function renderDiagramSVGString(
       const inner = hasDetails
         ? `<rect x="3" y="3" width="${n.width - 6}" height="${n.height - 6}" rx="4" fill="none" stroke="${theme.nodeBorder}" stroke-width="1" />`
         : '';
+      const description = options.includeDescriptions ? dcNode?.description : undefined;
+      const labelY = description ? n.height / 2 - 7 : n.height / 2;
+      const descriptionSvg = description
+        ? `<text x="${n.width / 2}" y="${n.height / 2 + 9}" text-anchor="middle" dominant-baseline="middle" font-size="11" font-family="system-ui, sans-serif" fill="${theme.text}" opacity="0.65">${esc(description)}</text>`
+        : '';
       return (
         `<g transform="translate(${pos.x},${pos.y})">` +
         shape.renderSvgInner(n.width, n.height, { fill, stroke: theme.nodeBorder, strokeWidth: hasDetails ? 3 : 1.5 }) +
         inner +
-        `<text x="${n.width / 2}" y="${n.height / 2}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="system-ui, sans-serif" fill="${theme.text}">${label}</text>` +
+        `<text x="${n.width / 2}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="system-ui, sans-serif" fill="${theme.text}">${label}</text>` +
+        descriptionSvg +
         `</g>`
       );
+    })
+    .join('');
+
+  const notesSvg = notes
+    .map((note) => {
+      const pos = notePositions[note.id] ?? { x: 0, y: 0 };
+      const lines = note.text.split('\n');
+      const tspans = lines
+        .map((line, i) => `<tspan x="0" dy="${i === 0 ? 0 : 16}">${esc(line)}</tspan>`)
+        .join('');
+      return `<text x="${pos.x}" y="${pos.y + 12}" font-size="13" font-family="system-ui, sans-serif" fill="${theme.text}">${tspans}</text>`;
     })
     .join('');
 
@@ -142,6 +165,7 @@ export function renderDiagramSVGString(
     edgesSvg +
     markerSvg +
     nodesSvg +
+    notesSvg +
     `</svg>`
   );
 }

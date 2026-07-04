@@ -5,7 +5,7 @@ import { parseDiagram } from '../parseDiagram';
 import { validateDiagram } from '../wasmValidate';
 import type { ValidationError } from '../wasmValidate';
 import { computeLayout } from '../layout';
-import type { Diagram, DiagramNode, DiagramLink } from '../types';
+import type { Diagram, DiagramNode, DiagramLink, DiagramNoteDef } from '../types';
 import { parseLayoutFile } from '../layoutFile';
 import type { LayoutPosition } from '../layoutFile';
 import type { FlowPlayerState } from '../flowPlayer';
@@ -45,7 +45,10 @@ export function useDiagramEditing(
    * node as manual — used when a node is created by dropping it at a
    * specific canvas location. */
   const applyOps = useCallback(
-    (ops: PatchOp[], opts?: { manualPosition?: { id: string; pos: LayoutPosition } }) => {
+    (
+      ops: PatchOp[],
+      opts?: { manualPosition?: { id: string; pos: LayoutPosition }; notePosition?: { id: string; pos: LayoutPosition } },
+    ) => {
       const run = async () => {
         const level = levelRef.current;
         if (!level) return;
@@ -63,6 +66,9 @@ export function useDiagramEditing(
           positions[opts.manualPosition.id] = opts.manualPosition.pos;
           manualPositionIds.add(opts.manualPosition.id);
         }
+        const notePositions = opts?.notePosition
+          ? { ...level.notePositions, [opts.notePosition.id]: opts.notePosition.pos }
+          : level.notePositions;
         if (newText !== level.rawText) pushHistory(level.rawText);
         updateCurrentLevel({
           rawText: newText,
@@ -71,6 +77,7 @@ export function useDiagramEditing(
           layout: recomputed,
           positions,
           manualPositionIds,
+          notePositions,
         });
       };
       return runMutation(run);
@@ -135,6 +142,47 @@ export function useDiagramEditing(
   const onNodeClick = useCallback((node: DiagramNode) => {
     setSelectedNodeId(node.id);
   }, []);
+
+  /** Palette "Text" item dropped on the canvas (PLAN.md step 10.11):
+   * creates a `notes:` entry and seeds its position, mirroring
+   * `onDropNodeType`. */
+  const onDropNoteType = useCallback(
+    (pos: LayoutPosition) => {
+      if (!current) return;
+      const existingIds = new Set((current.diagram.notes ?? []).map((n) => n.id));
+      let n = 1;
+      let id = `note${n}`;
+      while (existingIds.has(id)) {
+        n += 1;
+        id = `note${n}`;
+      }
+      void applyOps([{ op: 'addNote', note: { id, text: 'New note' } }], { notePosition: { id, pos } });
+    },
+    [current, applyOps],
+  );
+
+  const onNoteDrag = useCallback(
+    (id: string, pos: LayoutPosition) => {
+      if (!current) return;
+      updateCurrentLevel({ notePositions: { ...current.notePositions, [id]: pos } });
+    },
+    [current, updateCurrentLevel],
+  );
+
+  /** Double-click a note (PLAN.md step 10.11): prompts for new text —
+   * clearing it removes the note, cancelling leaves it untouched. */
+  const onNoteDoubleClick = useCallback(
+    (note: DiagramNoteDef) => {
+      const next = window.prompt('Note text', note.text);
+      if (next === null) return;
+      if (next.trim() === '') {
+        void applyOps([{ op: 'removeNote', id: note.id }]);
+        return;
+      }
+      void applyOps([{ op: 'updateNote', id: note.id, patch: { text: next } }]);
+    },
+    [applyOps],
+  );
 
   const onUpdateSelectedNode = useCallback(
     (patch: Partial<DiagramNode>) => {
@@ -337,6 +385,7 @@ export function useDiagramEditing(
           updateCurrentLevel({
             positions: { ...current.positions, ...importedPositions },
             manualPositionIds,
+            notePositions: { ...current.notePositions, ...(imported.views.default?.notePositions ?? {}) },
           });
         } catch (err) {
           setLoadError(err instanceof Error ? err.message : String(err));
@@ -363,6 +412,9 @@ export function useDiagramEditing(
     applyOps,
     applyTextReplace,
     onDropNodeType,
+    onDropNoteType,
+    onNoteDrag,
+    onNoteDoubleClick,
     onNodeClick,
     onUpdateSelectedNode,
     onDeleteSelectedNode,

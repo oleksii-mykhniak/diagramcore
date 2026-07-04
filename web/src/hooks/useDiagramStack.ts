@@ -26,6 +26,10 @@ export interface DiagramLevel {
    * as opposed to the last auto-layout computation — "Re-layout"
    * (PLAN.md step 6.2) leaves these untouched. */
   manualPositionIds: Set<string>;
+  /** Note positions (PLAN.md step 10.11) — separate from `positions`
+   * since notes aren't diagram nodes and have no auto-layout; every note
+   * has an entry, defaulted on load if the layout file didn't have one. */
+  notePositions: Record<string, LayoutPosition>;
   /** File System Access handles (PLAN.md step 8.1), only set when the
    * level was opened via the native picker (Chromium). `null` (as
    * opposed to `undefined`) means "opened natively, but no layout file
@@ -121,6 +125,9 @@ export function useDiagramStack() {
       errors: validationErrors,
       flowPlayerState: initialFlowPlayerState,
       manualPositionIds: new Set<string>(),
+      notePositions: Object.fromEntries(
+        (parsed.notes ?? []).map((note, i) => [note.id, { x: 40 + i * 30, y: 40 + i * 30 }]),
+      ),
       savedRawText: text,
     };
   }, []);
@@ -240,6 +247,7 @@ export function useDiagramStack() {
           const importedPositions = imported.views.default?.positions ?? {};
           level.positions = { ...level.positions, ...importedPositions };
           level.manualPositionIds = new Set(Object.keys(importedPositions));
+          level.notePositions = { ...level.notePositions, ...(imported.views.default?.notePositions ?? {}) };
         }
         levelRef.current = level;
         resetHistory();
@@ -262,20 +270,23 @@ export function useDiagramStack() {
     if (!current) return;
     if (!current.mainHandle || !isNativeFsSupported()) {
       downloadBlob(current.fileName, new Blob([current.rawText], { type: 'application/x-yaml' }));
-      if (current.manualPositionIds.size > 0) {
-        downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFile(current.positions));
+      if (current.manualPositionIds.size > 0 || current.diagram.notes?.length) {
+        downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFile(current.positions, current.notePositions));
       }
       updateCurrentLevel({ savedRawText: current.rawText });
       return;
     }
     await writeTextToHandle(current.mainHandle, current.rawText);
     let layoutHandle = current.layoutHandle ?? null;
-    if (current.manualPositionIds.size > 0) {
+    if (current.manualPositionIds.size > 0 || current.diagram.notes?.length) {
       if (!layoutHandle) {
         layoutHandle = await pickSaveHandle(layoutFileName(current.fileName));
       }
       if (layoutHandle) {
-        await writeTextToHandle(layoutHandle, JSON.stringify(buildLayoutFile(current.positions), null, 2));
+        await writeTextToHandle(
+          layoutHandle,
+          JSON.stringify(buildLayoutFile(current.positions, current.notePositions), null, 2),
+        );
       }
     }
     updateCurrentLevel({ savedRawText: current.rawText, layoutHandle: layoutHandle ?? undefined });
@@ -308,6 +319,7 @@ export function useDiagramStack() {
         const importedPositions = shared.layout.views.default?.positions ?? {};
         level.positions = { ...level.positions, ...importedPositions };
         level.manualPositionIds = new Set(Object.keys(importedPositions));
+        level.notePositions = { ...level.notePositions, ...(shared.layout.views.default?.notePositions ?? {}) };
       }
       levelRef.current = level;
       resetHistory();

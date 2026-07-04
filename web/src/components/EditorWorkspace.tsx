@@ -12,7 +12,7 @@ import { StatusBar } from './StatusBar';
 import { RightDock } from './RightDock';
 import type { RightDockTab } from './RightDock';
 import type { ValidationError } from '../wasmValidate';
-import type { DiagramNode, DiagramLink, Flow } from '../types';
+import type { DiagramNode, DiagramLink, DiagramNoteDef, Flow } from '../types';
 import type { LayoutPosition } from '../layoutFile';
 import { computeFlowHighlight } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
@@ -40,6 +40,10 @@ interface EditorWorkspaceProps {
   onNodeDoubleClick: (node: DiagramNode) => void;
   onNodeClick: (node: DiagramNode) => void;
   onDropNodeType: (type: string, pos: LayoutPosition) => void;
+  onDropNoteType: (pos: LayoutPosition) => void;
+  onNoteDrag: (id: string, pos: LayoutPosition) => void;
+  onNoteDoubleClick: (note: DiagramNoteDef) => void;
+  showDescriptions: boolean;
   onConnectNodes: (source: string, target: string) => void;
   hoveredLinkIndex: number | null;
   onEdgeHover: (index: number | null) => void;
@@ -99,6 +103,10 @@ export function EditorWorkspace({
   onNodeDoubleClick,
   onNodeClick,
   onDropNodeType,
+  onDropNoteType,
+  onNoteDrag,
+  onNoteDoubleClick,
+  showDescriptions,
   onConnectNodes,
   hoveredLinkIndex,
   onEdgeHover,
@@ -186,6 +194,12 @@ export function EditorWorkspace({
                 visitedStepKeys={highlight?.visitedStepKeys}
                 showGrid={grid}
                 snapToGridEnabled={snap}
+                notes={current.diagram.notes}
+                notePositions={current.notePositions}
+                onNoteDrag={onNoteDrag}
+                onNoteDoubleClick={onNoteDoubleClick}
+                onDropNoteType={onDropNoteType}
+                showDescriptions={showDescriptions}
               />
             </div>
             <RightDock

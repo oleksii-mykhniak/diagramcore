@@ -31,7 +31,7 @@ export function useDiagramExports(current: DiagramLevel | null) {
 
   const onExportLayout = useCallback(() => {
     if (!current) return;
-    downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFile(current.positions));
+    downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFile(current.positions, current.notePositions));
   }, [current]);
 
   /** File → Export image… (PLAN.md step 10.9): PNG/JPG rasterize the SVG
@@ -46,7 +46,9 @@ export function useDiagramExports(current: DiagramLevel | null) {
         current.layout,
         current.positions,
         { activeStep: highlight.activeStep ?? undefined, visitedStepKeys: highlight.visitedStepKeys },
-        { includeGrid: settings.includeGrid },
+        { includeGrid: settings.includeGrid, includeDescriptions: settings.includeDescriptions },
+        current.diagram.notes,
+        current.notePositions,
       );
       const base = baseName(current.fileName);
       if (settings.format === 'svg') {
@@ -78,7 +80,9 @@ export function useDiagramExports(current: DiagramLevel | null) {
           current.layout,
           current.positions,
           { activeStep: frame.activeStep, visitedStepKeys: frame.visitedStepKeys },
-          { includeGrid: settings.includeGrid },
+          { includeGrid: settings.includeGrid, includeDescriptions: settings.includeDescriptions },
+          current.diagram.notes,
+          current.notePositions,
         );
         if (settings.format === 'svg') {
           zipInput[`${frame.name}.svg`] = new TextEncoder().encode(svg);
@@ -105,7 +109,10 @@ export function useDiagramExports(current: DiagramLevel | null) {
 
   const onShare = useCallback(() => {
     if (!current) return;
-    const layout = current.manualPositionIds.size > 0 ? buildLayoutFile(current.positions) : null;
+    const layout =
+      current.manualPositionIds.size > 0 || (current.diagram.notes?.length ?? 0) > 0
+        ? buildLayoutFile(current.positions, current.notePositions)
+        : null;
     const { fragment, size } = encodeShareState({ fileName: current.fileName, yaml: current.rawText, layout });
     if (size > SHARE_URL_SIZE_LIMIT) {
       setShareError(

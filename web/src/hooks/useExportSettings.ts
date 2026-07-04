@@ -8,6 +8,7 @@ export interface ExportSettings {
   scale: 1 | 2 | 4;
   background: RasterBackground;
   includeGrid: boolean;
+  includeDescriptions: boolean;
 }
 
 const STORAGE_KEY = 'dc.ui.exportSettings';
@@ -17,6 +18,7 @@ const DEFAULTS: ExportSettings = {
   scale: 1,
   background: 'white',
   includeGrid: false,
+  includeDescriptions: false,
 };
 
 function read(): ExportSettings {

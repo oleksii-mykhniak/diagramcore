@@ -36,6 +36,8 @@ func TestInvalidFixtures(t *testing.T) {
 		{"dc006_details_missing.dc.yaml", "DC006"},
 		{"dc007_empty_flow.dc.yaml", "DC007"},
 		{"dc008_branch_no_then.dc.yaml", "DC008"},
+		{"dc009_duplicate_note_id.dc.yaml", "DC009"},
+		{"dc010_note_bad_target.dc.yaml", "DC010"},
 	}
 
 	for _, c := range cases {
@@ -198,5 +200,34 @@ func TestStyledCustomTypeFixtureIsValid(t *testing.T) {
 	}
 	if len(errs) != 0 {
 		t.Errorf("expected no validation errors, got: %v", errs)
+	}
+}
+
+func TestNoteTargetingLinkIsValid(t *testing.T) {
+	yamlText := `
+diagram:
+  title: "T"
+nodes:
+  - id: A
+    type: component
+  - id: B
+    type: component
+links:
+  - from: A
+    to: B
+    type: request
+notes:
+  - id: note1
+    text: "Retried on 5xx"
+    target: "A->B"
+`
+	errs, err := ValidateString(yamlText)
+	if err != nil {
+		t.Fatalf("ValidateString failed: %v", err)
+	}
+	for _, e := range errs {
+		if e.Code == "DC010" {
+			t.Errorf("unexpected DC010 for a note targeting an existing link: %v", errs)
+		}
 	}
 }

@@ -1,0 +1,14 @@
+diagram:
+  title: "DC009 note"
+
+nodes:
+  - id: A
+    type: component
+
+links: []
+
+notes:
+  - id: dup
+    text: "First"
+  - id: dup
+    text: "Second"

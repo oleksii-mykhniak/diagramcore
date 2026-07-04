@@ -22,6 +22,7 @@ function readNumber(key: string, fallback: number): number {
 export function useViewSettings() {
   const [grid, setGrid] = useState(() => readBool('dc.ui.grid', true));
   const [snap, setSnap] = useState(() => readBool('dc.ui.snap', false));
+  const [showDescriptions, setShowDescriptions] = useState(() => readBool('dc.ui.showDescriptions', false));
   const [yamlPanelOpen, setYamlPanelOpen] = useState(() => localStorage.getItem('dc.ui.yamlPanel') !== 'collapsed');
   const [yamlPanelHeight, setYamlPanelHeightState] = useState(() =>
     readNumber('dc.ui.yamlPanelHeight', DEFAULT_YAML_PANEL_HEIGHT),
@@ -29,6 +30,7 @@ export function useViewSettings() {
 
   useEffect(() => localStorage.setItem('dc.ui.grid', String(grid)), [grid]);
   useEffect(() => localStorage.setItem('dc.ui.snap', String(snap)), [snap]);
+  useEffect(() => localStorage.setItem('dc.ui.showDescriptions', String(showDescriptions)), [showDescriptions]);
   useEffect(
     () => localStorage.setItem('dc.ui.yamlPanel', yamlPanelOpen ? 'open' : 'collapsed'),
     [yamlPanelOpen],
@@ -47,6 +49,8 @@ export function useViewSettings() {
     toggleGrid: () => setGrid((g) => !g),
     snap,
     toggleSnap: () => setSnap((s) => !s),
+    showDescriptions,
+    toggleShowDescriptions: () => setShowDescriptions((d) => !d),
     yamlPanelOpen,
     toggleYamlPanel: () => setYamlPanelOpen((o) => !o),
     yamlPanelHeight,

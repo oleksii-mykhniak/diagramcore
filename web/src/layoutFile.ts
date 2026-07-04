@@ -11,14 +11,24 @@ export interface LayoutFile {
   views: {
     [view: string]: {
       positions: Record<string, LayoutPosition>;
+      /** Note positions (PLAN.md step 10.11) — separate from `positions`
+       * since notes aren't diagram nodes. */
+      notePositions?: Record<string, LayoutPosition>;
     };
   };
 }
 
 export const DEFAULT_VIEW = 'default';
 
-export function buildLayoutFile(positions: Record<string, LayoutPosition>): LayoutFile {
-  return { views: { [DEFAULT_VIEW]: { positions } } };
+export function buildLayoutFile(
+  positions: Record<string, LayoutPosition>,
+  notePositions?: Record<string, LayoutPosition>,
+): LayoutFile {
+  return {
+    views: {
+      [DEFAULT_VIEW]: notePositions ? { positions, notePositions } : { positions },
+    },
+  };
 }
 
 export function parseLayoutFile(text: string): LayoutFile {

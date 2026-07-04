@@ -11,13 +11,13 @@ import {
 } from '@xyflow/react';
 import type { Node, NodeChange } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { Diagram, DiagramNode } from '../types';
+import type { Diagram, DiagramNode, DiagramNoteDef } from '../types';
 import { nodeLabel } from '../types';
 import type { DiagramLayout } from '../layout';
 import type { LayoutPosition } from '../layoutFile';
 import { pairKey } from '../flowPlayer';
 import { nodeTypes, resolveNodeType } from './rfNodeTypes';
-import type { DcNodeData } from './rfNodeTypes';
+import type { DcNodeData, NoteNodeData } from './rfNodeTypes';
 import { nodeVisual } from '../shapes';
 import { edgeTypes } from './rfEdgeTypes';
 import type { DcEdgeData } from './rfEdgeTypes';
@@ -53,7 +53,17 @@ interface Props {
   /** View → Grid/Snap to grid (PLAN.md step 10.5), persisted by the caller. */
   showGrid?: boolean;
   snapToGridEnabled?: boolean;
+  /** Free-text annotations (PLAN.md step 10.11). */
+  notes?: DiagramNoteDef[];
+  notePositions?: Record<string, LayoutPosition>;
+  onNoteDrag?: (id: string, pos: LayoutPosition) => void;
+  onNoteDoubleClick?: (note: DiagramNoteDef) => void;
+  onDropNoteType?: (pos: LayoutPosition) => void;
+  showDescriptions?: boolean;
 }
+
+/** dataTransfer type value used by the palette's "Text" (note) item. */
+export const NOTE_DND_TYPE = 'note';
 
 function FlowCanvasInner({
   diagram,
@@ -74,8 +84,15 @@ function FlowCanvasInner({
   focusNonce,
   showGrid = true,
   snapToGridEnabled = false,
+  notes,
+  notePositions,
+  onNoteDrag,
+  onNoteDoubleClick,
+  onDropNoteType,
+  showDescriptions = false,
 }: Props) {
   const nodeById = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram.nodes]);
+  const noteById = useMemo(() => new Map((notes ?? []).map((n) => [n.id, n])), [notes]);
   const { fitView, screenToFlowPosition } = useReactFlow();
 
   useEffect(() => {
@@ -112,11 +129,24 @@ function FlowCanvasInner({
             isActive: activeKey !== null && (activeStep?.from === n.id || activeStep?.to === n.id),
             isVisited: false,
             isSelected: selectedNodeId === n.id,
+            description: dcNode?.description,
+            showDescription: showDescriptions,
             ...(visual ? { customType: type, shape: visual.shape.name, color: visual.color, icon: visual.icon } : {}),
           },
         };
       }),
-    [layout.nodes, nodeById, positions, activeStep, activeKey, selectedNodeId, diagram],
+    [layout.nodes, nodeById, positions, activeStep, activeKey, selectedNodeId, diagram, showDescriptions],
+  );
+
+  const rfNoteNodes: Node<NoteNodeData>[] = useMemo(
+    () =>
+      (notes ?? []).map((note) => ({
+        id: note.id,
+        type: 'note',
+        position: notePositions?.[note.id] ?? { x: 0, y: 0 },
+        data: { text: note.text },
+      })),
+    [notes, notePositions],
   );
 
   const rfEdges = useMemo(
@@ -144,30 +174,36 @@ function FlowCanvasInner({
     [diagram.links, activeKey, visitedStepKeys, hoveredLinkIndex],
   );
 
-  const handleNodesChange = (changes: NodeChange<Node<DcNodeData>>[]) => {
-    if (!onNodeDrag) return;
-    const next = applyNodeChanges(changes, rfNodes);
+  const noteIds = useMemo(() => new Set((notes ?? []).map((n) => n.id)), [notes]);
+  const allNodes = useMemo(() => [...rfNodes, ...rfNoteNodes] as Node[], [rfNodes, rfNoteNodes]);
+
+  const handleNodesChange = (changes: NodeChange<Node>[]) => {
+    const next = applyNodeChanges(changes, allNodes);
     for (const change of changes) {
       if (change.type === 'position' && change.position) {
-        onNodeDrag(change.id, change.position);
+        if (noteIds.has(change.id)) onNoteDrag?.(change.id, change.position);
+        else onNodeDrag?.(change.id, change.position);
       }
     }
     void next;
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    if (!onDropNodeType) return;
+    if (!onDropNodeType && !onDropNoteType) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    if (!onDropNodeType) return;
     const type = e.dataTransfer.getData(DND_NODE_TYPE);
     if (!type) return;
     e.preventDefault();
     const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    onDropNodeType(type, position);
+    if (type === NOTE_DND_TYPE) {
+      onDropNoteType?.(position);
+      return;
+    }
+    onDropNodeType?.(type, position);
   };
 
   return (
@@ -178,7 +214,7 @@ function FlowCanvasInner({
       onDrop={handleDrop}
     >
       <ReactFlow
-        nodes={rfNodes}
+        nodes={allNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -187,6 +223,11 @@ function FlowCanvasInner({
           if (clickTimer.current) {
             clearTimeout(clickTimer.current);
             clickTimer.current = null;
+          }
+          if (noteIds.has(node.id)) {
+            const note = noteById.get(node.id);
+            if (note && onNoteDoubleClick) onNoteDoubleClick(note);
+            return;
           }
           const dcNode = nodeById.get(node.id);
           if (dcNode && onNodeDoubleClick) onNodeDoubleClick(dcNode);

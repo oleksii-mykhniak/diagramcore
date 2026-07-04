@@ -56,6 +56,9 @@ export default function App() {
     recordingFlow,
     applyTextReplace,
     onDropNodeType,
+    onDropNoteType,
+    onNoteDrag,
+    onNoteDoubleClick,
     onNodeClick,
     onUpdateSelectedNode,
     onDeleteSelectedNode,
@@ -141,6 +144,8 @@ export default function App() {
         onToggleGrid={view.toggleGrid}
         snap={view.snap}
         onToggleSnap={view.toggleSnap}
+        showDescriptions={view.showDescriptions}
+        onToggleShowDescriptions={view.toggleShowDescriptions}
         yamlPanelOpen={view.yamlPanelOpen}
         onToggleYamlPanel={view.toggleYamlPanel}
         onImportDrawio={(file) => void onImportDrawio(file)}
@@ -167,6 +172,10 @@ export default function App() {
         onNodeDoubleClick={(node) => void openDetails(node)}
         onNodeClick={onNodeClick}
         onDropNodeType={onDropNodeType}
+        onDropNoteType={onDropNoteType}
+        onNoteDrag={onNoteDrag}
+        onNoteDoubleClick={onNoteDoubleClick}
+        showDescriptions={view.showDescriptions}
         onConnectNodes={onConnectNodes}
         hoveredLinkIndex={hoveredLinkIndex}
         onEdgeHover={setHoveredLinkIndex}

@@ -15,6 +15,9 @@ export interface DcNodeData extends Record<string, unknown> {
   shape?: string;
   color?: string;
   icon?: string;
+  /** View → "Show descriptions" (PLAN.md step 10.11). */
+  description?: string;
+  showDescription?: boolean;
 }
 
 interface ShellProps {
@@ -76,22 +79,39 @@ function NodeShell({ id, data, nodeType, shapeName, className }: ShellProps) {
           height: '100%',
           boxSizing: 'border-box',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 'var(--dc-space-1)',
           textAlign: 'center',
           padding: '0 var(--dc-space-2)',
           fontSize: 'var(--dc-font-size-base)',
           color: 'var(--dc-text)',
         }}
       >
-        {IconComponent && (
-          <span data-testid={`rf-node-icon-${id}`} style={{ display: 'inline-flex' }}>
-            <IconComponent size={14} />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--dc-space-1)' }}>
+          {IconComponent && (
+            <span data-testid={`rf-node-icon-${id}`} style={{ display: 'inline-flex' }}>
+              <IconComponent size={14} />
+            </span>
+          )}
+          {data.label}
+          {data.hasDetails && <span data-testid={`rf-details-marker-${id}`}> ⊞</span>}
+        </span>
+        {data.showDescription && data.description && (
+          <span
+            data-testid={`rf-node-description-${id}`}
+            style={{
+              fontSize: 'var(--dc-font-size-sm)',
+              color: 'var(--dc-text-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: '100%',
+            }}
+          >
+            {data.description}
           </span>
         )}
-        {data.label}
-        {data.hasDetails && <span data-testid={`rf-details-marker-${id}`}> ⊞</span>}
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>
@@ -132,6 +152,35 @@ export function CustomNode({ id, data }: NodeProps) {
   return <NodeShell id={id} data={d} nodeType={type} shapeName={d.shape ?? 'component'} className="rf-node--custom" />;
 }
 
+export interface NoteNodeData extends Record<string, unknown> {
+  text: string;
+}
+
+/** Free-text annotation (PLAN.md step 10.11) — borderless, draggable,
+ * no handles (notes don't participate in links). Double-click to edit
+ * (see `EditorWorkspace`'s `onNoteDoubleClick`). */
+export function NoteNode({ id, data }: NodeProps) {
+  const d = data as NoteNodeData;
+  return (
+    <div
+      data-testid={`rf-note-${id}`}
+      className="rf-note"
+      style={{
+        padding: 'var(--dc-space-1) var(--dc-space-2)',
+        fontSize: 'var(--dc-font-size-base)',
+        color: 'var(--dc-text)',
+        background: 'transparent',
+        border: 'none',
+        maxWidth: 220,
+        cursor: 'grab',
+        whiteSpace: 'pre-wrap',
+      }}
+    >
+      {d.text}
+    </div>
+  );
+}
+
 export const nodeTypes = {
   actor: ActorNode,
   service: ServiceNode,
@@ -140,6 +189,7 @@ export const nodeTypes = {
   external: ExternalNode,
   component: ComponentNode,
   custom: CustomNode,
+  note: NoteNode,
 };
 
 const BASE_TYPES = ['actor', 'service', 'storage', 'queue', 'external', 'component'];

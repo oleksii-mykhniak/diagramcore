@@ -1,4 +1,4 @@
-import { DND_NODE_TYPE } from './FlowCanvas';
+import { DND_NODE_TYPE, NOTE_DND_TYPE } from './FlowCanvas';
 import { normalizeCustomTypes } from '../types';
 import type { Diagram } from '../types';
 
@@ -75,6 +75,39 @@ export function Palette({ diagram }: Props) {
           <span style={{ fontSize: 'var(--dc-font-size-sm)', color: 'var(--dc-text)' }}>{type}</span>
         </div>
       ))}
+      <div
+        data-testid="palette-item-note"
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(DND_NODE_TYPE, NOTE_DND_TYPE);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 'var(--dc-space-1)',
+          padding: 'var(--dc-space-1)',
+          borderRadius: 'var(--dc-radius-md)',
+          cursor: 'grab',
+          userSelect: 'none',
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 'var(--dc-font-size-sm)',
+            color: 'var(--dc-text-muted)',
+          }}
+        >
+          Aa
+        </div>
+        <span style={{ fontSize: 'var(--dc-font-size-sm)', color: 'var(--dc-text)' }}>Text</span>
+      </div>
       {customTypes.length > 0 && (
         <>
           <div

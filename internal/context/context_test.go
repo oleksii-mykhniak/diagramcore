@@ -105,3 +105,33 @@ func TestGenerateInvalidDiagramMissingRequiredNothingPanics(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 }
+
+func TestGenerateIncludesNotes(t *testing.T) {
+	d, err := parser.ParseString([]byte(`
+diagram:
+  title: "T"
+nodes:
+  - id: A
+    type: component
+links: []
+notes:
+  - id: note1
+    text: "Trigger refresh"
+    target: A
+  - id: note2
+    text: "Freestanding note"
+`))
+	if err != nil {
+		t.Fatalf("ParseString failed: %v", err)
+	}
+	got, err := Generate(d, false)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+	if !strings.Contains(got, "### Notes") {
+		t.Errorf("expected a Notes section, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Trigger refresh") || !strings.Contains(got, "Freestanding note") {
+		t.Errorf("expected both notes' text, got:\n%s", got)
+	}
+}

@@ -1367,3 +1367,46 @@
   e2e-регресія (52 специфікації) + `npm run lint` зелені ✅. Вручну
   перевірено скріншотом: коректні фігури (ellipse/cylinder/dashed) і
   summary-рядок над канвою.
+
+### Крок 10.11 — Текстові анотації (notes) + показ description
+- Дата: 2026-07-04
+- Виконано: формат — top-level `notes: [{id, text, target?}]`
+  (`internal/model`, `internal/validate` — унікальність id, target
+  посилається на існуючий вузол/зв'язок; testdata dc009/dc010),
+  `schema/diagramcore.schema.json`, `docs/format.md`, `internal/context`
+  включає текст notes у markdown. Web: `yamlPatch.ts` —
+  `addNote`/`updateNote`/`removeNote` (створює `notes:` при першому
+  використанні); `layoutFile.ts`/`useDiagramStack.ts` — окремий
+  `notePositions` (нотатки не мають auto-layout, кожна отримує позицію
+  при відкритті/імпорті/дропі). `rfNodeTypes.tsx` — `NoteNode`
+  (borderless, draggable, без handles) + `showDescription` другим рядком
+  під лейблом вузла. `FlowCanvas.tsx` — рендерить notes поряд із
+  вузлами, drag/double-click окремо від звичайних нод, `onDropNoteType`
+  через ту саму DnD-подію палітри (`NOTE_DND_TYPE = 'note'` як значення
+  того самого `DND_NODE_TYPE`-ключа). `Palette.tsx` — пункт "Text".
+  `useDiagramEditing.ts` — `onDropNoteType`/`onNoteDrag`/
+  `onNoteDoubleClick` (prompt: порожній текст видаляє note); `applyOps`
+  отримав `opts.notePosition` (той самий атомарний патерн, що й
+  `manualPosition`, щоб уникнути гонки з async-мутацією). View →
+  "Show descriptions" (`useViewSettings`, персист); export-діалог —
+  "Include descriptions" (`useExportSettings`, персист). `svgExport.ts`
+  — `renderDiagramSVGString` малює notes за notePositions і, за
+  `includeDescriptions`, другий рядок тексту під вузлом; `onExportLayout`
+  і `onShare` виправлено, щоб теж включали `notePositions` (раніше
+  включали лише `positions`, notes губились при "Export layout"/Share,
+  якщо не було жодної ручної позиції вузла — знайдено і виправлено під
+  час цього кроку, без окремого запису в deviations.md — тривіальний
+  недогляд, той самий патерн вже існував у Save).
+- Коміт: (цей крок)
+- AC: Go unit — notes парсяться, унікальність id/target-валідація
+  працює, `dc context` містить текст notes, examples валідні ✅;
+  `go test ./...` + `go vet ./...` + `make wasm && make wasm-test` +
+  `./dc validate examples/*.dc.yaml` зелені ✅; Playwright
+  (`e2e/notes.spec.ts`, 3 тести) — note з палітри з'являється в
+  `yaml-source`, перетягування зберігається в `layout.json`
+  (`notePositions`), undo прибирає note; подвійний клік редагує текст
+  через prompt; note присутній в SVG-експорті; "Show descriptions"
+  показує/ховає опис на канві (`rf-node-description-<id>`) і в
+  SVG-експорті (`export-include-descriptions`) ✅; `npm test` (60,
+  +1 у `svgExport.test.ts`) + `npm run build` (без регресії розміру) +
+  повна e2e-регресія (55 специфікацій) + `npm run lint` зелені ✅.

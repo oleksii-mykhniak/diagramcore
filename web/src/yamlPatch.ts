@@ -1,6 +1,6 @@
 import { parseDocument } from 'yaml';
 import type { Document, YAMLMap, YAMLSeq } from 'yaml';
-import type { DiagramLink, DiagramNode, FlowStep } from './types';
+import type { DiagramLink, DiagramNode, DiagramNoteDef, FlowStep } from './types';
 
 /** Where an `addFlowStep` lands: the flow's top-level `steps[]`, or a
  * `then`/`else` arm of one of its branches (PLAN.md step 7.4). */
@@ -26,7 +26,10 @@ export type PatchOp =
   | { op: 'addFlowStep'; flowName: string; step: FlowStep; atIndex?: number; target?: FlowStepTarget }
   | { op: 'updateFlowStep'; flowName: string; atIndex: number; patch: Partial<FlowStep> }
   | { op: 'removeFlowStep'; flowName: string; atIndex: number }
-  | { op: 'renameNodeId'; oldId: string; newId: string };
+  | { op: 'renameNodeId'; oldId: string; newId: string }
+  | { op: 'addNote'; note: DiagramNoteDef }
+  | { op: 'updateNote'; id: string; patch: Partial<DiagramNoteDef> }
+  | { op: 'removeNote'; id: string };
 
 function nodesSeq(doc: Document): YAMLSeq {
   const seq = doc.get('nodes', true) as YAMLSeq | undefined;
@@ -42,6 +45,17 @@ function linksSeq(doc: Document): YAMLSeq {
 
 function flowsSeq(doc: Document): YAMLSeq | undefined {
   return doc.get('flows', true) as YAMLSeq | undefined;
+}
+
+/** Creates the top-level `notes:` sequence on first use (PLAN.md step
+ * 10.11) — mirrors how `addFlow` creates `flows:` the first time it's
+ * needed. */
+function notesSeq(doc: Document): YAMLSeq {
+  const existing = doc.get('notes', true) as YAMLSeq | undefined;
+  if (existing) return existing;
+  const seq = doc.createNode([]) as YAMLSeq;
+  doc.set('notes', seq);
+  return seq;
 }
 
 function findMapById(seq: YAMLSeq, idKey: string, id: string): YAMLMap | undefined {
@@ -166,6 +180,26 @@ function applyOp(doc: Document, op: PatchOp): void {
       for (const flowItem of flowsSeq(doc)?.items ?? []) {
         renameInSteps((flowItem as YAMLMap).get('steps', true) as unknown as YAMLSeq, op.oldId, op.newId);
       }
+      break;
+    }
+    case 'addNote': {
+      notesSeq(doc).add(doc.createNode(op.note));
+      break;
+    }
+    case 'updateNote': {
+      const note = findMapById(notesSeq(doc), 'id', op.id);
+      if (!note) throw new Error(`no note with id "${op.id}"`);
+      for (const [key, value] of Object.entries(op.patch)) {
+        if (value === undefined) note.delete(key);
+        else note.set(key, value);
+      }
+      break;
+    }
+    case 'removeNote': {
+      const seq = notesSeq(doc);
+      const index = seq.items.findIndex((item) => (item as YAMLMap).get('id') === op.id);
+      if (index === -1) throw new Error(`no note with id "${op.id}"`);
+      seq.items.splice(index, 1);
       break;
     }
   }

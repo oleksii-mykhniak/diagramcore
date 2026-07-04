@@ -1,0 +1,13 @@
+diagram:
+  title: "DC010 note"
+
+nodes:
+  - id: A
+    type: component
+
+links: []
+
+notes:
+  - id: note1
+    text: "Points nowhere"
+    target: nonexistentNode

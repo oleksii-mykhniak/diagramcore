@@ -161,4 +161,24 @@ nodes:
 links: []
 `);
   });
+
+  it('addNote: creates a notes[] section on first use and contains the new note', () => {
+    const out = applyPatch(authSystemYAML, [{ op: 'addNote', note: { id: 'note1', text: 'Trigger refresh', target: 'User' } }]);
+    const doc = parse(out);
+    expect(doc.notes).toEqual([{ id: 'note1', text: 'Trigger refresh', target: 'User' }]);
+  });
+
+  it('updateNote: patches fields on an existing note', () => {
+    const withNote = applyPatch(authSystemYAML, [{ op: 'addNote', note: { id: 'note1', text: 'Old text' } }]);
+    const out = applyPatch(withNote, [{ op: 'updateNote', id: 'note1', patch: { text: 'New text' } }]);
+    const doc = parse(out);
+    expect(doc.notes[0].text).toBe('New text');
+  });
+
+  it('removeNote: removes the note by id', () => {
+    const withNote = applyPatch(authSystemYAML, [{ op: 'addNote', note: { id: 'note1', text: 'Temp' } }]);
+    const out = applyPatch(withNote, [{ op: 'removeNote', id: 'note1' }]);
+    const doc = parse(out);
+    expect(doc.notes).toEqual([]);
+  });
 });

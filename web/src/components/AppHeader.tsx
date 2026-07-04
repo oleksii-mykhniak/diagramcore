@@ -38,6 +38,8 @@ interface AppHeaderProps {
   onToggleGrid: () => void;
   snap: boolean;
   onToggleSnap: () => void;
+  showDescriptions: boolean;
+  onToggleShowDescriptions: () => void;
   yamlPanelOpen: boolean;
   onToggleYamlPanel: () => void;
   onImportDrawio: (file: File) => void;
@@ -103,6 +105,8 @@ export function AppHeader({
   onToggleGrid,
   snap,
   onToggleSnap,
+  showDescriptions,
+  onToggleShowDescriptions,
   yamlPanelOpen,
   onToggleYamlPanel,
   onImportDrawio,
@@ -198,6 +202,11 @@ export function AppHeader({
         },
         { label: grid ? 'Grid: on' : 'Grid: off', testId: 'menu-grid-toggle', onSelect: onToggleGrid },
         { label: snap ? 'Snap to grid: on' : 'Snap to grid: off', testId: 'menu-snap-toggle', onSelect: onToggleSnap },
+        {
+          label: showDescriptions ? 'Show descriptions: on' : 'Show descriptions: off',
+          testId: 'menu-show-descriptions-toggle',
+          onSelect: onToggleShowDescriptions,
+        },
         {
           label: yamlPanelOpen ? 'YAML panel: shown' : 'YAML panel: hidden',
           testId: 'menu-yaml-panel-toggle',

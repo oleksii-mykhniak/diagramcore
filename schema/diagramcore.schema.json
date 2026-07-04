@@ -48,9 +48,23 @@
     "flows": {
       "type": "array",
       "items": { "$ref": "#/$defs/flow" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/note" }
     }
   },
   "$defs": {
+    "note": {
+      "type": "object",
+      "required": ["id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "target": { "type": "string" }
+      }
+    },
     "node": {
       "type": "object",
       "required": ["id", "type"],
