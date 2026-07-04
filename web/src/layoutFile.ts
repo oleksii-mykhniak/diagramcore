@@ -7,6 +7,8 @@ export interface LayoutPosition {
   y: number;
 }
 
+export type RenderStyle = 'clean' | 'sketch';
+
 export interface LayoutFile {
   views: {
     [view: string]: {
@@ -16,6 +18,10 @@ export interface LayoutFile {
       notePositions?: Record<string, LayoutPosition>;
     };
   };
+  /** Diagram style preset (PLAN.md step 10.12) — top-level, not per-view,
+   * since it's how the whole diagram is drawn rather than a layout
+   * detail; omitted (defaulting to 'clean') when never changed. */
+  renderStyle?: RenderStyle;
 }
 
 export const DEFAULT_VIEW = 'default';
@@ -23,11 +29,13 @@ export const DEFAULT_VIEW = 'default';
 export function buildLayoutFile(
   positions: Record<string, LayoutPosition>,
   notePositions?: Record<string, LayoutPosition>,
+  renderStyle?: RenderStyle,
 ): LayoutFile {
   return {
     views: {
       [DEFAULT_VIEW]: notePositions ? { positions, notePositions } : { positions },
     },
+    ...(renderStyle && renderStyle !== 'clean' ? { renderStyle } : {}),
   };
 }
 

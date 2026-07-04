@@ -19,6 +19,7 @@ import { pairKey } from '../flowPlayer';
 import { nodeTypes, resolveNodeType } from './rfNodeTypes';
 import type { DcNodeData, NoteNodeData } from './rfNodeTypes';
 import { nodeVisual } from '../shapes';
+import type { RenderStyle } from '../shapes';
 import { edgeTypes } from './rfEdgeTypes';
 import type { DcEdgeData } from './rfEdgeTypes';
 
@@ -60,6 +61,11 @@ interface Props {
   onNoteDoubleClick?: (note: DiagramNoteDef) => void;
   onDropNoteType?: (pos: LayoutPosition) => void;
   showDescriptions?: boolean;
+  /** View → "Diagram style" (PLAN.md step 10.12), persisted per-diagram
+   * in the layout file/share link (unlike grid/snap, which are pure UI
+   * prefs) since it changes how the diagram looks, not just the editor
+   * chrome. */
+  renderStyle?: RenderStyle;
 }
 
 /** dataTransfer type value used by the palette's "Text" (note) item. */
@@ -90,6 +96,7 @@ function FlowCanvasInner({
   onNoteDoubleClick,
   onDropNoteType,
   showDescriptions = false,
+  renderStyle,
 }: Props) {
   const nodeById = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram.nodes]);
   const noteById = useMemo(() => new Map((notes ?? []).map((n) => [n.id, n])), [notes]);
@@ -131,11 +138,12 @@ function FlowCanvasInner({
             isSelected: selectedNodeId === n.id,
             description: dcNode?.description,
             showDescription: showDescriptions,
+            renderStyle,
             ...(visual ? { customType: type, shape: visual.shape.name, color: visual.color, icon: visual.icon } : {}),
           },
         };
       }),
-    [layout.nodes, nodeById, positions, activeStep, activeKey, selectedNodeId, diagram, showDescriptions],
+    [layout.nodes, nodeById, positions, activeStep, activeKey, selectedNodeId, diagram, showDescriptions, renderStyle],
   );
 
   const rfNoteNodes: Node<NoteNodeData>[] = useMemo(
@@ -161,6 +169,7 @@ function FlowCanvasInner({
           isActive,
           isVisited,
           isHovered: hoveredLinkIndex === i,
+          renderStyle,
         };
         return {
           id: `link-${i}-${l.from}-${l.to}`,
@@ -171,7 +180,7 @@ function FlowCanvasInner({
           data,
         };
       }),
-    [diagram.links, activeKey, visitedStepKeys, hoveredLinkIndex],
+    [diagram.links, activeKey, visitedStepKeys, hoveredLinkIndex, renderStyle],
   );
 
   const noteIds = useMemo(() => new Set((notes ?? []).map((n) => n.id)), [notes]);
@@ -209,6 +218,7 @@ function FlowCanvasInner({
   return (
     <div
       data-testid="reactflow-canvas"
+      data-render-style={renderStyle ?? 'clean'}
       style={{ width: '100%', height: '100%' }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}

@@ -73,4 +73,16 @@ describe('renderDiagramSVGString', () => {
     expect(withNotes).toContain('Trigger refresh');
     expect(withNotes).toContain('x="20"');
   });
+
+  it('draws sketch-style nodes and edges as roughened paths, distinct from clean output (PLAN.md step 10.12)', () => {
+    const clean = renderDiagramSVGString(diagram, layout, positions, {}, { renderStyle: 'clean' });
+    const sketch = renderDiagramSVGString(diagram, layout, positions, {}, { renderStyle: 'sketch' });
+    expect(sketch).not.toBe(clean);
+    expect(clean).toContain('<polyline');
+    expect(sketch).not.toContain('<polyline');
+    expect(sketch).toContain('<path');
+
+    const sketchAgain = renderDiagramSVGString(diagram, layout, positions, {}, { renderStyle: 'sketch' });
+    expect(sketchAgain).toBe(sketch);
+  });
 });

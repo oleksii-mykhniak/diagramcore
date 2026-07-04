@@ -307,10 +307,12 @@ descriptions".
 патерн у `.claude/skills/design/SKILL.md`).
 
 **AC:**
-- [ ] Unit: для одного вузла clean і sketch дають різний SVG; sketch-геометрія детермінована при фіксованому seed (стабільні тести).
-- [ ] Playwright: View → Diagram style → sketch міняє вигляд канви; reload через share-link зберігає стиль; SVG-експорт містить sketch-контури.
-- [ ] Пресет застосовується до всіх фігур (базові 6 + custom shapes) і ребер; обидві UI-теми сумісні з обома пресетами.
-- [ ] `npm test` + `npm run build` + повна регресія зелені.
+- [x] Unit: для одного вузла clean і sketch дають різний SVG; sketch-геометрія детермінована при фіксованому seed (стабільні тести).
+- [x] Playwright: View → Diagram style → sketch міняє вигляд канви; reload через share-link зберігає стиль; SVG-експорт містить sketch-контури.
+- [x] Пресет застосовується до всіх фігур (базові 6 + custom shapes) і ребер; обидві UI-теми сумісні з обома пресетами.
+- [x] `npm test` + `npm run build` + повна регресія зелені.
+
+(рукописний шрифт для sketch-тексту свідомо descope — див. `docs/deviations.md`, крок 10.12.)
 
 ## Крок 10.13 — Полірування, StartScreen/Tour, фінальна регресія
 

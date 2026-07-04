@@ -1,5 +1,7 @@
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
+import { sketchEdgeD } from '../sketch';
+import type { RenderStyle } from '../shapes';
 
 export interface DcEdgeData extends Record<string, unknown> {
   label?: string;
@@ -7,6 +9,8 @@ export interface DcEdgeData extends Record<string, unknown> {
   isActive: boolean;
   isVisited: boolean;
   isHovered?: boolean;
+  /** View → "Diagram style" (PLAN.md step 10.12). */
+  renderStyle?: RenderStyle;
 }
 
 export function DcEdge({
@@ -21,7 +25,7 @@ export function DcEdge({
   markerEnd,
 }: EdgeProps) {
   const edgeData = data as DcEdgeData | undefined;
-  const [path, labelX, labelY] = getSmoothStepPath({
+  const [smoothPath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -29,6 +33,7 @@ export function DcEdge({
     targetY,
     targetPosition,
   });
+  const path = edgeData?.renderStyle === 'sketch' ? sketchEdgeD(smoothPath) : smoothPath;
   const isActive = edgeData?.isActive ?? false;
   const isVisited = edgeData?.isVisited ?? false;
   const isHovered = edgeData?.isHovered ?? false;

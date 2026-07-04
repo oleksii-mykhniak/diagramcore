@@ -386,6 +386,7 @@ export function useDiagramEditing(
             positions: { ...current.positions, ...importedPositions },
             manualPositionIds,
             notePositions: { ...current.notePositions, ...(imported.views.default?.notePositions ?? {}) },
+            ...(imported.renderStyle ? { renderStyle: imported.renderStyle } : {}),
           });
         } catch (err) {
           setLoadError(err instanceof Error ? err.message : String(err));

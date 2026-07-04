@@ -42,6 +42,7 @@ export default function App() {
     hasUnsavedChanges,
     openDetails,
     goToLevel,
+    setRenderStyle,
   } = useDiagramStack();
 
   const { onUndo, onRedo } = useHistory(levelRef, runMutation, updateCurrentLevel, historyRef, syncHistoryCounts);
@@ -146,6 +147,8 @@ export default function App() {
         onToggleSnap={view.toggleSnap}
         showDescriptions={view.showDescriptions}
         onToggleShowDescriptions={view.toggleShowDescriptions}
+        renderStyle={current?.renderStyle ?? 'clean'}
+        onToggleRenderStyle={() => setRenderStyle(current?.renderStyle === 'sketch' ? 'clean' : 'sketch')}
         yamlPanelOpen={view.yamlPanelOpen}
         onToggleYamlPanel={view.toggleYamlPanel}
         onImportDrawio={(file) => void onImportDrawio(file)}
@@ -200,6 +203,7 @@ export default function App() {
         <ExportDialog
           settings={exportSettings.settings}
           onChange={exportSettings.update}
+          renderStyle={current?.renderStyle ?? 'clean'}
           onCancel={() => setShowExportDialog(false)}
           onExport={() => {
             void onExportImage(exportSettings.settings);

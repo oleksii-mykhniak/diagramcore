@@ -7,7 +7,7 @@ import { computeLayout } from '../layout';
 import type { DiagramLayout } from '../layout';
 import type { Diagram, DiagramNode } from '../types';
 import { buildLayoutFile, downloadLayoutFile, layoutFileName, parseLayoutFile } from '../layoutFile';
-import type { LayoutPosition } from '../layoutFile';
+import type { LayoutPosition, RenderStyle } from '../layoutFile';
 import { initialFlowPlayerState } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
 import { isNativeFsSupported, openDiagramFiles, pickSaveHandle, writeTextToHandle } from '../nativeFile';
@@ -30,6 +30,9 @@ export interface DiagramLevel {
    * since notes aren't diagram nodes and have no auto-layout; every note
    * has an entry, defaulted on load if the layout file didn't have one. */
   notePositions: Record<string, LayoutPosition>;
+  /** Diagram style preset (PLAN.md step 10.12), persisted in the layout
+   * file/share link — see `layoutFile.ts`'s `RenderStyle`. */
+  renderStyle: RenderStyle;
   /** File System Access handles (PLAN.md step 8.1), only set when the
    * level was opened via the native picker (Chromium). `null` (as
    * opposed to `undefined`) means "opened natively, but no layout file
@@ -128,6 +131,7 @@ export function useDiagramStack() {
       notePositions: Object.fromEntries(
         (parsed.notes ?? []).map((note, i) => [note.id, { x: 40 + i * 30, y: 40 + i * 30 }]),
       ),
+      renderStyle: 'clean',
       savedRawText: text,
     };
   }, []);
@@ -248,6 +252,7 @@ export function useDiagramStack() {
           level.positions = { ...level.positions, ...importedPositions };
           level.manualPositionIds = new Set(Object.keys(importedPositions));
           level.notePositions = { ...level.notePositions, ...(imported.views.default?.notePositions ?? {}) };
+          if (imported.renderStyle) level.renderStyle = imported.renderStyle;
         }
         levelRef.current = level;
         resetHistory();
@@ -268,24 +273,29 @@ export function useDiagramStack() {
    * unsupported, or the level was opened via the plain file input). */
   const onSave = useCallback(async () => {
     if (!current) return;
+    const hasLayoutToSave =
+      current.manualPositionIds.size > 0 || Boolean(current.diagram.notes?.length) || current.renderStyle !== 'clean';
     if (!current.mainHandle || !isNativeFsSupported()) {
       downloadBlob(current.fileName, new Blob([current.rawText], { type: 'application/x-yaml' }));
-      if (current.manualPositionIds.size > 0 || current.diagram.notes?.length) {
-        downloadLayoutFile(layoutFileName(current.fileName), buildLayoutFile(current.positions, current.notePositions));
+      if (hasLayoutToSave) {
+        downloadLayoutFile(
+          layoutFileName(current.fileName),
+          buildLayoutFile(current.positions, current.notePositions, current.renderStyle),
+        );
       }
       updateCurrentLevel({ savedRawText: current.rawText });
       return;
     }
     await writeTextToHandle(current.mainHandle, current.rawText);
     let layoutHandle = current.layoutHandle ?? null;
-    if (current.manualPositionIds.size > 0 || current.diagram.notes?.length) {
+    if (hasLayoutToSave) {
       if (!layoutHandle) {
         layoutHandle = await pickSaveHandle(layoutFileName(current.fileName));
       }
       if (layoutHandle) {
         await writeTextToHandle(
           layoutHandle,
-          JSON.stringify(buildLayoutFile(current.positions, current.notePositions), null, 2),
+          JSON.stringify(buildLayoutFile(current.positions, current.notePositions, current.renderStyle), null, 2),
         );
       }
     }
@@ -320,6 +330,7 @@ export function useDiagramStack() {
         level.positions = { ...level.positions, ...importedPositions };
         level.manualPositionIds = new Set(Object.keys(importedPositions));
         level.notePositions = { ...level.notePositions, ...(shared.layout.views.default?.notePositions ?? {}) };
+        if (shared.layout.renderStyle) level.renderStyle = shared.layout.renderStyle;
       }
       levelRef.current = level;
       resetHistory();
@@ -352,6 +363,14 @@ export function useDiagramStack() {
       }
     },
     [virtualFS, buildLevel, resetHistory],
+  );
+
+  /** View → "Diagram style" (PLAN.md step 10.12): unlike grid/snap, this
+   * lives on the level (not a bare UI pref) since it's saved in the
+   * layout file/share link alongside positions. */
+  const setRenderStyle = useCallback(
+    (renderStyle: RenderStyle) => updateCurrentLevel({ renderStyle }),
+    [updateCurrentLevel],
   );
 
   const goToLevel = useCallback(
@@ -393,5 +412,6 @@ export function useDiagramStack() {
     hasUnsavedChanges,
     openDetails,
     goToLevel,
+    setRenderStyle,
   };
 }

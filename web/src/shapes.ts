@@ -2,11 +2,19 @@
  * and SVG export (`svgExport.ts`) both draw a node's outline through
  * `renderSvgInner` — so "what a storage node looks like" is defined in
  * exactly one place, and canvas/export can never drift apart. */
+import { sketchEllipse, sketchPath, sketchPolygon, sketchRect } from './sketch';
+
+export type RenderStyle = 'clean' | 'sketch';
 
 export interface ShapeStyle {
   fill: string;
   stroke: string;
   strokeWidth: number;
+  /** Diagram style preset (PLAN.md step 10.12) — 'clean' (default) draws
+   * the crisp vector outline below; 'sketch' roughens the same geometry
+   * via roughjs (see `./sketch.ts`) so canvas and export stay identical
+   * under either preset. */
+  renderStyle?: RenderStyle;
 }
 
 export interface ShapeSpec {
@@ -17,35 +25,67 @@ export interface ShapeSpec {
 }
 
 function rectShape(rx: number, dashArray?: string): ShapeSpec['renderSvgInner'] {
-  return (w, h, s) =>
-    `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="${rx}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dashArray ? ` stroke-dasharray="${dashArray}"` : ''} />`;
+  return (w, h, s) => {
+    if (s.renderStyle === 'sketch') return sketchRect(0.5, 0.5, w - 1, h - 1, s, dashArray);
+    return `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="${rx}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dashArray ? ` stroke-dasharray="${dashArray}"` : ''} />`;
+  };
 }
 
-const ellipseInner: ShapeSpec['renderSvgInner'] = (w, h, s) =>
-  `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2 - 1}" ry="${h / 2 - 1}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+const ellipseInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
+  if (s.renderStyle === 'sketch') return sketchEllipse(w / 2, h / 2, w - 2, h - 2, s);
+  return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2 - 1}" ry="${h / 2 - 1}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+};
 
 const storageInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
   const rx = w / 2 - 1;
   const ry = Math.min(10, h / 4);
   const top = ry;
   const bottom = h - ry - 1;
+  const bodyPath = `M1,${top} A${rx},${ry} 0 0 1 ${w - 1},${top} L${w - 1},${bottom} A${rx},${ry} 0 0 1 1,${bottom} Z`;
+  if (s.renderStyle === 'sketch') {
+    return sketchPath(bodyPath, s) + sketchEllipse(w / 2, top, rx * 2, ry * 2, s);
+  }
   return (
-    `<path d="M1,${top} A${rx},${ry} 0 0 1 ${w - 1},${top} L${w - 1},${bottom} A${rx},${ry} 0 0 1 1,${bottom} Z" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />` +
+    `<path d="${bodyPath}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />` +
     `<ellipse cx="${w / 2}" cy="${top}" rx="${rx}" ry="${ry}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`
   );
 };
 
-const diamondInner: ShapeSpec['renderSvgInner'] = (w, h, s) =>
-  `<polygon points="${w / 2},1 ${w - 1},${h / 2} ${w / 2},${h - 1} 1,${h / 2}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+const diamondInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
+  const points: [number, number][] = [
+    [w / 2, 1],
+    [w - 1, h / 2],
+    [w / 2, h - 1],
+    [1, h / 2],
+  ];
+  if (s.renderStyle === 'sketch') return sketchPolygon(points, s);
+  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+};
 
 const parallelogramInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
   const skew = w * 0.18;
-  return `<polygon points="${skew},1 ${w - 1},1 ${w - 1 - skew},${h - 1} 1,${h - 1}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+  const points: [number, number][] = [
+    [skew, 1],
+    [w - 1, 1],
+    [w - 1 - skew, h - 1],
+    [1, h - 1],
+  ];
+  if (s.renderStyle === 'sketch') return sketchPolygon(points, s);
+  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
 };
 
 const hexagonInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
   const cut = Math.min(w * 0.15, 24);
-  return `<polygon points="${cut},1 ${w - cut},1 ${w - 1},${h / 2} ${w - cut},${h - 1} ${cut},${h - 1} 1,${h / 2}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+  const points: [number, number][] = [
+    [cut, 1],
+    [w - cut, 1],
+    [w - 1, h / 2],
+    [w - cut, h - 1],
+    [cut, h - 1],
+    [1, h / 2],
+  ];
+  if (s.renderStyle === 'sketch') return sketchPolygon(points, s);
+  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
 };
 
 const cloudInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
@@ -58,6 +98,7 @@ const cloudInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
     `C${w * 0.85},${h * 0.18} ${w * 0.98},${h * 0.42} ${w * 0.82},${h * 0.58} ` +
     `C${w * 0.98},${h * 0.68} ${w * 0.9},${h * 0.92} ${w * 0.68},${h * 0.9} ` +
     `C${w * 0.6},${h * 1.05} ${w * 0.3},${h * 1.02} ${w * 0.25},${h * 0.75} Z`;
+  if (s.renderStyle === 'sketch') return sketchPath(path, s);
   return `<path d="${path}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
 };
 

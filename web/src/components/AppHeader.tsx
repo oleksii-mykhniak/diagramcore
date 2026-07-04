@@ -40,6 +40,8 @@ interface AppHeaderProps {
   onToggleSnap: () => void;
   showDescriptions: boolean;
   onToggleShowDescriptions: () => void;
+  renderStyle: 'clean' | 'sketch';
+  onToggleRenderStyle: () => void;
   yamlPanelOpen: boolean;
   onToggleYamlPanel: () => void;
   onImportDrawio: (file: File) => void;
@@ -107,6 +109,8 @@ export function AppHeader({
   onToggleSnap,
   showDescriptions,
   onToggleShowDescriptions,
+  renderStyle,
+  onToggleRenderStyle,
   yamlPanelOpen,
   onToggleYamlPanel,
   onImportDrawio,
@@ -211,6 +215,12 @@ export function AppHeader({
           label: yamlPanelOpen ? 'YAML panel: shown' : 'YAML panel: hidden',
           testId: 'menu-yaml-panel-toggle',
           onSelect: onToggleYamlPanel,
+        },
+        {
+          label: `Diagram style: ${renderStyle === 'sketch' ? 'Sketch' : 'Clean'}`,
+          testId: 'menu-render-style-toggle',
+          onSelect: onToggleRenderStyle,
+          disabled: !current,
         },
       ],
     },

@@ -200,6 +200,7 @@ export function EditorWorkspace({
                 onNoteDoubleClick={onNoteDoubleClick}
                 onDropNoteType={onDropNoteType}
                 showDescriptions={showDescriptions}
+                renderStyle={current.renderStyle}
               />
             </div>
             <RightDock

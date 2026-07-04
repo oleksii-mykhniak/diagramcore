@@ -1410,3 +1410,47 @@
   SVG-експорті (`export-include-descriptions`) ✅; `npm test` (60,
   +1 у `svgExport.test.ts`) + `npm run build` (без регресії розміру) +
   повна e2e-регресія (55 специфікацій) + `npm run lint` зелені ✅.
+
+### Крок 10.12 — Пресети стилю рендерингу (clean / sketch)
+- Дата: 2026-07-04
+- Виконано: нова залежність `roughjs` (~9.4KB gzip у бандлі — в межах
+  очікуваних ~10KB). `src/sketch.ts` — тонка обгортка над headless
+  `RoughGenerator` (`toPaths`/`opsToPath`, без DOM), фіксований `seed`
+  для детермінізму; `sketchRect`/`sketchEllipse`/`sketchPolygon`/
+  `sketchPath` (форми) і `sketchLineD`/`sketchEdgeD` (ребра — окремо,
+  бо мають лишатись одним `<path d>` під `marker-end`/`BaseEdge`).
+  `shapes.ts` — `ShapeStyle.renderStyle?: 'clean'|'sketch'`; кожна з 11
+  форм (базові 6 + hexagon/diamond/ellipse/cloud/parallelogram) гілкується
+  на `renderStyle`, малюючи ту саму геометрію (той самий `d`/points) або
+  напряму (clean), або через roughjs (sketch) — тому й custom-типи з
+  `shape:` автоматично отримують sketch без окремого коду. Канва:
+  `rfNodeTypes.tsx`/`rfEdgeTypes.tsx` пробрасують `renderStyle` з даних
+  вузла/ребра в `renderSvgInner`/`sketchEdgeD(getSmoothStepPath(...))`.
+  Експорт: `svgExport.ts` — `RenderOptions.renderStyle`, ребра через
+  `sketchLineD(layout.edges[].points)` замість `<polyline>`.
+  Персист: `layoutFile.ts` — `LayoutFile.renderStyle?` (top-level, не
+  per-view — стиль стосується всього вигляду діаграми); `useDiagramStack`
+  — `DiagramLevel.renderStyle` (дефолт `'clean'`), відновлюється з
+  layout-файлу при native-open/import-layout/share-link, пишеться при
+  Save/Export layout/Share (умова "є що зберігати" розширена: manual
+  positions АБО notes АБО `renderStyle !== 'clean'`); новий
+  `setRenderStyle` в `useDiagramStack`. UI: View → "Diagram style: Clean/
+  Sketch" (`menu-render-style-toggle`, вимкнено без відкритої діаграми);
+  `reactflow-canvas` має `data-render-style` для тестів; export-діалог
+  показує поточний стиль інформаційно (`export-render-style`) — сам
+  стиль міняється лише через View-меню, не з діалогу.
+  Свідомий descope: рукописний шрифт для sketch-тексту (потребує
+  self-hosted субсету, окрема задача) — `docs/deviations.md`, крок 10.12;
+  текст лишається системним шрифтом і в sketch-режимі.
+- Коміт: (цей крок)
+- AC: Unit (`shapes.test.ts`, `svgExport.test.ts`) — clean/sketch дають
+  різний SVG для кожної з 11 форм, sketch детермінований (два виклики з
+  тим самим seed дають ідентичний рядок), edges sketch — `<path>` замість
+  `<polyline>` ✅; Playwright (`e2e/render-style.spec.ts`) — View →
+  Diagram style → sketch міняє `data-render-style` на канві; share-link
+  у новому контексті відновлює sketch; SVG-експорт у sketch не містить
+  `<polyline>`/`<ellipse>` (усе через roughjs `<path>`), export-діалог
+  показує "Sketch" ✅; повна e2e-регресія (56 специфікацій, включно з
+  custom-types — custom shapes успадковують sketch без окремого коду)
+  ✅; `npm test` (63) + `npm run build` (бандл +9.4KB gzip, в межах
+  очікуваного) + `npm run lint` зелені.

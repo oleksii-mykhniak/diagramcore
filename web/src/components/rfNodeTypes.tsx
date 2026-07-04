@@ -2,6 +2,7 @@ import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { NODE_WIDTH, NODE_HEIGHT } from '../layout';
 import { resolveShape } from '../shapes';
+import type { RenderStyle } from '../shapes';
 import { CUSTOM_TYPE_ICONS } from '../customTypeIcons';
 
 export interface DcNodeData extends Record<string, unknown> {
@@ -18,6 +19,8 @@ export interface DcNodeData extends Record<string, unknown> {
   /** View → "Show descriptions" (PLAN.md step 10.11). */
   description?: string;
   showDescription?: boolean;
+  /** View → "Diagram style" (PLAN.md step 10.12). */
+  renderStyle?: RenderStyle;
 }
 
 interface ShellProps {
@@ -50,7 +53,7 @@ function NodeShell({ id, data, nodeType, shapeName, className }: ShellProps) {
         : 'var(--dc-node-border)';
   const fill = data.color ?? (nodeType === 'external' ? 'var(--dc-node-external-fill)' : 'var(--dc-node-fill)');
   const strokeWidth = data.hasDetails ? 3 : 1.5;
-  const svgInner = shape.renderSvgInner(NODE_WIDTH, NODE_HEIGHT, { fill, stroke, strokeWidth });
+  const svgInner = shape.renderSvgInner(NODE_WIDTH, NODE_HEIGHT, { fill, stroke, strokeWidth, renderStyle: data.renderStyle });
   const IconComponent = data.icon ? CUSTOM_TYPE_ICONS[data.icon] : null;
 
   return (

@@ -1,8 +1,13 @@
 import type { ExportSettings } from '../hooks/useExportSettings';
+import type { RenderStyle } from '../shapes';
 
 interface ExportDialogProps {
   settings: ExportSettings;
   onChange: (patch: Partial<ExportSettings>) => void;
+  /** Informational only (PLAN.md step 10.12) — the export always follows
+   * whatever style the canvas currently shows; change it via View →
+   * "Diagram style" before opening this dialog. */
+  renderStyle: RenderStyle;
   onCancel: () => void;
   onExport: () => void;
 }
@@ -38,13 +43,17 @@ const panelStyle: React.CSSProperties = {
  * SVG `viewBox` never changes), background (transparent unavailable for
  * JPG, which has no alpha channel), and "include grid". Settings persist
  * via `useExportSettings` and are also used by "Export flow steps (zip)". */
-export function ExportDialog({ settings, onChange, onCancel, onExport }: ExportDialogProps) {
+export function ExportDialog({ settings, onChange, renderStyle, onCancel, onExport }: ExportDialogProps) {
   const isJpg = settings.format === 'jpg';
 
   return (
     <div data-testid="export-dialog" style={dialogStyle} onClick={onCancel}>
       <div style={panelStyle} onClick={(e) => e.stopPropagation()}>
         <h2 style={{ margin: 0, fontSize: 'var(--dc-font-size-lg)' }}>Export image</h2>
+
+        <p data-testid="export-render-style" style={{ margin: 0, color: 'var(--dc-text-muted)', fontSize: 'var(--dc-font-size-sm)' }}>
+          Style: {renderStyle === 'sketch' ? 'Sketch' : 'Clean'} (View → Diagram style to change)
+        </p>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           Format

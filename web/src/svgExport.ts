@@ -4,6 +4,8 @@ import type { DiagramLayout, LayoutEdge, LayoutPoint } from './layout';
 import type { LayoutPosition } from './layoutFile';
 import { pairKey } from './flowPlayer';
 import { nodeVisual } from './shapes';
+import type { RenderStyle } from './shapes';
+import { sketchLineD } from './sketch';
 
 export interface FrameHighlight {
   activeStep?: { from: string; to: string };
@@ -18,6 +20,10 @@ export interface RenderOptions {
    * label — mirrors View → "Show descriptions" on the canvas (PLAN.md
    * step 10.11's "include descriptions" export option). */
   includeDescriptions?: boolean;
+  /** Diagram style preset (PLAN.md step 10.12) — drawn identically to
+   * whichever preset the canvas currently shows, via the same shape
+   * registry/roughjs wrapper (`./shapes.ts`, `./sketch.ts`). */
+  renderStyle?: RenderStyle;
 }
 
 export interface ThemeColors {
@@ -105,6 +111,10 @@ export function renderDiagramSVGString(
       const isVisited = !isActive && (highlight.visitedStepKeys?.has(key) ?? false);
       const stroke = isActive ? theme.flowActive : isVisited ? theme.flowVisited : theme.nodeBorder;
       const width = isActive ? 3 : isVisited ? 2 : 1.5;
+      if (options.renderStyle === 'sketch') {
+        const d = sketchLineD(e.points.map((p) => [p.x, p.y]));
+        return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${width}" marker-end="url(#arrow)" />`;
+      }
       const points = e.points.map((p) => `${p.x},${p.y}`).join(' ');
       return `<polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="${width}" marker-end="url(#arrow)" />`;
     })
@@ -138,7 +148,12 @@ export function renderDiagramSVGString(
         : '';
       return (
         `<g transform="translate(${pos.x},${pos.y})">` +
-        shape.renderSvgInner(n.width, n.height, { fill, stroke: theme.nodeBorder, strokeWidth: hasDetails ? 3 : 1.5 }) +
+        shape.renderSvgInner(n.width, n.height, {
+          fill,
+          stroke: theme.nodeBorder,
+          strokeWidth: hasDetails ? 3 : 1.5,
+          renderStyle: options.renderStyle,
+        }) +
         inner +
         `<text x="${n.width / 2}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="system-ui, sans-serif" fill="${theme.text}">${label}</text>` +
         descriptionSvg +
