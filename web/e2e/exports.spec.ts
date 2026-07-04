@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
+import { openMenu } from './helpers/menu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, '..', '..');
@@ -15,6 +16,7 @@ test('exporting PNG downloads a non-empty file', async ({ page }) => {
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
+  await openMenu(page, 'file');
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-png').click();
   const download = await downloadPromise;
@@ -34,6 +36,7 @@ test('exporting the AI context markdown matches `dc context` for the same file',
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
+  await openMenu(page, 'file');
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-context').click();
   const download = await downloadPromise;
@@ -52,8 +55,13 @@ test('exporting flow steps as a zip contains one PNG per step', async ({ page })
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
+  await openMenu(page, 'file');
   await expect(page.getByTestId('export-flow-steps-zip')).toBeDisabled();
+  await page.keyboard.press('Escape');
+
   await page.getByTestId('flow-select').selectOption({ label: 'Успішна авторизація через OAuth' });
+
+  await openMenu(page, 'file');
   await expect(page.getByTestId('export-flow-steps-zip')).toBeEnabled();
 
   const downloadPromise = page.waitForEvent('download');

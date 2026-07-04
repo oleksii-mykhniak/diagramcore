@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openMenu } from './helpers/menu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
@@ -49,6 +50,7 @@ test('opening via the native picker, adding a node, and saving writes the change
   await installFakeNativeFs(page, { 'auth-system.dc.yaml': authSystemText });
   await page.goto('/');
 
+  await openMenu(page, 'file');
   await page.getByTestId('open-native').click();
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
@@ -75,6 +77,7 @@ test('opening via the native picker, adding a node, and saving writes the change
   await page.mouse.up();
 
   await expect(page.getByTestId('unsaved-indicator')).toBeVisible();
+  await openMenu(page, 'file');
   await page.getByTestId('save').click();
   await expect(page.getByTestId('unsaved-indicator')).toHaveCount(0);
 
@@ -98,12 +101,14 @@ test('without native File System Access support, Open/Save degrade to the file i
   page.on('pageerror', (err) => pageErrors.push(err));
 
   // "Open" degrades to clicking the plain file input instead of throwing.
+  await openMenu(page, 'file');
   await page.getByTestId('open-native').click();
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
   // "Save" degrades to a download instead of throwing.
   const downloadPromise = page.waitForEvent('download');
+  await openMenu(page, 'file');
   await page.getByTestId('save').click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('auth-system.dc.yaml');
@@ -114,6 +119,7 @@ test('without native File System Access support, Open/Save degrade to the file i
 test('an unsaved-changes indicator appears after editing and a beforeunload warning is armed', async ({ page }) => {
   await installFakeNativeFs(page, { 'auth-system.dc.yaml': authSystemText });
   await page.goto('/');
+  await openMenu(page, 'file');
   await page.getByTestId('open-native').click();
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 

@@ -46,6 +46,7 @@ describe('App', () => {
     await userEvent.upload(screen.getByTestId('file-input'), file);
     await waitFor(() => expect(screen.getByTestId('reactflow-canvas')).toBeInTheDocument());
 
+    await userEvent.click(screen.getByTestId('menu-trigger-file'));
     expect(screen.getByTestId('export-png')).toBeEnabled();
     expect(screen.getByTestId('export-context')).toBeEnabled();
     expect(screen.getByTestId('export-flow-steps-zip')).toBeDisabled();

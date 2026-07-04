@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openMenu } from './helpers/menu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
@@ -23,10 +24,12 @@ test('sharing a diagram and opening the link in a new context restores the same 
   await page.mouse.move(box.x + 120, box.y + 90, { steps: 5 });
   await page.mouse.up();
 
+  await openMenu(page, 'file');
   await page.getByTestId('share').click();
   const shareUrl = await page.getByTestId('share-url').inputValue();
   expect(shareUrl).toContain('#s=');
 
+  await openMenu(page, 'file');
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-layout').click();
   const download = await downloadPromise;
@@ -44,6 +47,7 @@ test('sharing a diagram and opening the link in a new context restores the same 
     await expect(freshPage.getByTestId(`rf-node-${id}`)).toBeVisible();
   }
 
+  await openMenu(freshPage, 'file');
   const freshDownloadPromise = freshPage.waitForEvent('download');
   await freshPage.getByTestId('export-layout').click();
   const freshDownload = await freshDownloadPromise;
@@ -62,6 +66,7 @@ test('the share fragment never reaches the server and stays under the size budge
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
+  await openMenu(page, 'file');
   await page.getByTestId('share').click();
   const shareUrl = await page.getByTestId('share-url').inputValue();
 

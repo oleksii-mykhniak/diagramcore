@@ -1062,3 +1062,46 @@
   збережені ✅; `npm run build` зелений ✅; `npx tsc -b` без помилок,
   `npm run lint` без нових попереджень ✅.
 
+### Крок 10.3 — MenuBar + іконковий Toolbar
+- Дата: 2026-07-04
+- Виконано: нова залежність `lucide-react`. `components/MenuBar.tsx` —
+  самописний ARIA menubar/menu/menuitem (~180 рядків): клік відкриває/
+  закриває, hover перемикає між відкритими меню, Escape/клік поза
+  закриває, ArrowUp/Down навігує пунктами відкритого меню, автофокус
+  першого доступного пункту при відкритті. `components/AppHeader.tsx`
+  переписано: рядок 1 — лого + `MenuBar` (File/Edit/View/Arrange/Help),
+  рядок 2 — тонкий toolbar з lucide-іконками (Undo2/Redo2/RefreshCw/
+  Maximize2-Minimize2/Sun-Moon) + unsaved-indicator/share-url/
+  share-error/breadcrumbs. Дії старої шапки зберегли testid: `save`,
+  `export-png`, `export-layout`, `layout-input`, `export-context`,
+  `export-flow-steps-zip`, `share`, `open-native` — тепер пункти File-
+  меню; `undo`/`redo`/`relayout`/`theme-toggle` — іконки тулбару (не
+  дублюються в меню під тим самим testid — Edit/Arrange-меню
+  використовують `menu-undo`/`menu-redo`/`menu-relayout`, щоб уникнути
+  колізії з тулбаром). Нова дія Arrange → "Re-layout all"
+  (`onRelayoutAll` в `useDiagramEditing.ts`) скидає всі manual-позиції.
+  Fullscreen — робочий (`requestFullscreen`/`exitFullscreen`). Help →
+  Tour піднято на рівень `App.tsx` (окремий `showTour`-стан, доступний
+  і з відкритою діаграмою) + посилання на формат-доки/GitHub. Скоуп
+  View-меню й toolbar звужено відносно тексту плану — деталі й причина
+  в `docs/deviations.md`, крок 10.3. `e2e/helpers/menu.ts` —
+  `openMenu(page, 'file'|'edit'|'view'|'arrange'|'help')`; оновлено
+  `exports.spec.ts`, `share-link.spec.ts`, `native-fs.spec.ts`,
+  `drag-layout.spec.ts` і (не згадувався в плані) `drill-down.spec.ts`
+  — усі відкривають потрібне меню перед кліком; `undo-redo.spec.ts` не
+  змінювався. Нова `e2e/menubar.spec.ts` (4 тести): відкриття/закриття
+  кліком/Escape/клік-поза, hover-перемикання, ArrowDown+Enter-навігація,
+  усі testid'и File-меню присутні й робочі.
+- Коміт: (цей крок)
+- AC: Playwright — File відкривається/закривається кліком, Escape,
+  клік поза ✅; hover по Edit при відкритому File перемикає меню ✅;
+  усі дії старої шапки досяжні й працюють (оновлені специфікації
+  зелені) ✅; стрілки навігують, Enter активує, ARIA role=menubar/menu/
+  menuitem присутні (перевірено в `menubar.spec.ts`) ✅; `grep -rn
+  "style={{[^}]*#[0-9a-fA-F]" src/components/AppHeader.tsx
+  src/components/MenuBar.tsx src/App.tsx` — порожньо ✅, обидві теми
+  перевірені вручну скріншотами (світла/темна) ✅; повна e2e-регресія
+  (41 специфікація, включно з новою `menubar.spec.ts`) + `npm test`
+  (41 юніт-тест) + `npm run build` + `npm run lint` (без нових
+  попереджень) зелені ✅.
+

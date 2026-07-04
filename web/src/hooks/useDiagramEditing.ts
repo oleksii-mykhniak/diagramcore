@@ -311,6 +311,19 @@ export function useDiagramEditing(
     updateCurrentLevel({ layout: recomputed, positions });
   }, [current, updateCurrentLevel]);
 
+  /** Arrange → "Re-layout all" (PLAN.md step 10.3): unlike `onRelayout`,
+   * also discards manual (dragged/imported) positions, so every node gets
+   * a fresh auto-layout coordinate. */
+  const onRelayoutAll = useCallback(async () => {
+    if (!current) return;
+    const recomputed = await computeLayout(current.diagram);
+    const positions: Record<string, LayoutPosition> = {};
+    for (const n of recomputed.nodes) {
+      positions[n.id] = { x: n.x, y: n.y };
+    }
+    updateCurrentLevel({ layout: recomputed, positions, manualPositionIds: new Set<string>() });
+  }, [current, updateCurrentLevel]);
+
   const onImportLayout = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -367,6 +380,7 @@ export function useDiagramEditing(
     onDeleteFlowStep,
     onSelectProblem,
     onRelayout,
+    onRelayoutAll,
     onImportLayout,
     onFlowPlayerChange,
   };

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openMenu } from './helpers/menu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const examplesDir = path.join(__dirname, '..', '..', 'examples');
@@ -10,6 +11,7 @@ const oauthDetailPath = path.join(examplesDir, 'oauth-detail.dc.yaml');
 const paymentPath = path.join(examplesDir, 'payment-processing.dc.yaml');
 
 async function exportLayout(page: import('@playwright/test').Page) {
+  await openMenu(page, 'file');
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-layout').click();
   const download = await downloadPromise;

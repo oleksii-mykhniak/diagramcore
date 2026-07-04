@@ -2,11 +2,13 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openMenu } from './helpers/menu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
 
 async function exportLayout(page: import('@playwright/test').Page) {
+  await openMenu(page, 'file');
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('export-layout').click();
   const download = await downloadPromise;
@@ -76,6 +78,7 @@ test('importing an exported layout restores the dragged position', async ({ page
   await page.reload();
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
+  await openMenu(page, 'file');
   await page.getByTestId('layout-input').setInputFiles(tmpLayoutPath);
 
   const reExported = await exportLayout(page);
@@ -100,6 +103,7 @@ test('Re-layout does not move nodes with a manual (imported) position', async ({
   await page.reload();
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
+  await openMenu(page, 'file');
   await page.getByTestId('layout-input').setInputFiles(tmpLayoutPath);
 
   await page.getByTestId('relayout').click();

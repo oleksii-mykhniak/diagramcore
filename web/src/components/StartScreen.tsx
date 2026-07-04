@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { examples } from '../examples';
 import { Tour } from './Tour';
 
-const BLANK_TEMPLATE = `diagram:
+export const BLANK_TEMPLATE = `diagram:
   title: "New diagram"
 
 nodes:

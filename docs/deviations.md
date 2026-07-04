@@ -207,3 +207,27 @@
   звужено до власне undo/redo-екшенів і гарячих клавіш, отримує
   historyRef/syncHistoryCounts як параметри від useDiagramStack.
 - Дата: 2026-07-04, коміт: (цей крок)
+
+## Крок 10.3 — MenuBar + іконковий Toolbar
+- Причина: план перелічив повний вміст View-меню (Theme, Grid, Snap to
+  grid, YAML panel, Zoom in/out/Fit, Fullscreen) і toolbar (undo/redo/
+  zoom in/out/fit/re-layout/flow-play/fullscreen/theme), але Grid/Snap/
+  YAML-panel-toggle — стан, що з'являється лише в кроці 10.5; Zoom
+  in/out/Fit дублює вже наявний React Flow `<Controls/>` віджет на
+  канві; "flow-play" в тулбарі дублює власні контроли `FlowPlayer`.
+  Додавання неробочих/дубльованих пунктів заради буквального збігу з
+  текстом плану суперечило б принципу "не проєктувати наперед".
+- Рішення: у 10.3 View-меню містить лише Theme + Fullscreen (обидва
+  функціональні зараз); Grid/Snap/YAML-panel toggle додасться в 10.5,
+  коли з'явиться відповідний стан. Toolbar — Undo/Redo/Re-layout/
+  Fullscreen/Theme (без Zoom/flow-play — навмисний descope, дублікати
+  не додають цінності). Додатково: `drill-down.spec.ts` теж
+  використовував `export-layout` напряму (план згадав лише
+  `exports.spec/share-link.spec/native-fs.spec/drag-layout.spec`) —
+  оновлено разом з іншими. "Re-layout all" (нова дрібна дія з плану)
+  реалізовано як `onRelayoutAll` в `useDiagramEditing.ts`. Help-меню:
+  "Tour" піднято на рівень App.tsx (окремий стан `showTour`, доступний
+  і коли діаграма вже відкрита, а не лише зі StartScreen); "формат/
+  GitHub" — посилання на `docs/format.md` і репозиторій на GitHub у
+  новій вкладці.
+- Дата: 2026-07-04, коміт: (цей крок)

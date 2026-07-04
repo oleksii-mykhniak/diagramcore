@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { AppHeader } from './components/AppHeader';
 import { EditorWorkspace } from './components/EditorWorkspace';
+import { Tour } from './components/Tour';
 import { useTheme } from './hooks/useTheme';
 import { useDiagramStack } from './hooks/useDiagramStack';
 import { useHistory } from './hooks/useHistory';
@@ -8,6 +10,7 @@ import { useDiagramExports } from './hooks/useDiagramExports';
 
 export default function App() {
   const [theme, , toggleTheme] = useTheme();
+  const [showTour, setShowTour] = useState(false);
 
   const {
     stack,
@@ -62,6 +65,7 @@ export default function App() {
     onDeleteFlowStep,
     onSelectProblem,
     onRelayout,
+    onRelayoutAll,
     onImportLayout,
     onFlowPlayerChange,
   } = useDiagramEditing(current, levelRef, runMutation, updateCurrentLevel, pushHistory, setLoadError);
@@ -76,6 +80,7 @@ export default function App() {
         toggleTheme={toggleTheme}
         onFileInput={onFileInput}
         onOpenNative={(fallback) => void onOpenNative(fallback)}
+        onNewDiagram={(text) => void openTextAsDiagram('untitled.dc.yaml', text)}
         current={current}
         hasUnsavedChanges={hasUnsavedChanges}
         onSave={() => void onSave()}
@@ -88,11 +93,15 @@ export default function App() {
         shareUrl={shareUrl}
         shareError={shareError}
         onRelayout={() => void onRelayout()}
+        onRelayoutAll={() => void onRelayoutAll()}
         onUndo={() => void onUndo()}
         onRedo={() => void onRedo()}
         historyCounts={historyCounts}
         stack={stack}
         goToLevel={goToLevel}
+        selectedNodeId={selectedNodeId}
+        onDeleteSelectedNode={onDeleteSelectedNode}
+        onShowTour={() => setShowTour(true)}
       />
       <EditorWorkspace
         loadError={loadError}
@@ -128,6 +137,7 @@ export default function App() {
         onOpenExample={(fileName, text) => void openTextAsDiagram(fileName, text)}
         onNewDiagram={(text) => void openTextAsDiagram('untitled.dc.yaml', text)}
       />
+      {showTour && <Tour onClose={() => setShowTour(false)} />}
     </div>
   );
 }
