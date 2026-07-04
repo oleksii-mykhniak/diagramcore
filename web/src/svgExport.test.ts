@@ -110,4 +110,19 @@ describe('renderDiagramSVGString', () => {
     expect(svg).toContain('stroke-dasharray="5,3"'); // container's own dashed box
     expect(svg.indexOf('GCP')).toBeLessThan(svg.indexOf('Svc'));
   });
+
+  it('applies an instance style override (PLAN3.md step 11.8) to the matching node only', () => {
+    const svg = renderDiagramSVGString(diagram, layout, positions, {}, {}, [], {}, {
+      A: { fill: '#ff00ff', stroke: '#00ffff', strokeWidth: 4, lineStyle: 'dashed' },
+    });
+    expect(svg).toContain('#ff00ff');
+    expect(svg).toContain('#00ffff');
+    expect(svg).toContain('stroke-width="4"');
+    expect(svg).toContain('stroke-dasharray="6,4"');
+
+    // Node B has no override — its own drawn markup doesn't mention the
+    // override color at all.
+    const bIndex = svg.indexOf('Beta');
+    expect(svg.slice(bIndex - 300, bIndex)).not.toContain('#ff00ff');
+  });
 });

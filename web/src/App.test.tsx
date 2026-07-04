@@ -36,8 +36,12 @@ describe('App', () => {
     await userEvent.upload(input, file);
 
     await waitFor(() => expect(screen.getByTestId('reactflow-canvas')).toBeInTheDocument());
-    expect(screen.getByTestId('rf-node-User')).toBeInTheDocument();
-    expect(screen.getByTestId('rf-node-Gateway')).toBeInTheDocument();
+    // React Flow mounts the canvas container first and only populates its
+    // node children on a subsequent effect-driven pass, so these need
+    // their own wait rather than a synchronous check right after the
+    // canvas appears.
+    await waitFor(() => expect(screen.getByTestId('rf-node-User')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('rf-node-Gateway')).toBeInTheDocument());
   });
 
   it('shows export controls once a diagram is open, with the flow-steps export disabled until a flow is selected', async () => {

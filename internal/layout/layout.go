@@ -22,6 +22,16 @@ type Size struct {
 	Height float64 `json:"h"`
 }
 
+// Style is a node's instance-level style override (phase 11, step 11.8):
+// all fields optional, only the ones the user actually changed are set.
+type Style struct {
+	Fill        string  `json:"fill,omitempty"`
+	Stroke      string  `json:"stroke,omitempty"`
+	StrokeWidth float64 `json:"strokeWidth,omitempty"`
+	LineStyle   string  `json:"lineStyle,omitempty"`
+	Rounded     bool    `json:"rounded,omitempty"`
+}
+
 // View holds the positions for one named view. v0 only uses "default".
 type View struct {
 	Positions map[string]Position `json:"positions"`
@@ -32,6 +42,9 @@ type View struct {
 	// Sizes holds manually-resized node dimensions (phase 11, step 11.4)
 	// — same round-tripping rule as NotePositions above.
 	Sizes map[string]Size `json:"sizes,omitempty"`
+	// Styles holds instance-level style overrides (phase 11, step 11.8)
+	// — same round-tripping rule as NotePositions above.
+	Styles map[string]Style `json:"styles,omitempty"`
 }
 
 // File is the decoded contents of a <name>.layout.json file.
@@ -108,7 +121,7 @@ func Save(path string, positions map[string]Position) error {
 	} else if existing != nil {
 		f.RenderStyle = existing.RenderStyle
 		if v, ok := existing.Views[DefaultView]; ok {
-			f.Views[DefaultView] = View{Positions: positions, NotePositions: v.NotePositions, Sizes: v.Sizes}
+			f.Views[DefaultView] = View{Positions: positions, NotePositions: v.NotePositions, Sizes: v.Sizes, Styles: v.Styles}
 		}
 	}
 	data, err := json.MarshalIndent(f, "", "  ")

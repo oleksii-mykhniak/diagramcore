@@ -1,4 +1,4 @@
-import type { LayoutPosition, RenderStyle } from './layoutFile';
+import type { LayoutPosition, LayoutStyle, RenderStyle } from './layoutFile';
 
 /** Local (per-browser) autosave (PLAN3.md step 11.3): a debounced
  * IndexedDB snapshot of the current level's editable state, keyed by
@@ -13,6 +13,9 @@ export interface AutosaveData {
   /** Manually-resized node dimensions (PLAN3.md step 11.4). Optional so
    * records written before this field existed still decode. */
   sizes?: Record<string, { width: number; height: number }>;
+  /** Instance-level style overrides (PLAN3.md step 11.8). Optional so
+   * records written before this field existed still decode. */
+  styles?: Record<string, LayoutStyle>;
 }
 
 export interface AutosaveRecord extends AutosaveData {

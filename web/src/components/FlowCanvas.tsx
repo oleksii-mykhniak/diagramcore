@@ -19,8 +19,8 @@ import type { LayoutPosition } from '../layoutFile';
 import { pairKey } from '../flowPlayer';
 import { nodeTypes, resolveNodeType } from './rfNodeTypes';
 import type { ContainerNodeData, DcNodeData, NoteNodeData } from './rfNodeTypes';
-import { nodeVisual } from '../shapes';
-import type { RenderStyle } from '../shapes';
+import { resolveNodeStyle } from '../shapes';
+import type { RenderStyle, StyleOverride } from '../shapes';
 import { edgeTypes } from './rfEdgeTypes';
 import type { DcEdgeData } from './rfEdgeTypes';
 
@@ -58,6 +58,9 @@ interface Props {
   /** Committed once per resize gesture, on release (same single-commit
    * pattern as `onNodeDragStop`). */
   onNodeResizeStop?: (id: string, size: { width: number; height: number }) => void;
+  /** Instance-level style overrides (PLAN3.md step 11.8) — like `sizes`,
+   * only nodes the user actually styled get an entry. */
+  styles?: Record<string, StyleOverride>;
   visitedStepKeys?: Set<string>;
   activeStep?: ActiveStep;
   onNodeDoubleClick?: (node: DiagramNode) => void;
@@ -100,6 +103,7 @@ function FlowCanvasInner({
   onNodeDragStop,
   sizes,
   onNodeResizeStop,
+  styles,
   visitedStepKeys,
   activeStep,
   onNodeDoubleClick,
@@ -174,7 +178,7 @@ function FlowCanvasInner({
         const isContainer = geometry.containerIds.has(n.id);
         const type = dcNode?.type ?? 'component';
         const rfType = isContainer ? 'container' : resolveNodeType(type);
-        const visual = !isContainer && rfType === 'custom' ? nodeVisual(diagram, type) : null;
+        const resolvedStyle = isContainer ? null : resolveNodeStyle(diagram, type, styles?.[n.id]);
 
         let position = abs;
         if (n.parent) {
@@ -219,7 +223,14 @@ function FlowCanvasInner({
                 showDescription: showDescriptions,
                 renderStyle,
                 onResizeEnd: (nextSize: { width: number; height: number }) => onNodeResizeStop?.(n.id, nextSize),
-                ...(visual ? { customType: type, shape: visual.shape.name, color: visual.color, icon: visual.icon } : {}),
+                color: resolvedStyle?.fill,
+                strokeColor: resolvedStyle?.stroke,
+                strokeWidthOverride: resolvedStyle?.strokeWidth,
+                lineStyle: resolvedStyle?.lineStyle,
+                rounded: resolvedStyle?.rounded,
+                ...(rfType === 'custom' && resolvedStyle
+                  ? { customType: type, shape: resolvedStyle.shape.name, icon: resolvedStyle.icon }
+                  : {}),
               },
         };
       }),
@@ -234,6 +245,7 @@ function FlowCanvasInner({
       showDescriptions,
       renderStyle,
       onNodeResizeStop,
+      styles,
     ],
   );
 

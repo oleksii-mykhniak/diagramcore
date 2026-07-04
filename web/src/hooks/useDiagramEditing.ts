@@ -8,6 +8,7 @@ import { computeLayout } from '../layout';
 import type { Diagram, DiagramNode, DiagramLink, DiagramNoteDef } from '../types';
 import { fromLayoutSizes, parseLayoutFile } from '../layoutFile';
 import type { LayoutPosition } from '../layoutFile';
+import type { StyleOverride } from '../shapes';
 import type { FlowPlayerState } from '../flowPlayer';
 import { applyPatch } from '../yamlPatch';
 import type { PatchOp } from '../yamlPatch';
@@ -280,6 +281,29 @@ export function useDiagramEditing(
     [current, updateCurrentLevel],
   );
 
+  /** Properties panel → Style section (PLAN3.md step 11.8): patches an
+   * instance style override for the selected node — layout-file state,
+   * like `sizes`/`positions`, never the YAML (`rawText` stays byte-for-
+   * byte identical). */
+  const onUpdateNodeStyle = useCallback(
+    (patch: Partial<StyleOverride>) => {
+      if (!current || !selectedNodeId) return;
+      const existing = current.styles[selectedNodeId] ?? {};
+      updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: { ...existing, ...patch } } });
+    },
+    [current, selectedNodeId, updateCurrentLevel],
+  );
+
+  /** "Reset style" — drops the selected node's entire override, back to
+   * its `custom_types`/theme default. */
+  const onResetNodeStyle = useCallback(() => {
+    if (!current || !selectedNodeId) return;
+    if (!(selectedNodeId in current.styles)) return;
+    const styles = { ...current.styles };
+    delete styles[selectedNodeId];
+    updateCurrentLevel({ styles });
+  }, [current, selectedNodeId, updateCurrentLevel]);
+
   const recordingFlow =
     current?.flowPlayerState.flowIndex != null ? current.diagram.flows?.[current.flowPlayerState.flowIndex] ?? null : null;
 
@@ -409,6 +433,7 @@ export function useDiagramEditing(
             manualPositionIds,
             notePositions: { ...current.notePositions, ...(imported.views.default?.notePositions ?? {}) },
             sizes: { ...current.sizes, ...fromLayoutSizes(imported.views.default?.sizes) },
+            styles: { ...current.styles, ...(imported.views.default?.styles ?? {}) },
             ...(imported.renderStyle ? { renderStyle: imported.renderStyle } : {}),
           });
         } catch (err) {
@@ -447,6 +472,8 @@ export function useDiagramEditing(
     onDeleteLink,
     onNodeDrag,
     onNodeResizeStop,
+    onUpdateNodeStyle,
+    onResetNodeStyle,
     onNewFlow,
     onToggleRecording,
     onAddBranch,

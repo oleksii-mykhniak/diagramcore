@@ -78,6 +78,8 @@ export default function App() {
     onDeleteLink,
     onNodeDrag: onNodeDragStop,
     onNodeResizeStop,
+    onUpdateNodeStyle,
+    onResetNodeStyle,
     onNewFlow,
     onToggleRecording,
     onAddBranch,
@@ -213,6 +215,8 @@ export default function App() {
         selectedNodeId={selectedNodeId}
         onNodeDragStop={onNodeDragStop}
         onNodeResizeStop={onNodeResizeStop}
+        onUpdateNodeStyle={onUpdateNodeStyle}
+        onResetNodeStyle={onResetNodeStyle}
         onNodeDoubleClick={(node) => void openDetails(node)}
         onNodeClick={onNodeClick}
         onDropNodeType={onDropNodeType}

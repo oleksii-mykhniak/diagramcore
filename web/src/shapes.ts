@@ -6,6 +6,8 @@ import { sketchEllipse, sketchPath, sketchPolygon, sketchRect } from './sketch';
 
 export type RenderStyle = 'clean' | 'sketch';
 
+export type LineStyle = 'solid' | 'dashed' | 'dotted';
+
 export interface ShapeStyle {
   fill: string;
   stroke: string;
@@ -15,6 +17,29 @@ export interface ShapeStyle {
    * via roughjs (see `./sketch.ts`) so canvas and export stay identical
    * under either preset. */
   renderStyle?: RenderStyle;
+  /** Instance/type-level style overrides (PLAN3.md step 11.8) — when
+   * set, replaces whatever dash pattern/corner radius the shape itself
+   * would otherwise draw. Only `rectShape`-based shapes honor `rounded`
+   * (the others have no meaningful "corner" to round). */
+  lineStyle?: LineStyle;
+  rounded?: boolean;
+}
+
+/** `lineStyle` -> SVG `stroke-dasharray`, or `fallback` (the shape's own
+ * built-in dash pattern, if any) when unset — so an instance/type
+ * override always wins over a shape's default (e.g. `external`'s
+ * built-in dashed outline), but leaving it unset preserves that default. */
+function resolveDashArray(lineStyle: LineStyle | undefined, fallback?: string): string | undefined {
+  switch (lineStyle) {
+    case 'solid':
+      return undefined;
+    case 'dashed':
+      return '6,4';
+    case 'dotted':
+      return '2,3';
+    default:
+      return fallback;
+  }
 }
 
 export interface ShapeSpec {
@@ -26,14 +51,17 @@ export interface ShapeSpec {
 
 function rectShape(rx: number, dashArray?: string): ShapeSpec['renderSvgInner'] {
   return (w, h, s) => {
-    if (s.renderStyle === 'sketch') return sketchRect(0.5, 0.5, w - 1, h - 1, s, dashArray);
-    return `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="${rx}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dashArray ? ` stroke-dasharray="${dashArray}"` : ''} />`;
+    const effectiveRx = s.rounded === undefined ? rx : s.rounded ? Math.max(rx, 8) : 0;
+    const effectiveDash = resolveDashArray(s.lineStyle, dashArray);
+    if (s.renderStyle === 'sketch') return sketchRect(0.5, 0.5, w - 1, h - 1, s, effectiveDash);
+    return `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="${effectiveRx}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${effectiveDash ? ` stroke-dasharray="${effectiveDash}"` : ''} />`;
   };
 }
 
 const ellipseInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
+  const dash = resolveDashArray(s.lineStyle);
   if (s.renderStyle === 'sketch') return sketchEllipse(w / 2, h / 2, w - 2, h - 2, s);
-  return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2 - 1}" ry="${h / 2 - 1}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+  return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2 - 1}" ry="${h / 2 - 1}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dash ? ` stroke-dasharray="${dash}"` : ''} />`;
 };
 
 const storageInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
@@ -42,12 +70,14 @@ const storageInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
   const top = ry;
   const bottom = h - ry - 1;
   const bodyPath = `M1,${top} A${rx},${ry} 0 0 1 ${w - 1},${top} L${w - 1},${bottom} A${rx},${ry} 0 0 1 1,${bottom} Z`;
+  const dash = resolveDashArray(s.lineStyle);
   if (s.renderStyle === 'sketch') {
-    return sketchPath(bodyPath, s) + sketchEllipse(w / 2, top, rx * 2, ry * 2, s);
+    return sketchPath(bodyPath, s, dash) + sketchEllipse(w / 2, top, rx * 2, ry * 2, s);
   }
+  const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
   return (
-    `<path d="${bodyPath}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />` +
-    `<ellipse cx="${w / 2}" cy="${top}" rx="${rx}" ry="${ry}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`
+    `<path d="${bodyPath}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dashAttr} />` +
+    `<ellipse cx="${w / 2}" cy="${top}" rx="${rx}" ry="${ry}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dashAttr} />`
   );
 };
 
@@ -58,8 +88,9 @@ const diamondInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
     [w / 2, h - 1],
     [1, h / 2],
   ];
+  const dash = resolveDashArray(s.lineStyle);
   if (s.renderStyle === 'sketch') return sketchPolygon(points, s);
-  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dash ? ` stroke-dasharray="${dash}"` : ''} />`;
 };
 
 const parallelogramInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
@@ -70,8 +101,9 @@ const parallelogramInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
     [w - 1 - skew, h - 1],
     [1, h - 1],
   ];
+  const dash = resolveDashArray(s.lineStyle);
   if (s.renderStyle === 'sketch') return sketchPolygon(points, s);
-  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dash ? ` stroke-dasharray="${dash}"` : ''} />`;
 };
 
 const hexagonInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
@@ -84,8 +116,9 @@ const hexagonInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
     [cut, h - 1],
     [1, h / 2],
   ];
+  const dash = resolveDashArray(s.lineStyle);
   if (s.renderStyle === 'sketch') return sketchPolygon(points, s);
-  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+  return `<polygon points="${points.map((p) => p.join(',')).join(' ')}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dash ? ` stroke-dasharray="${dash}"` : ''} />`;
 };
 
 const cloudInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
@@ -98,8 +131,9 @@ const cloudInner: ShapeSpec['renderSvgInner'] = (w, h, s) => {
     `C${w * 0.85},${h * 0.18} ${w * 0.98},${h * 0.42} ${w * 0.82},${h * 0.58} ` +
     `C${w * 0.98},${h * 0.68} ${w * 0.9},${h * 0.92} ${w * 0.68},${h * 0.9} ` +
     `C${w * 0.6},${h * 1.05} ${w * 0.3},${h * 1.02} ${w * 0.25},${h * 0.75} Z`;
-  if (s.renderStyle === 'sketch') return sketchPath(path, s);
-  return `<path d="${path}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" />`;
+  const dash = resolveDashArray(s.lineStyle);
+  if (s.renderStyle === 'sketch') return sketchPath(path, s, dash);
+  return `<path d="${path}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"${dash ? ` stroke-dasharray="${dash}"` : ''} />`;
 };
 
 const baseShapes: Record<string, ShapeSpec> = {
@@ -132,11 +166,28 @@ export interface NodeVisual {
   shape: ShapeSpec;
   color?: string;
   icon?: string;
+  /** Type-level style extensions (PLAN3.md step 11.5/11.8) — from
+   * `custom_types`, one tier below an instance override. */
+  stroke?: string;
+  strokeWidth?: number;
+  lineStyle?: LineStyle;
+  rounded?: boolean;
+}
+
+interface CustomTypeLike {
+  name: string;
+  shape?: string;
+  color?: string;
+  icon?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  lineStyle?: LineStyle;
+  rounded?: boolean;
 }
 
 interface DiagramLike {
   diagram: {
-    custom_types?: (string | { name: string; shape?: string; color?: string; icon?: string })[];
+    custom_types?: (string | CustomTypeLike)[];
   };
 }
 
@@ -175,5 +226,54 @@ export function nodeVisual(diagram: DiagramLike, nodeType: string): NodeVisual {
     ?.map((t) => (typeof t === 'string' ? { name: t } : t))
     .find((t) => t.name === nodeType);
   if (!def) return { shape: baseShapes.component };
-  return { shape: def.shape ? resolveShape(def.shape) : baseShapes.component, color: def.color, icon: def.icon };
+  return {
+    shape: def.shape ? resolveShape(def.shape) : baseShapes.component,
+    color: def.color,
+    icon: def.icon,
+    stroke: def.stroke,
+    strokeWidth: def.strokeWidth,
+    lineStyle: def.lineStyle,
+    rounded: def.rounded,
+  };
+}
+
+/** An instance-level style override (PLAN3.md step 11.8) — persisted in
+ * the layout file/share link (`layoutFile.ts`'s `LayoutStyle`), not the
+ * semantic YAML — so styling a node never touches `rawText`. */
+export interface StyleOverride {
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  lineStyle?: LineStyle;
+  rounded?: boolean;
+}
+
+export interface ResolvedNodeStyle {
+  shape: ShapeSpec;
+  icon?: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  lineStyle?: LineStyle;
+  rounded?: boolean;
+}
+
+/** Resolves a node's final style by priority (PLAN3.md step 11.8):
+ * instance override → `custom_types` (type-level) → theme default (the
+ * theme tier is left to the caller, same as before this step — callers
+ * already fall back to `var(--dc-node-fill)`/`var(--dc-node-border)`
+ * when `fill`/`stroke` come back `undefined`). Canvas (`FlowCanvas.tsx`)
+ * and SVG export (`svgExport.ts`) both call this one function, so an
+ * override can never render differently in the two places. */
+export function resolveNodeStyle(diagram: DiagramLike, nodeType: string, instanceOverride?: StyleOverride): ResolvedNodeStyle {
+  const visual = nodeVisual(diagram, nodeType);
+  return {
+    shape: visual.shape,
+    icon: visual.icon,
+    fill: instanceOverride?.fill ?? visual.color,
+    stroke: instanceOverride?.stroke ?? visual.stroke,
+    strokeWidth: instanceOverride?.strokeWidth ?? visual.strokeWidth,
+    lineStyle: instanceOverride?.lineStyle ?? visual.lineStyle,
+    rounded: instanceOverride?.rounded ?? visual.rounded,
+  };
 }

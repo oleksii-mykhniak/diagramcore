@@ -1,9 +1,9 @@
 import type { Diagram, DiagramNoteDef } from './types';
 import { nodeLabel } from './types';
 import type { DiagramLayout, LayoutEdge, LayoutPoint } from './layout';
-import type { LayoutPosition } from './layoutFile';
+import type { LayoutPosition, LayoutStyle } from './layoutFile';
 import { pairKey } from './flowPlayer';
-import { nodeVisual, renderContainerSvgInner } from './shapes';
+import { renderContainerSvgInner, resolveNodeStyle } from './shapes';
 import type { RenderStyle } from './shapes';
 import { sketchLineD } from './sketch';
 
@@ -91,6 +91,7 @@ export function renderDiagramSVGString(
   options: RenderOptions = {},
   notes: DiagramNoteDef[] = [],
   notePositions: Record<string, LayoutPosition> = {},
+  styles: Record<string, LayoutStyle> = {},
 ): string {
   const labelById = new Map(diagram.nodes.map((n) => [n.id, nodeLabel(n)]));
   const nodeById = new Map(diagram.nodes.map((n) => [n.id, n]));
@@ -148,9 +149,9 @@ export function renderDiagramSVGString(
       }
       const hasDetails = Boolean(dcNode?.details);
       const label = esc(labelById.get(n.id) ?? n.id) + (hasDetails ? ' ⊞' : '');
-      const visual = nodeVisual(diagram, dcNode?.type ?? 'component');
-      const shape = visual.shape;
-      const fill = visual.color ?? (dcNode?.type === 'external' ? theme.nodeExternalFill : theme.nodeFill);
+      const resolved = resolveNodeStyle(diagram, dcNode?.type ?? 'component', styles[n.id]);
+      const shape = resolved.shape;
+      const fill = resolved.fill ?? (dcNode?.type === 'external' ? theme.nodeExternalFill : theme.nodeFill);
       const inner = hasDetails
         ? `<rect x="3" y="3" width="${n.width - 6}" height="${n.height - 6}" rx="4" fill="none" stroke="${theme.nodeBorder}" stroke-width="1" />`
         : '';
@@ -163,9 +164,11 @@ export function renderDiagramSVGString(
         `<g transform="translate(${pos.x},${pos.y})">` +
         shape.renderSvgInner(n.width, n.height, {
           fill,
-          stroke: theme.nodeBorder,
-          strokeWidth: hasDetails ? 3 : 1.5,
+          stroke: resolved.stroke ?? theme.nodeBorder,
+          strokeWidth: hasDetails ? 3 : (resolved.strokeWidth ?? 1.5),
           renderStyle: options.renderStyle,
+          lineStyle: resolved.lineStyle,
+          rounded: resolved.rounded,
         }) +
         inner +
         `<text x="${n.width / 2}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="system-ui, sans-serif" fill="${theme.text}">${label}</text>` +

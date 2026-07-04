@@ -3,7 +3,7 @@ import { Handle, NodeResizer, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { MIN_NODE_HEIGHT, MIN_NODE_WIDTH, NODE_WIDTH, NODE_HEIGHT } from '../layout';
 import { renderContainerSvgInner, resolveShape } from '../shapes';
-import type { RenderStyle } from '../shapes';
+import type { LineStyle, RenderStyle } from '../shapes';
 import { CUSTOM_TYPE_ICONS } from '../customTypeIcons';
 
 export interface DcNodeData extends Record<string, unknown> {
@@ -15,8 +15,18 @@ export interface DcNodeData extends Record<string, unknown> {
   /** Only set for custom (non-base-six) types — PLAN.md step 10.8. */
   customType?: string;
   shape?: string;
+  /** Resolved fill (instance override → custom_type → theme default —
+   * PLAN3.md step 11.8's `resolveNodeStyle`). */
   color?: string;
   icon?: string;
+  /** Resolved stroke/strokeWidth/lineStyle/rounded (PLAN3.md step
+   * 11.8) — same priority order as `color` above. Active/visited/
+   * selected highlight colors still take precedence over `strokeColor`
+   * when applicable (see `NodeShell`). */
+  strokeColor?: string;
+  strokeWidthOverride?: number;
+  lineStyle?: LineStyle;
+  rounded?: boolean;
   /** View → "Show descriptions" (PLAN.md step 10.11). */
   description?: string;
   showDescription?: boolean;
@@ -60,10 +70,17 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
       ? 'var(--dc-flow-visited)'
       : data.isSelected
         ? 'var(--dc-accent)'
-        : 'var(--dc-node-border)';
+        : (data.strokeColor ?? 'var(--dc-node-border)');
   const fill = data.color ?? (nodeType === 'external' ? 'var(--dc-node-external-fill)' : 'var(--dc-node-fill)');
-  const strokeWidth = data.hasDetails ? 3 : 1.5;
-  const svgInner = shape.renderSvgInner(width, height, { fill, stroke, strokeWidth, renderStyle: data.renderStyle });
+  const strokeWidth = data.hasDetails ? 3 : (data.strokeWidthOverride ?? 1.5);
+  const svgInner = shape.renderSvgInner(width, height, {
+    fill,
+    stroke,
+    strokeWidth,
+    renderStyle: data.renderStyle,
+    lineStyle: data.lineStyle,
+    rounded: data.rounded,
+  });
   const IconComponent = data.icon ? CUSTOM_TYPE_ICONS[data.icon] : null;
 
   return (

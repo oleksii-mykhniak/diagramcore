@@ -18,6 +18,7 @@ import type { LayoutPosition } from '../layoutFile';
 import { computeFlowHighlight } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
 import type { DiagramLevel } from '../hooks/useDiagramStack';
+import type { StyleOverride } from '../shapes';
 
 interface EditorWorkspaceProps {
   loadError: string | null;
@@ -46,6 +47,8 @@ interface EditorWorkspaceProps {
   selectedNodeId: string | null;
   onNodeDragStop: (id: string, pos: LayoutPosition) => void;
   onNodeResizeStop: (id: string, size: { width: number; height: number }) => void;
+  onUpdateNodeStyle: (patch: Partial<StyleOverride>) => void;
+  onResetNodeStyle: () => void;
   onNodeDoubleClick: (node: DiagramNode) => void;
   onNodeClick: (node: DiagramNode) => void;
   onDropNodeType: (type: string, pos: LayoutPosition) => void;
@@ -111,6 +114,8 @@ export function EditorWorkspace({
   selectedNodeId,
   onNodeDragStop,
   onNodeResizeStop,
+  onUpdateNodeStyle,
+  onResetNodeStyle,
   onNodeDoubleClick,
   onNodeClick,
   onDropNodeType,
@@ -190,6 +195,7 @@ export function EditorWorkspace({
                 onNodeDragStop={onNodeDragStop}
                 sizes={current.sizes}
                 onNodeResizeStop={onNodeResizeStop}
+                styles={current.styles}
                 onNodeDoubleClick={onNodeDoubleClick}
                 onNodeClick={onNodeClick}
                 selectedNodeId={selectedNodeId}
@@ -220,7 +226,15 @@ export function EditorWorkspace({
               onToggleCollapsed={() => setRightDockCollapsed((c) => !c)}
               propertiesContent={
                 selectedNode ? (
-                  <PropertiesPanel node={selectedNode} diagram={current.diagram} onUpdate={onUpdateSelectedNode} onDelete={onDeleteSelectedNode} />
+                  <PropertiesPanel
+                    node={selectedNode}
+                    diagram={current.diagram}
+                    onUpdate={onUpdateSelectedNode}
+                    onDelete={onDeleteSelectedNode}
+                    style={current.styles[selectedNode.id]}
+                    onUpdateStyle={onUpdateNodeStyle}
+                    onResetStyle={onResetNodeStyle}
+                  />
                 ) : (
                   <p data-testid="properties-empty" style={{ padding: 'var(--dc-space-3)', color: 'var(--dc-text-muted)' }}>
                     Select a node to edit its properties.

@@ -299,3 +299,62 @@
   (4/4), `npm test` (79/79), `npm run build`, повний `npx playwright
   test` (74 passed + 3 skipped — прихований draw.io).
 - Commit: `phase11-step7: вкладки діаграм + breadcrumbs, автозавантаження details`.
+
+## phase11-step8 — Стилі вузлів: інстанс-оверрайди + Properties UI — 2026-07-04
+
+- `internal/layout.Style{Fill,Stroke,StrokeWidth,LineStyle,Rounded}` +
+  `View.Styles`, round-трипиться в `Save` як `Sizes`/`NotePositions`.
+  Заразом підтягнуто пропущені з кроку 11.4 `sizes`/`size` у
+  `schema/layout.schema.json` (мали бути додані тоді, але не були) —
+  тепер разом зі `styles`.
+- Web-дзеркало: `layoutFile.ts` — `LayoutStyle` + `styles?` на `View`,
+  `buildLayoutFile` отримав 5-й параметр. `DiagramLevel.styles:
+  Record<id, LayoutStyle>` — той самий патерн, що й `sizes` (маніфестне
+  дублювання по всіх точках: `buildLevel`, `onOpenNative`, share-link
+  ефект, autosave-restore, `onSave`/`onExportLayout`/`onShare`,
+  `localAutosave.ts`'s `AutosaveData`). **Знайдено й виправлено
+  побічний баг**: `onImportLayout` у `useDiagramEditing.ts` зливав
+  `sizes`, але додавання `styles` пропустили в тому самому місці —
+  полагоджено (деталі — `docs/deviations.md`, крок 11.8).
+- `shapes.ts`: `ShapeStyle` розширено `lineStyle`/`rounded`; усі функції
+  фігур (`rectShape` та rect/ellipse/storage/diamond/parallelogram/
+  hexagon/cloud) тепер консультують `resolveDashArray` (інстанс
+  `lineStyle` перекриває вбудований dasharray фігури, напр. `external`
+  за замовчуванням пунктирний) — і `rounded` для rect-подібних. Новий
+  `resolveNodeStyle(diagram, type, instanceOverride)` — єдина точка
+  резолву пріоритету інстанс → `custom_types` (тип-рівень, розширений
+  ще в кроці 11.5) → тема (лишається на відкупі викликача, як і
+  раніше). `nodeVisual` тепер повертає ще й
+  stroke/strokeWidth/lineStyle/rounded з `custom_types`.
+- Канва (`FlowCanvas.tsx`+`rfNodeTypes.tsx`): для КОЖНОГО вузла (не
+  лише custom, як стилі типу раніше) рахується `resolveNodeStyle(...,
+  current.styles[id])`, результат — у `data.color`/`strokeColor`/
+  `strokeWidthOverride`/`lineStyle`/`rounded`; `NodeShell` використовує
+  їх для fill/stroke/strokeWidth/lineStyle/rounded параметрів
+  `renderSvgInner`, active/visited/selected-підсвітка як і раніше має
+  пріоритет над `strokeColor`-оверрайдом (як з flow-highlight
+  кольорами). SVG-експорт (`svgExport.ts`) отримав `styles` параметр
+  і йде через ту саму `resolveNodeStyle` — тому canvas і export не
+  можуть розійтись.
+- `PropertiesPanel.tsx`: нова секція Style — color-picker fill/stroke,
+  select товщини (1-4), select типу лінії (solid/dashed/dotted),
+  checkbox заокруглення, кнопка "Reset style" (вимкнена, якщо
+  оверрайду нема). `useDiagramEditing.ts`: `onUpdateNodeStyle`/
+  `onResetNodeStyle` патчать `current.styles` напряму через
+  `updateCurrentLevel` (не `applyOps`/YAML) — стилізація не чіпає
+  `rawText`.
+- Тести: `shapes.test.ts` (lineStyle перекриває вбудований dasharray,
+  rounded перемикає rx, sketch-режим поважає fill/stroke/strokeWidth
+  оверрайду, `resolveNodeStyle` пріоритет інстанс→тип→base-без-типу),
+  `svgExport.test.ts` (оверрайд застосовується лише до потрібного
+  вузла), новий e2e `node-style.spec.ts` (4 сценарії: зміна видима
+  одразу і YAML незмінний; Reset style; виживає Export→Import layout;
+  sketch-пресет малює оверрайд-кольори).
+- Регресія: `go build/vet/test ./...`, `./dc validate
+  examples/*.dc.yaml` (4/4), `npm test` (86/86 — включно з дрібним
+  hardening флейкі-тесту `App.test.tsx`, що виявився під паралельним
+  навантаженням тестів: rf-node-* перевірка тепер під `waitFor`, бо
+  React Flow монтує контейнер і вузли в різні паси), `npm run build`,
+  повний `npx playwright test` (78 passed + 3 skipped — прихований
+  draw.io).
+- Commit: `phase11-step8: інстанс-стилі вузлів + Properties UI Style-секція`.

@@ -16,6 +16,18 @@ export interface LayoutSize {
 
 export type RenderStyle = 'clean' | 'sketch';
 
+/** An instance-level node style override (PLAN3.md step 11.8) — mirrors
+ * `shapes.ts`'s `StyleOverride`, kept as its own small type here (like
+ * `LayoutSize`) since `layoutFile.ts` doesn't otherwise depend on
+ * `shapes.ts`. */
+export interface LayoutStyle {
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+  rounded?: boolean;
+}
+
 export interface LayoutFile {
   views: {
     [view: string]: {
@@ -27,6 +39,9 @@ export interface LayoutFile {
        * nodes the user actually resized get an entry; everything else
        * keeps the auto-layout default size. */
       sizes?: Record<string, LayoutSize>;
+      /** Instance-level style overrides (PLAN3.md step 11.8) — only
+       * nodes the user actually styled get an entry. */
+      styles?: Record<string, LayoutStyle>;
     };
   };
   /** Diagram style preset (PLAN.md step 10.12) — top-level, not per-view,
@@ -42,6 +57,7 @@ export function buildLayoutFile(
   notePositions?: Record<string, LayoutPosition>,
   renderStyle?: RenderStyle,
   sizes?: Record<string, LayoutSize>,
+  styles?: Record<string, LayoutStyle>,
 ): LayoutFile {
   return {
     views: {
@@ -49,6 +65,7 @@ export function buildLayoutFile(
         positions,
         ...(notePositions ? { notePositions } : {}),
         ...(sizes && Object.keys(sizes).length > 0 ? { sizes } : {}),
+        ...(styles && Object.keys(styles).length > 0 ? { styles } : {}),
       },
     },
     ...(renderStyle && renderStyle !== 'clean' ? { renderStyle } : {}),

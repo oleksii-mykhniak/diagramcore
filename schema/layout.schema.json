@@ -30,6 +30,16 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/position" },
           "description": "Note positions (phase 10, step 10.11) — notes aren't diagram nodes, so kept separate from positions."
+        },
+        "sizes": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/size" },
+          "description": "Manually-resized node dimensions (phase 11, step 11.4) — only nodes the user actually resized get an entry."
+        },
+        "styles": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/style" },
+          "description": "Instance-level style overrides (phase 11, step 11.8) — only nodes the user actually styled get an entry."
         }
       }
     },
@@ -40,6 +50,26 @@
       "properties": {
         "x": { "type": "number" },
         "y": { "type": "number" }
+      }
+    },
+    "size": {
+      "type": "object",
+      "required": ["w", "h"],
+      "additionalProperties": false,
+      "properties": {
+        "w": { "type": "number" },
+        "h": { "type": "number" }
+      }
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "strokeWidth": { "type": "number" },
+        "lineStyle": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
+        "rounded": { "type": "boolean" }
       }
     }
   }

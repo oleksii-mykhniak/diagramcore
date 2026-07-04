@@ -34,7 +34,13 @@ export function useDiagramExports(current: DiagramLevel | null) {
     if (!current) return;
     downloadLayoutFile(
       layoutFileName(current.fileName),
-      buildLayoutFile(current.positions, current.notePositions, current.renderStyle, toLayoutSizes(current.sizes)),
+      buildLayoutFile(
+        current.positions,
+        current.notePositions,
+        current.renderStyle,
+        toLayoutSizes(current.sizes),
+        current.styles,
+      ),
     );
   }, [current]);
 
@@ -56,6 +62,7 @@ export function useDiagramExports(current: DiagramLevel | null) {
         { includeGrid: settings.includeGrid, includeDescriptions: settings.includeDescriptions, renderStyle: current.renderStyle },
         current.diagram.notes,
         current.notePositions,
+        current.styles,
       );
       const base = baseName(current.fileName);
       if (settings.format === 'svg') {
@@ -91,6 +98,7 @@ export function useDiagramExports(current: DiagramLevel | null) {
           { includeGrid: settings.includeGrid, includeDescriptions: settings.includeDescriptions, renderStyle: current.renderStyle },
           current.diagram.notes,
           current.notePositions,
+          current.styles,
         );
         if (settings.format === 'svg') {
           zipInput[`${frame.name}.svg`] = new TextEncoder().encode(svg);
@@ -121,8 +129,15 @@ export function useDiagramExports(current: DiagramLevel | null) {
       current.manualPositionIds.size > 0 ||
       (current.diagram.notes?.length ?? 0) > 0 ||
       current.renderStyle !== 'clean' ||
-      Object.keys(current.sizes).length > 0
-        ? buildLayoutFile(current.positions, current.notePositions, current.renderStyle, toLayoutSizes(current.sizes))
+      Object.keys(current.sizes).length > 0 ||
+      Object.keys(current.styles).length > 0
+        ? buildLayoutFile(
+            current.positions,
+            current.notePositions,
+            current.renderStyle,
+            toLayoutSizes(current.sizes),
+            current.styles,
+          )
         : null;
     const { fragment, size } = encodeShareState({ fileName: current.fileName, yaml: current.rawText, layout });
     if (size > SHARE_URL_SIZE_LIMIT) {
