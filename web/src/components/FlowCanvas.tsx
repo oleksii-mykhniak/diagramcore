@@ -70,8 +70,12 @@ interface Props {
    * `positions`, only nodes the user actually resized get an entry. */
   sizes?: Record<string, { width: number; height: number }>;
   /** Committed once per resize gesture, on release (same single-commit
-   * pattern as `onNodeDragStop`). */
-  onNodeResizeStop?: (id: string, size: { width: number; height: number }) => void;
+   * pattern as `onNodeDragStop`). `pos` is the node's new absolute
+   * position — top/left-handle resizes shift x/y along with the size to
+   * keep the opposite edge anchored, and that has to be committed too or
+   * the node snaps back to its pre-resize position on the next render
+   * (PLAN3.md step 11.4 follow-up fix). */
+  onNodeResizeStop?: (id: string, size: { width: number; height: number }, pos: LayoutPosition) => void;
   /** Instance-level style overrides (PLAN3.md step 11.8) — like `sizes`,
    * only nodes the user actually styled get an entry. */
   styles?: Record<string, StyleOverride>;
@@ -271,7 +275,14 @@ function FlowCanvasInner({
                 isSelected: false,
                 minWidth,
                 minHeight,
-                onResizeEnd: (nextSize: { width: number; height: number }) => onNodeResizeStop?.(n.id, nextSize),
+                onResizeEnd: (next: { width: number; height: number; x: number; y: number }) =>
+                  onNodeResizeStop?.(
+                    n.id,
+                    { width: next.width, height: next.height },
+                    n.parent
+                      ? { x: next.x + (geometry.absoluteById.get(n.parent)?.x ?? 0), y: next.y + (geometry.absoluteById.get(n.parent)?.y ?? 0) }
+                      : { x: next.x, y: next.y },
+                  ),
               }
             : {
                 label: dcNode ? nodeLabel(dcNode) : n.id,
@@ -282,7 +293,14 @@ function FlowCanvasInner({
                 description: dcNode?.description,
                 showDescription: showDescriptions,
                 renderStyle,
-                onResizeEnd: (nextSize: { width: number; height: number }) => onNodeResizeStop?.(n.id, nextSize),
+                onResizeEnd: (next: { width: number; height: number; x: number; y: number }) =>
+                  onNodeResizeStop?.(
+                    n.id,
+                    { width: next.width, height: next.height },
+                    n.parent
+                      ? { x: next.x + (geometry.absoluteById.get(n.parent)?.x ?? 0), y: next.y + (geometry.absoluteById.get(n.parent)?.y ?? 0) }
+                      : { x: next.x, y: next.y },
+                  ),
                 color: resolvedStyle?.fill,
                 strokeColor: resolvedStyle?.stroke,
                 strokeWidthOverride: resolvedStyle?.strokeWidth,

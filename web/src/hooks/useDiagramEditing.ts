@@ -433,11 +433,19 @@ export function useDiagramEditing(
   );
 
   /** Node resize (PLAN3.md step 11.4): committed once, on resize-stop —
-   * same pattern as `onNodeDrag`'s single commit at drag-stop. */
+   * same pattern as `onNodeDrag`'s single commit at drag-stop. `pos` is
+   * committed alongside `size` because top/left-handle resizes shift the
+   * node's x/y to keep the opposite edge anchored — without also
+   * updating `positions`, the node would snap back to its pre-resize
+   * position on the next render (only the size would "stick"). */
   const onNodeResizeStop = useCallback(
-    (id: string, size: { width: number; height: number }) => {
+    (id: string, size: { width: number; height: number }, pos: LayoutPosition) => {
       if (!current) return;
-      updateCurrentLevel({ sizes: { ...current.sizes, [id]: size } });
+      updateCurrentLevel({
+        sizes: { ...current.sizes, [id]: size },
+        positions: { ...current.positions, [id]: pos },
+        manualPositionIds: new Set(current.manualPositionIds).add(id),
+      });
     },
     [current, updateCurrentLevel],
   );

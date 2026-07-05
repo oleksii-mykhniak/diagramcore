@@ -34,7 +34,7 @@ export interface DcNodeData extends Record<string, unknown> {
   renderStyle?: RenderStyle;
   /** Fires once, on resize release (mirrors `onNodeDragStop`'s
    * single-commit-per-gesture pattern from step 11.1). */
-  onResizeEnd?: (size: { width: number; height: number }) => void;
+  onResizeEnd?: (size: { width: number; height: number; x: number; y: number }) => void;
 }
 
 interface ShellProps {
@@ -98,7 +98,9 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
         isVisible={data.isSelected}
         minWidth={MIN_NODE_WIDTH}
         minHeight={MIN_NODE_HEIGHT}
-        onResizeEnd={(_, params) => data.onResizeEnd?.({ width: params.width, height: params.height })}
+        onResizeEnd={(_, params) =>
+          data.onResizeEnd?.({ width: params.width, height: params.height, x: params.x, y: params.y })
+        }
       />
       <svg
         width={width}
@@ -267,7 +269,7 @@ export interface ContainerNodeData extends Record<string, unknown> {
    * what it currently holds. */
   minWidth?: number;
   minHeight?: number;
-  onResizeEnd?: (size: { width: number; height: number }) => void;
+  onResizeEnd?: (size: { width: number; height: number; x: number; y: number }) => void;
 }
 
 /** A node with `parent:` children (PLAN3.md step 11.6) draws as a
@@ -295,7 +297,9 @@ export const ContainerNode = memo(function ContainerNode({ id, data, width, heig
         isVisible={d.isSelected}
         minWidth={d.minWidth ?? MIN_NODE_WIDTH}
         minHeight={d.minHeight ?? MIN_NODE_HEIGHT}
-        onResizeEnd={(_, params) => d.onResizeEnd?.({ width: params.width, height: params.height })}
+        onResizeEnd={(_, params) =>
+          d.onResizeEnd?.({ width: params.width, height: params.height, x: params.x, y: params.y })
+        }
       />
       <svg
         width={w}

@@ -50,7 +50,7 @@ interface EditorWorkspaceProps {
   onSelectionChange: (ids: string[]) => void;
   onGroupNodeDragStop: (updates: Array<{ id: string; pos: LayoutPosition }>) => void;
   onNodeDragStop: (id: string, pos: LayoutPosition) => void;
-  onNodeResizeStop: (id: string, size: { width: number; height: number }) => void;
+  onNodeResizeStop: (id: string, size: { width: number; height: number }, pos: LayoutPosition) => void;
   onUpdateNodeStyle: (patch: Partial<StyleOverride>) => void;
   onResetNodeStyle: () => void;
   onNodeDoubleClick: (node: DiagramNode) => void;
