@@ -1,0 +1,15 @@
+/* @xyflow/react's default resize-handle hit area is 5x5px — since it
+ * lives inside the zoomed/panned viewport, it shrinks together with the
+ * canvas at low zoom, to the point of being nearly impossible to grab
+ * precisely. Missing it grabs the node body instead, which just
+ * drags/moves the shape rather than resizing it (looks like "resize
+ * doesn't work, the shape just moves"). Widen the hit box well past its
+ * default size; only imported from FlowCanvas.tsx, after
+ * `@xyflow/react/dist/style.css`, so this cascade wins over the library
+ * default at equal specificity. Corner handles are centered via the
+ * library's own `translate(-50%, -50%)`, so growing width/height stays
+ * symmetric around the corner — no position drift. */
+.react-flow__resize-control.handle {
+  width: 10px;
+  height: 10px;
+}

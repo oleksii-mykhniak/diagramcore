@@ -12,6 +12,7 @@ import {
 } from '@xyflow/react';
 import type { Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import './FlowCanvas.css';
 import type { Diagram, DiagramNode, DiagramNoteDef } from '../types';
 import { nodeLabel } from '../types';
 import { MIN_NODE_HEIGHT, MIN_NODE_WIDTH } from '../layout';

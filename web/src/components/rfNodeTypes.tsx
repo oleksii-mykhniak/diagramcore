@@ -105,12 +105,34 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
       <svg
         width={width}
         height={height}
-        style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
+        // Same reasoning as the label div below: this comes after
+        // <NodeResizer> in DOM order, so at z-index:auto it paints (and
+        // hit-tests) on top of the resize handles wherever the shape's
+        // path actually has fill/stroke near the node's edges/corners
+        // (e.g. the storage cylinder's arc) — pointer-events:none hands
+        // those pixels back to the resize handles/plain node div
+        // underneath without affecting node click/drag/select, which
+        // React Flow attaches to the ancestor `.react-flow__node`, not
+        // to this element specifically.
+        style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: svgInner }}
       />
       <Handle type="target" position={Position.Top} />
       <div
+        // This label layer sits in DOM order right after <NodeResizer>,
+        // so with default stacking (later sibling wins at z-index:auto)
+        // it would paint on top of the resize handles — its box covers
+        // the full node, overlapping the inner half of every corner/edge
+        // handle (they're centered exactly on the node boundary). Since
+        // it's a plain div, it captures pointer events everywhere in its
+        // box by default, even where there's no visible content — unlike
+        // the SVG shape below, whose unpainted areas pass clicks through.
+        // That made resize-handle clicks land on this label layer instead
+        // of the handle depending on sub-pixel rounding (zoom-dependent),
+        // silently turning an attempted resize into a plain node drag.
+        // No content here is interactive, so it's safe to opt it out of
+        // hit-testing entirely.
         style={{
           position: 'relative',
           width: '100%',
@@ -124,6 +146,7 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
           padding: '0 var(--dc-space-2)',
           fontSize: 'var(--dc-font-size-base)',
           color: 'var(--dc-text)',
+          pointerEvents: 'none',
         }}
       >
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--dc-space-1)' }}>
@@ -304,7 +327,13 @@ export const ContainerNode = memo(function ContainerNode({ id, data, width, heig
       <svg
         width={w}
         height={h}
-        style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
+        // Same fix as NodeShell's leaf-node SVG: this paints after
+        // <NodeResizer> in DOM order and would otherwise hit-test on top
+        // of the resize handles wherever the container's border/fill
+        // touches an edge/corner. The container's own click/select still
+        // works — it bubbles from the underlying `.rf-node` div through
+        // to the `.react-flow__node` ancestor either way.
+        style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: svgInner }}
       />
