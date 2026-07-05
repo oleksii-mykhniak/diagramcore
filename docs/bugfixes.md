@@ -34,3 +34,23 @@
 
 **Перевірка:** `tsc --noEmit` чисто, `npm test` — 91/91 passed,
 `npm run build` успішний.
+
+## 2026-07-05 — На кожен push/PR у main запускалось 3 GitHub Actions замість 2
+
+**Симптом:** на push у `main` (і на PR) паралельно стартували три
+workflow-прогони: `CI`, `Deploy web` і `Diagrams`, хоча очікувались
+лише перші два.
+
+**Причина:** `.github/workflows/diagrams.example.yml` — це приклад
+workflow'а для користувачів DiagramCore (описаний у `docs/ci.md`, мали
+скопіювати собі під іншою назвою), а не активний CI-крок цього
+репозиторію. Але GitHub Actions підхоплює як активні workflow'и всі
+файли з розширенням `.yml`/`.yaml` прямо в `.github/workflows/`
+незалежно від імені — тому "приклад" реально запускався в самому
+DiagramCore на кожен push/PR у `main`.
+
+**Виправлення:** файл перенесено з `.github/workflows/diagrams.example.yml`
+у `docs/ci-examples/diagrams.example.yml` (поза директорією, яку сканує
+GitHub Actions) — лишається чинним прикладом для копіювання, але більше
+не виконується як реальний workflow тут. Оновлено посилання в
+`docs/ci.md`.
