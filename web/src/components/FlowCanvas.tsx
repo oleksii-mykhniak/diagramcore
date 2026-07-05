@@ -548,6 +548,20 @@ function FlowCanvasInner({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
+        onNodeDragStart={() => {
+          // A pending single-click selection timer (below) is only
+          // cleared by a subsequent *click* on some node, never by a
+          // *drag* — so clicking A then immediately dragging B left A's
+          // timer armed to fire ~250ms into B's drag and clobber the
+          // selection RF had already moved to B (visually: A stays
+          // "active" briefly, then B's drag looks like it got reset).
+          // Starting any drag means the click's single-select intent is
+          // moot, so cancel it here too.
+          if (clickTimer.current) {
+            clearTimeout(clickTimer.current);
+            clickTimer.current = null;
+          }
+        }}
         onNodeDragStop={(_, node) => handleNodeDragStop(node.id, node.position)}
         onSelectionDragStop={(_, draggedNodes) => handleSelectionDragStop(draggedNodes)}
         onNodeDoubleClick={(_, node) => {
