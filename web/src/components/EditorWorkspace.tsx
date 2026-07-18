@@ -230,7 +230,6 @@ export function EditorWorkspace({
                 styles={current.styles}
                 onNodeDoubleClick={onNodeDoubleClick}
                 onNodeClick={onNodeClick}
-                selectedNodeId={selectedNodeId}
                 selectedNodeIds={selectedNodeIds}
                 onSelectionChange={onSelectionChange}
                 onGroupDragStop={onGroupNodeDragStop}

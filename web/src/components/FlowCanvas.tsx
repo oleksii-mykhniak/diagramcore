@@ -84,10 +84,9 @@ interface Props {
   activeStep?: ActiveStep;
   onNodeDoubleClick?: (node: DiagramNode) => void;
   onNodeClick?: (node: DiagramNode) => void;
-  selectedNodeId?: string | null;
   /** Multi-selection (PLAN3.md step 11.10), driven by React Flow's own
-   * rubber-band select — every id in it gets the same selected-highlight
-   * as `selectedNodeId`. */
+   * rubber-band select — drives the node highlight; a plain single click
+   * sets this to a single-id array too (see `useDiagramEditing.ts`). */
   selectedNodeIds?: string[];
   /** Fires on every rubber-band selection change (and on empty-pane
    * click, which clears it) — the caller owns turning this into its
@@ -152,7 +151,6 @@ function FlowCanvasInner({
   activeStep,
   onNodeDoubleClick,
   onNodeClick,
-  selectedNodeId,
   selectedNodeIds,
   onSelectionChange,
   onGroupDragStop,
@@ -411,23 +409,32 @@ function FlowCanvasInner({
     setNodes(allNodes);
   }, [allNodes, setNodes]);
 
-  // Applies `selectedNodeId`/`selectedNodeIds` (PLAN3.md step 11.10) onto
-  // the *live* `nodes` state via the functional updater — never through
-  // `allNodes` (see the "selected: false" comment above) — so it can't
-  // clobber an in-progress drag's position. Re-runs after every position
-  // resync too (`allNodes` in the deps), since that resync just reset
-  // every node's `selected`/`data.isSelected` to `false`.
+  // Applies `selectedNodeIds` (PLAN3.md step 11.10) onto the *live* `nodes`
+  // state via the functional updater — never through `allNodes` (see the
+  // "selected: false" comment above) — so it can't clobber an in-progress
+  // drag's position. Re-runs after every position resync too (`allNodes`
+  // in the deps), since that resync just reset every node's
+  // `selected`/`data.isSelected` to `false`.
+  //
+  // Deliberately keyed off `selectedNodeIds` alone, NOT `selectedNodeId`:
+  // `selectedNodeId` is the Properties-panel target and, on a double-click,
+  // is intentionally left stale (see `onSelectionChange` comment in
+  // `useDiagramEditing.ts`) to avoid flipping the right dock. If this effect
+  // also honored `selectedNodeId`, that staleness kept the *previously*
+  // selected node highlighted forever after double-clicking a different
+  // node, since `selectedNodeIds` had already moved on but the stale id
+  // kept forcing the old node's `isSelected` back to `true`.
   useEffect(() => {
     setNodes((prev) =>
       prev.map((n) => {
-        const isSelected = selectedNodeId === n.id || (selectedNodeIds?.includes(n.id) ?? false);
+        const isSelected = selectedNodeIds?.includes(n.id) ?? false;
         const prevIsSelected = (n.data as { isSelected?: boolean } | undefined)?.isSelected ?? false;
         if (n.selected === isSelected && prevIsSelected === isSelected) return n;
         return { ...n, selected: isSelected, data: { ...n.data, isSelected } };
       }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeId, selectedNodeIds, allNodes, setNodes]);
+  }, [selectedNodeIds, allNodes, setNodes]);
 
   // Rubber-band selection (PLAN3.md step 11.10) is derived from `nodes`
   // itself (already synced through `onNodesChange`'s own 'select' change
@@ -576,7 +583,16 @@ function FlowCanvasInner({
             return;
           }
           const dcNode = nodeById.get(node.id);
-          if (dcNode && onNodeDoubleClick) onNodeDoubleClick(dcNode);
+          if (!dcNode) return;
+          // A confirmed double-click is a definitive selection of `node`,
+          // unlike RF's native first-click `selected` flag (deliberately
+          // NOT fed into `selectedNodeId`, see the `onSelectionChange`
+          // comment in useDiagramEditing.ts). Without this call, the
+          // deferred single-click's own `onNodeClick` never fires (its
+          // timer was just cleared above), so neither `selectedNodeId` nor
+          // `selectedNodeIds` would move to the double-clicked node at all.
+          onNodeClick?.(dcNode);
+          if (onNodeDoubleClick) onNodeDoubleClick(dcNode);
         }}
         onNodeClick={(_, node) => {
           if (clickTimer.current) clearTimeout(clickTimer.current);
