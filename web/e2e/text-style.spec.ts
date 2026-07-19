@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDock } from './helpers/dock';
 import { openMenu } from './helpers/menu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -126,10 +125,9 @@ test('changing an edge label size/color shows up immediately and matches the SVG
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await openDock(page, 'links');
-  await page.getByTestId('link-item-0').click();
-  await page.getByTestId('link-text-font-size-0').selectOption('18');
-  await page.getByTestId('link-text-color-0').fill('#00ff00');
+  await page.getByTestId('overview-link-0').click();
+  await page.getByTestId('link-text-font-size').selectOption('18');
+  await page.getByTestId('link-text-color').fill('#00ff00');
   await page.mouse.move(10, 10);
 
   const label = page.getByTestId('rf-edge-label-link-0-User-Gateway');

@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDock } from './helpers/dock';
 import { openMenu } from './helpers/menu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,9 +62,8 @@ test('a colored edge override paints the same color on the canvas marker and the
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await openDock(page, 'links');
-  await page.getByTestId('link-item-0').click();
-  await page.getByTestId('link-edit-color-0').fill('#ff8800');
+  await page.getByTestId('overview-link-0').click();
+  await page.getByTestId('link-edit-color').fill('#ff8800');
   await page.mouse.move(10, 10); // clear the hover highlight from the panel click
 
   const canvasMarker = await canvasMarkerEnd(page, 'rf-edge-link-0-User-Gateway');
@@ -80,9 +78,8 @@ test("an 'open-arrow' override renders as an unfilled chevron identically on can
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await openDock(page, 'links');
-  await page.getByTestId('link-item-0').click();
-  await page.getByTestId('link-edit-marker-end-0').selectOption('open-arrow');
+  await page.getByTestId('overview-link-0').click();
+  await page.getByTestId('link-edit-marker-end').selectOption('open-arrow');
   await page.mouse.move(10, 10);
 
   const canvasMarker = await canvasMarkerEnd(page, 'rf-edge-link-0-User-Gateway');
@@ -98,9 +95,8 @@ test("a 'none' marker override draws no arrowhead on either the canvas or the ex
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await openDock(page, 'links');
-  await page.getByTestId('link-item-0').click();
-  await page.getByTestId('link-edit-marker-end-0').selectOption('none');
+  await page.getByTestId('overview-link-0').click();
+  await page.getByTestId('link-edit-marker-end').selectOption('none');
   await page.mouse.move(10, 10);
 
   const edge = page.getByTestId('rf-edge-link-0-User-Gateway');

@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDock } from './helpers/dock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const authSystemPath = path.join(__dirname, '..', '..', 'examples', 'auth-system.dc.yaml');
@@ -66,13 +65,12 @@ test('hovering a link list item highlights the edge; deleting from the list remo
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await openDock(page, 'links');
-  await expect(page.getByTestId('links-panel')).toBeVisible();
-  await page.getByTestId('link-item-0').hover();
+  await expect(page.getByTestId('diagram-overview')).toBeVisible();
+  await page.getByTestId('overview-link-0').hover();
   await expect(page.getByTestId('rf-edge-link-0-User-Gateway')).toHaveAttribute('data-hovered', 'true');
 
-  await page.getByTestId('link-item-0').click();
-  await page.getByTestId('link-delete-0').click();
+  await page.getByTestId('overview-link-0').click();
+  await page.getByTestId('link-delete').click();
 
   await expect(page.getByTestId('rf-edge-link-0-User-Gateway')).toHaveCount(0);
   const yaml = await page.getByTestId('yaml-source').inputValue();

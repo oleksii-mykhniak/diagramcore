@@ -125,7 +125,7 @@ test('Escape clears the selection', async ({ page }) => {
   await expect(page.getByTestId('properties-panel')).toBeVisible();
 
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('properties-empty')).toBeVisible();
+  await expect(page.getByTestId('diagram-overview')).toBeVisible();
 });
 
 test('Edit menu Delete/Duplicate act on the current selection', async ({ page }) => {

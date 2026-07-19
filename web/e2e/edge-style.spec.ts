@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDock } from './helpers/dock';
 import { openMenu } from './helpers/menu';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,15 +17,15 @@ async function exportLayout(page: import('@playwright/test').Page) {
   return JSON.parse(fs.readFileSync(downloadPath, 'utf8'));
 }
 
-test('clicking an edge on the canvas opens its properties in the Links dock', async ({ page }) => {
+test('clicking an edge on the canvas opens its properties in the Properties dock', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
   await page.getByTestId('rf-edge-link-0-User-Gateway').dispatchEvent('click');
 
-  await expect(page.getByTestId('links-panel')).toBeVisible();
-  await expect(page.getByTestId('link-edit-marker-end-0')).toBeVisible();
+  await expect(page.getByTestId('link-properties-panel')).toBeVisible();
+  await expect(page.getByTestId('link-edit-marker-end')).toBeVisible();
 });
 
 test('changing marker/line-style/width/color shows up on the canvas edge and leaves the YAML untouched', async ({ page }) => {
@@ -36,12 +35,11 @@ test('changing marker/line-style/width/color shows up on the canvas edge and lea
 
   const yamlBefore = await page.getByTestId('yaml-source').inputValue();
 
-  await openDock(page, 'links');
-  await page.getByTestId('link-item-0').click();
-  await page.getByTestId('link-edit-marker-start-0').selectOption('open-arrow');
-  await page.getByTestId('link-edit-line-style-0').selectOption('dashed');
-  await page.getByTestId('link-edit-stroke-width-0').selectOption('3');
-  await page.getByTestId('link-edit-color-0').fill('#ff8800');
+  await page.getByTestId('overview-link-0').click();
+  await page.getByTestId('link-edit-marker-start').selectOption('open-arrow');
+  await page.getByTestId('link-edit-line-style').selectOption('dashed');
+  await page.getByTestId('link-edit-stroke-width').selectOption('3');
+  await page.getByTestId('link-edit-color').fill('#ff8800');
 
   // The panel row is still hovered from the click above, and the hover
   // highlight color legitimately takes priority over the override (same
@@ -64,9 +62,8 @@ test('an edge style override survives Export layout -> Import layout, same on ca
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await openDock(page, 'links');
-  await page.getByTestId('link-item-0').click();
-  await page.getByTestId('link-edit-color-0').fill('#ff8800');
+  await page.getByTestId('overview-link-0').click();
+  await page.getByTestId('link-edit-color').fill('#ff8800');
 
   const layout = await exportLayout(page);
   expect(layout.views.default.edgeStyles['User->Gateway:request'].color).toBe('#ff8800');
@@ -90,14 +87,13 @@ test('Reset style clears the edge override', async ({ page }) => {
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  await openDock(page, 'links');
-  await page.getByTestId('link-item-0').click();
-  await page.getByTestId('link-edit-color-0').fill('#ff8800');
-  await expect(page.getByTestId('link-reset-style-0')).toBeEnabled();
+  await page.getByTestId('overview-link-0').click();
+  await page.getByTestId('link-edit-color').fill('#ff8800');
+  await expect(page.getByTestId('link-reset-style')).toBeEnabled();
 
-  await page.getByTestId('link-reset-style-0').click();
+  await page.getByTestId('link-reset-style').click();
   await expect(page.getByTestId('rf-edge-link-0-User-Gateway')).not.toHaveCSS('stroke', 'rgb(255, 136, 0)');
-  await expect(page.getByTestId('link-reset-style-0')).toBeDisabled();
+  await expect(page.getByTestId('link-reset-style')).toBeDisabled();
 });
 
 test('dragging an edge label moves it independently and the offset survives Export -> Import layout', async ({ page }) => {
@@ -171,9 +167,8 @@ test('View → Connection labels hides every label; the per-edge hide checkbox h
 
   await expect(page.getByTestId('rf-edge-label-link-0-User-Gateway')).toBeVisible();
 
-  await openDock(page, 'links');
-  await page.getByTestId('link-item-1').click();
-  await page.getByTestId('link-edit-hide-label-1').check();
+  await page.getByTestId('overview-link-1').click();
+  await page.getByTestId('link-edit-hide-label').check();
   await expect(page.getByTestId('rf-edge-label-link-1-Gateway-AuthService')).toHaveCount(0);
   await expect(page.getByTestId('rf-edge-label-link-0-User-Gateway')).toBeVisible();
 

@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react';
 
-export type RightDockTab = 'properties' | 'links' | 'flows' | 'yaml';
+/** No standalone "Links" tab since PLAN4.md step 12.6 — its content
+ * (link form, and the diagram-wide link list) folded into Properties,
+ * which is now contextual: node selected -> node form, link selected ->
+ * link form, nothing selected -> diagram overview. History joins in
+ * step 12.13. */
+export type RightDockTab = 'properties' | 'flows' | 'yaml';
 
 const TABS: { id: RightDockTab; label: string }[] = [
   { id: 'properties', label: 'Properties' },
-  { id: 'links', label: 'Links' },
   { id: 'flows', label: 'Flows' },
   { id: 'yaml', label: 'YAML' },
 ];
@@ -15,12 +19,11 @@ interface RightDockProps {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   propertiesContent: ReactNode;
-  linksContent: ReactNode;
   flowsContent: ReactNode;
   yamlContent: ReactNode;
 }
 
-/** Right-hand dock (PLAN.md step 10.4): tabbed Properties/Links/Flows,
+/** Right-hand dock (PLAN.md step 10.4): tabbed Properties/Flows/YAML,
  * collapsible with the choice persisted (`dc.ui.rightDock`). */
 export function RightDock({
   tab,
@@ -28,7 +31,6 @@ export function RightDock({
   collapsed,
   onToggleCollapsed,
   propertiesContent,
-  linksContent,
   flowsContent,
   yamlContent,
 }: RightDockProps) {
@@ -87,7 +89,6 @@ export function RightDock({
       {!collapsed && (
         <div data-testid="right-dock-content" style={{ flex: 1, overflow: 'auto' }}>
           {tab === 'properties' && propertiesContent}
-          {tab === 'links' && linksContent}
           {tab === 'flows' && flowsContent}
           {tab === 'yaml' && yamlContent}
         </div>

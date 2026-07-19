@@ -230,3 +230,48 @@
   111/115 passed, 3 skipped (drawio), 1 pre-existing failure
   (drill-down, з кроку 12.3, не зачеплено цим кроком).
 - Commit: phase12-step5: налаштування тексту вузлів і лейблів ребер
+
+## phase12-step6 — Об'єднання Links у Properties (контекстна панель) — 2026-07-19
+
+- `RightDock.tsx`: вкладки тепер Properties/Flows/YAML (Links немає,
+  History додасться в 12.13). Пропси `linksContent` більше немає.
+- Стара `LinksPanel.tsx` (список + фільтри + inline-розгортання форми)
+  видалена, розбита на два нові компоненти:
+  - `LinkProperties.tsx` — форма властивостей ОДНОГО лінка (from/to/
+    type/label/hide-label/Style/Text/Delete), той самий патерн, що
+    `PropertiesPanel.tsx` для вузла; testid'и без індексу (`link-edit-
+    color`, не `link-edit-color-0`), бо в контексті Properties одразу
+    видно щонайбільше один лінк, як і для вузла.
+  - `DiagramOverview.tsx` — стан «нічого не вибрано»: назва/purpose
+    діаграми + компактний фільтрований список вузлів (`overview-node-
+    ${id}`) і лінків (`overview-link-${index}`, з двостороннім hover-
+    підсвічуванням канви, як раніше). Клік вибирає елемент і Properties
+    перемикається на його форму.
+  - `EditorWorkspace.tsx`: `propertiesContent` — тристороння умова
+    (`selectedNode ? PropertiesPanel : selectedLink ? LinkProperties :
+    DiagramOverview`), обидва ефекти перемикання дока (на вибір вузла
+    і на вибір лінка) тепер ведуть в `'properties'`.
+- **Знайдена пастка:** клік по вузлу й клік по ребру НЕ скидали одне
+  одного (`selectedNodeId`/`selectedLinkIndex` — незалежні стани,
+  раніше безпечно, бо жили в різних вкладках дока). Після об'єднання в
+  одну вкладку виграш пріоритету (вузол > лінк) без явного скидання
+  дав би застряглий вибір лінка, що не показується, поки вручну не
+  скинути. Фікс: `onNodeClick` скидає `selectedLinkIndex`,
+  `onEdgeClickRecord`'s select-branch скидає `selectedNodeId`/`Ids`.
+- **Ще одна пастка:** клік по рядку лінка в оглядовому списку одразу
+  розмонтовує список (Properties перемикається на форму лінка) — той
+  самий DOM-вузол, чий `onMouseLeave` мав би зняти hover-підсвітку,
+  зникає ДО того, як подія встигає спрацювати, тож `hoveredLinkIndex`
+  застрягав. Фікс: клік явно скидає hover (`onHoverLink(null)`) поряд
+  із вибором лінка.
+- Спеки адаптовано (без зміни їхньої мети): `edge-style.spec.ts`,
+  `edge-marker-parity.spec.ts`, `links.spec.ts`, `text-style.spec.ts`
+  (крок 12.5) — `openDock(page,'links')` + `link-item-N` прибрано,
+  замінено на клік по ребру на канві або `overview-link-N`, всі
+  `link-edit-*-N`/`link-text-*-N` тестіди без індексу;
+  `multi-select.spec.ts` — `properties-empty` замінено на
+  `diagram-overview`.
+- Регресія: `npm test` (100 passed), `npm run build`, `npx playwright
+  test` — 111/115 passed, 3 skipped (drawio), 1 pre-existing failure
+  (drill-down, з кроку 12.3, не зачеплено цим кроком).
+- Commit: phase12-step6: об'єднання Links у контекстну панель Properties

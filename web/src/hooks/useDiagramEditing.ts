@@ -161,6 +161,10 @@ export function useDiagramEditing(
   const onNodeClick = useCallback((node: DiagramNode) => {
     setSelectedNodeId(node.id);
     setSelectedNodeIds([node.id]);
+    // Properties is contextual (PLAN4.md step 12.6: node/link/overview
+    // share one tab) — a lingering link selection would otherwise fight
+    // the node selection for which form shows.
+    setSelectedLinkIndex(null);
   }, []);
 
   /** Rubber-band selection (PLAN3.md step 11.10) — driven by React
@@ -654,9 +658,12 @@ export function useDiagramEditing(
     (index: number) => {
       if (!recording || !recordingFlow || !current) {
         // Not recording a flow: a click on an edge selects it instead,
-        // so its properties can open in the right dock's Links tab
-        // (PLAN3.md step 11.9).
+        // so its properties can open in the right dock's Properties tab
+        // (PLAN3.md step 11.9; folded from its own Links tab in PLAN4.md
+        // step 12.6, hence also clearing the node selection here).
         setSelectedLinkIndex(index);
+        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
         return;
       }
       const link = current.diagram.links[index];

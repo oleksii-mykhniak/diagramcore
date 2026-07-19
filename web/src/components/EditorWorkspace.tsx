@@ -3,7 +3,8 @@ import { FlowCanvas } from './FlowCanvas';
 import { FlowPlayer } from './FlowPlayer';
 import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
-import { LinksPanel } from './LinksPanel';
+import { LinkProperties } from './LinkProperties';
+import { DiagramOverview } from './DiagramOverview';
 import { FlowEditorPanel } from './FlowEditorPanel';
 import type { BranchTarget } from './FlowEditorPanel';
 import { YamlPanel } from './YamlPanel';
@@ -19,6 +20,7 @@ import { computeFlowHighlight } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
 import type { DiagramLevel } from '../hooks/useDiagramStack';
 import type { StyleOverride } from '../shapes';
+import { edgeLinkKey } from '../edgeStyle';
 import type { EdgeStyleOverride } from '../edgeStyle';
 
 interface EditorWorkspaceProps {
@@ -175,6 +177,13 @@ export function EditorWorkspace({
 }: EditorWorkspaceProps) {
   const highlight = current ? computeFlowHighlight(current.diagram, current.flowPlayerState) : null;
   const selectedNode = current?.diagram.nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const selectedLink = current && selectedLinkIndex !== null ? (current.diagram.links[selectedLinkIndex] ?? null) : null;
+  /** Diagram overview's node list (PLAN4.md step 12.6) selects a node
+   * exactly like clicking it on the canvas would. */
+  const onSelectOverviewNode = (id: string) => {
+    const node = current?.diagram.nodes.find((n) => n.id === id);
+    if (node) onNodeClick(node);
+  };
 
   const [rightDockTab, setRightDockTab] = useState<RightDockTab>('properties');
   const [rightDockCollapsed, setRightDockCollapsed] = useState(readRightDockCollapsed);
@@ -190,11 +199,12 @@ export function EditorWorkspace({
   }, [selectedNodeId]);
 
   /** Clicking an edge on the canvas (outside flow recording) opens its
-   * properties in the Links tab (PLAN3.md step 11.9) — mirrors the
+   * properties in the Properties tab (PLAN3.md step 11.9; folded from
+   * its own Links tab in PLAN4.md step 12.6) — mirrors the
    * `selectedNodeId` effect above. */
   useEffect(() => {
     if (selectedLinkIndex === null) return;
-    setRightDockTab('links');
+    setRightDockTab('properties');
     setRightDockCollapsed(false);
   }, [selectedLinkIndex]);
 
@@ -292,29 +302,28 @@ export function EditorWorkspace({
                     onUpdateTextStyle={onUpdateNodeTextStyle}
                     onResetTextStyle={onResetNodeTextStyle}
                   />
+                ) : selectedLink ? (
+                  <LinkProperties
+                    link={selectedLink}
+                    onUpdate={(patch) => onUpdateLink(selectedLinkIndex!, patch)}
+                    onDelete={() => onDeleteLink(selectedLinkIndex!)}
+                    style={current.edgeStyles[edgeLinkKey(selectedLink)]}
+                    onUpdateStyle={onUpdateEdgeStyle}
+                    onResetStyle={onResetEdgeStyle}
+                    onUpdateTextStyle={onUpdateEdgeTextStyle}
+                    onResetTextStyle={onResetEdgeTextStyle}
+                    labelHidden={current.hiddenEdgeLabels.has(edgeLinkKey(selectedLink))}
+                    onToggleLabelHidden={() => onToggleEdgeLabelHidden(selectedLinkIndex!)}
+                  />
                 ) : (
-                  <p data-testid="properties-empty" style={{ padding: 'var(--dc-space-3)', color: 'var(--dc-text-muted)' }}>
-                    Select a node to edit its properties.
-                  </p>
+                  <DiagramOverview
+                    diagram={current.diagram}
+                    hoveredLinkIndex={hoveredLinkIndex}
+                    onHoverLink={onEdgeHover}
+                    onSelectNode={onSelectOverviewNode}
+                    onSelectLink={onSelectLinkIndex}
+                  />
                 )
-              }
-              linksContent={
-                <LinksPanel
-                  links={current.diagram.links}
-                  hoveredLinkIndex={hoveredLinkIndex}
-                  onHoverLink={onEdgeHover}
-                  onUpdateLink={onUpdateLink}
-                  onDeleteLink={onDeleteLink}
-                  selectedIndex={selectedLinkIndex}
-                  onSelectIndex={onSelectLinkIndex}
-                  edgeStyles={current.edgeStyles}
-                  onUpdateEdgeStyle={onUpdateEdgeStyle}
-                  onResetEdgeStyle={onResetEdgeStyle}
-                  onUpdateEdgeTextStyle={onUpdateEdgeTextStyle}
-                  onResetEdgeTextStyle={onResetEdgeTextStyle}
-                  hiddenEdgeLabels={current.hiddenEdgeLabels}
-                  onToggleEdgeLabelHidden={onToggleEdgeLabelHidden}
-                />
               }
               flowsContent={
                 <>
