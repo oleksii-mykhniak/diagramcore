@@ -79,6 +79,12 @@ export interface DiagramLevel {
   /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
    * shape itself still renders. */
   hiddenNodeLabels: Set<string>;
+  /** Node ids bottom-to-top (PLAN4.md step 12.9) — presentation-only
+   * draw order, not necessarily covering every node; see `zOrder.ts`'s
+   * `resolveZOrder`. Unlike the `hidden*` sets, a later snapshot
+   * (import/restore) REPLACES this rather than merging into it — it's
+   * itself already the full resolved order as of that snapshot. */
+  zOrder: string[];
   /** Diagram style preset (PLAN.md step 10.12), persisted in the layout
    * file/share link — see `layoutFile.ts`'s `RenderStyle`. */
   renderStyle: RenderStyle;
@@ -242,6 +248,7 @@ export function useDiagramStack() {
       hiddenEdgeLabels: new Set<string>(),
       hiddenEdges: new Set<string>(),
       hiddenNodeLabels: new Set<string>(),
+      zOrder: [],
       renderStyle: 'clean',
       savedRawText: text,
       savedLayoutSnapshot: '',
@@ -469,6 +476,7 @@ export function useDiagramStack() {
             ...level.hiddenNodeLabels,
             ...(imported.views.default?.hiddenNodeLabels ?? []),
           ]);
+          if (imported.views.default?.zOrder?.length) level.zOrder = imported.views.default.zOrder;
           if (imported.renderStyle) level.renderStyle = imported.renderStyle;
           level.savedLayoutSnapshot = layoutSnapshotOf(level);
         }
@@ -500,7 +508,8 @@ export function useDiagramStack() {
       Object.keys(current.edgeLabelOffsets).length > 0 ||
       current.hiddenEdgeLabels.size > 0 ||
       current.hiddenEdges.size > 0 ||
-      current.hiddenNodeLabels.size > 0;
+      current.hiddenNodeLabels.size > 0 ||
+      current.zOrder.length > 0;
     // A real Save makes any pending/stored local autosave draft moot
     // (PLAN3.md step 11.3) — cancel the debounced write and clear
     // whatever's already in IndexedDB for this file.
@@ -602,6 +611,7 @@ export function useDiagramStack() {
         hiddenEdgeLabels: Array.from(current.hiddenEdgeLabels),
         hiddenEdges: Array.from(current.hiddenEdges),
         hiddenNodeLabels: Array.from(current.hiddenNodeLabels),
+        zOrder: current.zOrder,
       },
       (savedAt) => setAutosavedByTab((prev) => ({ ...prev, [fileName]: { rawText, layoutSnapshot, savedAt } })),
     );
@@ -682,6 +692,7 @@ export function useDiagramStack() {
     level.hiddenEdgeLabels = new Set([...level.hiddenEdgeLabels, ...(record.hiddenEdgeLabels ?? [])]);
     level.hiddenEdges = new Set([...level.hiddenEdges, ...(record.hiddenEdges ?? [])]);
     level.hiddenNodeLabels = new Set([...level.hiddenNodeLabels, ...(record.hiddenNodeLabels ?? [])]);
+    if (record.zOrder?.length) level.zOrder = record.zOrder;
     level.renderStyle = record.renderStyle;
     // Deliberately NOT `layoutSnapshotOf(level)` — that would be the
     // draft's own layout, making the indicator lie that a just-restored,
@@ -732,6 +743,7 @@ export function useDiagramStack() {
           ...level.hiddenNodeLabels,
           ...(shared.layout.views.default?.hiddenNodeLabels ?? []),
         ]);
+        if (shared.layout.views.default?.zOrder?.length) level.zOrder = shared.layout.views.default.zOrder;
         if (shared.layout.renderStyle) level.renderStyle = shared.layout.renderStyle;
         level.savedLayoutSnapshot = layoutSnapshotOf(level);
       }

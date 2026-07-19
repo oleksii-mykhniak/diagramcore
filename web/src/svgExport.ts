@@ -8,6 +8,7 @@ import type { EdgeStyleOverride } from './edgeStyle';
 import { renderContainerSvgInner, resolveNodeStyle } from './shapes';
 import type { RenderStyle } from './shapes';
 import { sketchLineD } from './sketch';
+import { resolveDrawOrder } from './zOrder';
 
 export interface FrameHighlight {
   activeStep?: { from: string; to: string };
@@ -41,6 +42,10 @@ export interface RenderOptions {
   /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
    * shape still renders. */
   hiddenNodeLabels?: Set<string>;
+  /** Node ids bottom-to-top (PLAN4.md step 12.9) — same resolve
+   * (`resolveZOrder`) the canvas uses for RF `zIndex`, so draw order
+   * never disagrees between the two. */
+  zOrder?: string[];
   /** View → "Connection labels" show/hide-all (PLAN3.md step 11.9) —
    * defaults to showing every label with a non-empty `label`, same as
    * before this step. `dc context`/AI export never see this: they read
@@ -234,12 +239,18 @@ export function renderDiagramSVGString(
   // node's resolved `parent`, drawn via `renderContainerSvgInner`
   // instead of its own dc-type shape — same function the canvas's
   // `ContainerNode` uses, so a container never looks different between
-  // the two. `layout.nodes` is already parent-before-child order (see
-  // `layout.ts`'s `collectNodes`), so painting in that order alone
-  // already keeps every container behind its children.
+  // the two.
   const containerIds = new Set(layout.nodes.map((n) => n.parent).filter((p): p is string => Boolean(p)));
 
-  const nodesSvg = layout.nodes
+  // Draw order (PLAN4.md step 12.9): `layout.nodes` is already
+  // parent-before-child (see `layout.ts`'s `collectNodes`), which alone
+  // keeps every container behind its children; `resolveDrawOrder` layers
+  // `zOrder` on top, reordering only within each level's siblings, same
+  // resolve the canvas uses for its `zIndex`.
+  const layoutNodeById = new Map(layout.nodes.map((n) => [n.id, n]));
+  const orderedNodes = resolveDrawOrder(layout.nodes, options.zOrder ?? []).map((id) => layoutNodeById.get(id)!);
+
+  const nodesSvg = orderedNodes
     .map((n) => {
       const pos = positions[n.id] ?? n;
       const dcNode = nodeById.get(n.id);

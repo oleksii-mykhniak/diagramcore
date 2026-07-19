@@ -97,6 +97,13 @@ type View struct {
 	// round-tripping rule as NotePositions above; never consulted by
 	// `dc context`/AI export.
 	HiddenNodeLabels []string `json:"hiddenNodeLabels,omitempty"`
+	// ZOrder holds node ids bottom-to-top (phase 12, step 12.9) —
+	// presentation-only draw order, not necessarily covering every node
+	// in the diagram (ids missing from it draw in their default diagram
+	// order, interleaved where they'd naturally fall). Same
+	// round-tripping rule as NotePositions above; `dc render`'s D2/SVG
+	// output never consults it (only `layout.Position`).
+	ZOrder []string `json:"zOrder,omitempty"`
 }
 
 // File is the decoded contents of a <name>.layout.json file.
@@ -183,6 +190,7 @@ func Save(path string, positions map[string]Position) error {
 				HiddenEdgeLabels: v.HiddenEdgeLabels,
 				HiddenEdges:      v.HiddenEdges,
 				HiddenNodeLabels: v.HiddenNodeLabels,
+				ZOrder:           v.ZOrder,
 			}
 		}
 	}

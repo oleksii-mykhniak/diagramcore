@@ -14,6 +14,7 @@ function baseSource(): LayoutFileSource {
     hiddenEdgeLabels: new Set<string>(),
     hiddenEdges: new Set<string>(),
     hiddenNodeLabels: new Set<string>(),
+    zOrder: [],
   };
 }
 

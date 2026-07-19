@@ -86,6 +86,10 @@ export interface LayoutFile {
       /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
        * shape itself still renders. */
       hiddenNodeLabels?: string[];
+      /** Node ids bottom-to-top (PLAN4.md step 12.9), presentation-only
+       * draw order — not necessarily covering every node; see
+       * `zOrder.ts`'s `resolveZOrder`. */
+      zOrder?: string[];
     };
   };
   /** Diagram style preset (PLAN.md step 10.12) — top-level, not per-view,
@@ -107,6 +111,7 @@ export interface BuildLayoutFileInput {
   hiddenEdgeLabels?: string[];
   hiddenEdges?: string[];
   hiddenNodeLabels?: string[];
+  zOrder?: string[];
 }
 
 export function buildLayoutFile(input: BuildLayoutFileInput): LayoutFile {
@@ -121,6 +126,7 @@ export function buildLayoutFile(input: BuildLayoutFileInput): LayoutFile {
     hiddenEdgeLabels,
     hiddenEdges,
     hiddenNodeLabels,
+    zOrder,
   } = input;
   return {
     views: {
@@ -134,6 +140,7 @@ export function buildLayoutFile(input: BuildLayoutFileInput): LayoutFile {
         ...(hiddenEdgeLabels && hiddenEdgeLabels.length > 0 ? { hiddenEdgeLabels } : {}),
         ...(hiddenEdges && hiddenEdges.length > 0 ? { hiddenEdges } : {}),
         ...(hiddenNodeLabels && hiddenNodeLabels.length > 0 ? { hiddenNodeLabels } : {}),
+        ...(zOrder && zOrder.length > 0 ? { zOrder } : {}),
       },
     },
     ...(renderStyle && renderStyle !== 'clean' ? { renderStyle } : {}),
@@ -157,6 +164,7 @@ export interface LayoutFileSource {
   hiddenEdgeLabels: Set<string>;
   hiddenEdges: Set<string>;
   hiddenNodeLabels: Set<string>;
+  zOrder: string[];
 }
 
 export function buildLayoutFileFromLevel(level: LayoutFileSource): LayoutFile {
@@ -171,6 +179,7 @@ export function buildLayoutFileFromLevel(level: LayoutFileSource): LayoutFile {
     hiddenEdgeLabels: Array.from(level.hiddenEdgeLabels),
     hiddenEdges: Array.from(level.hiddenEdges),
     hiddenNodeLabels: Array.from(level.hiddenNodeLabels),
+    zOrder: level.zOrder,
   });
 }
 

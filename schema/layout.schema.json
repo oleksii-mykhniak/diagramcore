@@ -65,6 +65,11 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Node ids whose text label is hidden (phase 12, step 12.7) — the shape itself still renders. Never consulted by `dc context`/AI export."
+        },
+        "zOrder": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Node ids bottom-to-top (phase 12, step 12.9), presentation-only draw order — not necessarily covering every node; missing ids draw in their default diagram order."
         }
       }
     },

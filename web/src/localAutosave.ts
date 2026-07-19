@@ -31,6 +31,9 @@ export interface AutosaveData {
   /** Node ids whose text label is hidden (PLAN4.md step 12.7). Optional
    * so records written before this field existed still decode. */
   hiddenNodeLabels?: string[];
+  /** Node ids bottom-to-top (PLAN4.md step 12.9). Optional so records
+   * written before this field existed still decode. */
+  zOrder?: string[];
 }
 
 export interface AutosaveRecord extends AutosaveData {

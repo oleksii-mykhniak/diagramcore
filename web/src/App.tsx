@@ -67,6 +67,7 @@ export default function App() {
     onSelectionChange,
     onGroupNodeDragStop,
     onDuplicateSelectedNodes,
+    onZOrderOp,
     hoveredLinkIndex,
     setHoveredLinkIndex,
     selectedLinkIndex,
@@ -182,6 +183,7 @@ export default function App() {
         selectedNodeIds={selectedNodeIds}
         onDeleteSelectedNode={onDeleteSelectedNode}
         onDuplicateSelectedNodes={onDuplicateSelectedNodes}
+        onZOrderOp={onZOrderOp}
         onShowTour={() => setShowTour(true)}
         grid={view.grid}
         onToggleGrid={view.toggleGrid}
@@ -284,6 +286,8 @@ export default function App() {
         focusRequest={focusRequest}
         onUpdateSelectedNode={onUpdateSelectedNode}
         onDeleteSelectedNode={onDeleteSelectedNode}
+        onDuplicateSelectedNodes={onDuplicateSelectedNodes}
+        onZOrderOp={onZOrderOp}
         onUpdateLink={onUpdateLink}
         onDeleteLink={onDeleteLink}
         onCommitYamlText={(text) => void applyTextReplace(text)}

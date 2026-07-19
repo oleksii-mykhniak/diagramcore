@@ -68,6 +68,7 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 				HiddenEdgeLabels: []string{"User->Gateway:request"},
 				HiddenEdges:      []string{"Gateway->AuthService:call"},
 				HiddenNodeLabels: []string{"DB"},
+				ZOrder:           []string{"DB", "Gateway", "User"},
 			},
 		},
 		RenderStyle: "sketch",
@@ -119,6 +120,16 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 	}
 	if len(view.HiddenNodeLabels) != 1 || view.HiddenNodeLabels[0] != "DB" {
 		t.Errorf("HiddenNodeLabels = %v, want preserved [DB]", view.HiddenNodeLabels)
+	}
+	wantZOrder := []string{"DB", "Gateway", "User"}
+	if len(view.ZOrder) != len(wantZOrder) {
+		t.Errorf("ZOrder = %v, want preserved %v", view.ZOrder, wantZOrder)
+	} else {
+		for i, id := range wantZOrder {
+			if view.ZOrder[i] != id {
+				t.Errorf("ZOrder[%d] = %q, want %q", i, view.ZOrder[i], id)
+			}
+		}
 	}
 }
 

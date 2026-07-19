@@ -86,6 +86,8 @@ interface EditorWorkspaceProps {
   focusRequest: { kind: 'node'; id: string; nonce: number } | { kind: 'line'; line: number; nonce: number } | null;
   onUpdateSelectedNode: (patch: Partial<DiagramNode>) => void;
   onDeleteSelectedNode: () => void;
+  onDuplicateSelectedNodes: () => void;
+  onZOrderOp: (op: 'front' | 'forward' | 'backward' | 'back') => void;
   onUpdateLink: (index: number, patch: Partial<DiagramLink>) => void;
   onDeleteLink: (index: number) => void;
   onCommitYamlText: (text: string) => void;
@@ -173,6 +175,8 @@ export function EditorWorkspace({
   focusRequest,
   onUpdateSelectedNode,
   onDeleteSelectedNode,
+  onDuplicateSelectedNodes,
+  onZOrderOp,
   onUpdateLink,
   onDeleteLink,
   onCommitYamlText,
@@ -276,6 +280,10 @@ export function EditorWorkspace({
                 hiddenNodeLabels={current.hiddenNodeLabels}
                 showEdgeLabels={showEdgeLabels}
                 coreView={coreView}
+                zOrder={current.zOrder}
+                onZOrderOp={onZOrderOp}
+                onDeleteSelectedNode={onDeleteSelectedNode}
+                onDuplicateSelectedNodes={onDuplicateSelectedNodes}
                 onEdgeLabelDragStop={onEdgeLabelDragStop}
                 onEdgeLabelCommit={onEdgeLabelCommit}
                 focusNodeId={focusRequest?.kind === 'node' ? focusRequest.id : null}

@@ -27,6 +27,9 @@ import { edgeLinkKey, resolveEdgeColor, resolveEdgeStyle } from '../edgeStyle';
 import type { EdgeMarker, EdgeStyleOverride } from '../edgeStyle';
 import { edgeTypes } from './rfEdgeTypes';
 import type { DcEdgeData } from './rfEdgeTypes';
+import { resolveDrawOrder } from '../zOrder';
+import { NodeContextMenu } from './NodeContextMenu';
+import type { NodeContextMenuState } from './NodeContextMenu';
 
 /** Marker as an object (not a bare `MarkerType`) so it carries an
  * explicit `color` — React Flow's default marker otherwise falls back
@@ -128,6 +131,15 @@ interface Props {
   /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
    * shape still renders. */
   hiddenNodeLabels?: Set<string>;
+  /** Node ids bottom-to-top (PLAN4.md step 12.9) — resolved the same
+   * way (`resolveDrawOrder`) as the SVG export, so RF `zIndex` and the
+   * export's paint order never disagree. */
+  zOrder?: string[];
+  /** Right-click node context menu (PLAN4.md step 12.9) — z-order +
+   * Delete/Duplicate, "minimal" per plan (grows in later steps). */
+  onZOrderOp?: (op: 'front' | 'forward' | 'backward' | 'back') => void;
+  onDeleteSelectedNode?: () => void;
+  onDuplicateSelectedNodes?: () => void;
   /** View → "Core view" (PLAN4.md step 12.8): shows every hidden
    * connector/label anyway, translucent with a badge, instead of
    * filtering it out — a view-only toggle, never affects the SVG
@@ -191,6 +203,10 @@ function FlowCanvasInner({
   hiddenEdgeLabels,
   hiddenEdges,
   hiddenNodeLabels,
+  zOrder,
+  onZOrderOp,
+  onDeleteSelectedNode,
+  onDuplicateSelectedNodes,
   coreView = false,
   showEdgeLabels = true,
   onEdgeLabelDragStop,
@@ -250,6 +266,16 @@ function FlowCanvasInner({
     return { containerIds, childrenOf, absoluteById, sizeById, layoutNodeById };
   }, [layout.nodes, positions, sizes]);
 
+  // z-order (PLAN4.md step 12.9) — `resolveDrawOrder`'s index becomes
+  // each node's RF `zIndex`; same resolve the SVG export uses for paint
+  // order, so the two never disagree. Containers always end up below
+  // their children (the resolve's own invariant), independent of
+  // `zOrder`.
+  const zIndexById = useMemo(() => {
+    const order = resolveDrawOrder(layout.nodes, zOrder ?? []);
+    return new Map(order.map((id, i) => [id, i]));
+  }, [layout.nodes, zOrder]);
+
   const rfNodes: Node<DcNodeData | ContainerNodeData>[] = useMemo(
     () =>
       layout.nodes.map((n) => {
@@ -285,6 +311,7 @@ function FlowCanvasInner({
           position,
           width: size.width,
           height: size.height,
+          zIndex: zIndexById.get(n.id),
           // React Flow's own `selected` flag (PLAN3.md step 11.10) is
           // deliberately NOT derived from `selectedNodeId`/`selectedNodeIds`
           // here — this object only gets (re)built (via the `allNodes`
@@ -359,6 +386,7 @@ function FlowCanvasInner({
       styles,
       hiddenNodeLabels,
       coreView,
+      zIndexById,
     ],
   );
 
@@ -494,6 +522,8 @@ function FlowCanvasInner({
   // editor rebuild every node's position from the last-committed layout,
   // clobbering an in-progress drag.
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  // Right-click node context menu (PLAN4.md step 12.9).
+  const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
   useEffect(() => {
     setNodes((prev) =>
       prev.map((n) => {
@@ -663,6 +693,19 @@ function FlowCanvasInner({
         }}
         onNodeDragStop={(_, node) => handleNodeDragStop(node.id, node.position)}
         onSelectionDragStop={(_, draggedNodes) => handleSelectionDragStop(draggedNodes)}
+        onNodeContextMenu={(event, node) => {
+          event.preventDefault();
+          if (noteIds.has(node.id) || geometry.containerIds.has(node.id)) return;
+          const dcNode = nodeById.get(node.id);
+          if (!dcNode) return;
+          // Right-clicking a node outside the current multi-selection
+          // replaces the selection with just that node (mirrors most
+          // desktop apps); right-clicking one already selected keeps the
+          // whole selection so z-order/delete/duplicate act on all of it.
+          if (!selectedNodeIds?.includes(node.id)) onNodeClick?.(dcNode);
+          setContextMenu({ x: event.clientX, y: event.clientY });
+        }}
+        onPaneClick={() => setContextMenu(null)}
         onNodeDoubleClick={(_, node) => {
           if (clickTimer.current) {
             clearTimeout(clickTimer.current);
@@ -728,6 +771,18 @@ function FlowCanvasInner({
         <MiniMap />
         <Controls />
       </ReactFlow>
+      {contextMenu && (
+        <NodeContextMenu
+          state={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onBringToFront={() => onZOrderOp?.('front')}
+          onBringForward={() => onZOrderOp?.('forward')}
+          onSendBackward={() => onZOrderOp?.('backward')}
+          onSendToBack={() => onZOrderOp?.('back')}
+          onDelete={() => onDeleteSelectedNode?.()}
+          onDuplicate={() => onDuplicateSelectedNodes?.()}
+        />
+      )}
     </div>
   );
 }

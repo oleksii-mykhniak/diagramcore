@@ -15,6 +15,7 @@ import type { FlowPlayerState } from '../flowPlayer';
 import { applyPatch } from '../yamlPatch';
 import type { PatchOp } from '../yamlPatch';
 import { findNodeDependents } from '../dependents';
+import { applyZOrderOp } from '../zOrder';
 import type { BranchTarget } from '../components/FlowEditorPanel';
 import type { DiagramLevel } from './useDiagramStack';
 
@@ -650,6 +651,25 @@ export function useDiagramEditing(
     updateCurrentLevel({ hiddenNodeLabels });
   }, [current, selectedNodeId, updateCurrentLevel]);
 
+  /** Arrange → z-order (PLAN4.md step 12.9): Bring to front/forward,
+   * Send backward/to back — acts on the current selection
+   * (`selectedNodeIds`, falling back to the single `selectedNodeId`,
+   * same scope rule as delete/duplicate), via the shared
+   * `applyZOrderOp`/`resolveDrawOrder` (`zOrder.ts`) the canvas and SVG
+   * export both resolve against. Persists the FULL resulting order, not
+   * just the touched ids — see `zOrder.ts`'s module doc. */
+  const onZOrderOp = useCallback(
+    (op: 'front' | 'forward' | 'backward' | 'back') => {
+      if (!current) return;
+      const ids = selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
+      if (ids.length === 0) return;
+      const nodeIds = current.diagram.nodes.map((n) => n.id);
+      const zOrder = applyZOrderOp(nodeIds, current.zOrder, ids, op);
+      updateCurrentLevel({ zOrder });
+    },
+    [current, selectedNodeId, selectedNodeIds, updateCurrentLevel],
+  );
+
   const recordingFlow =
     current?.flowPlayerState.flowIndex != null ? current.diagram.flows?.[current.flowPlayerState.flowIndex] ?? null : null;
 
@@ -801,6 +821,7 @@ export function useDiagramEditing(
               ...current.hiddenNodeLabels,
               ...(imported.views.default?.hiddenNodeLabels ?? []),
             ]),
+            ...(imported.views.default?.zOrder?.length ? { zOrder: imported.views.default.zOrder } : {}),
             ...(imported.renderStyle ? { renderStyle: imported.renderStyle } : {}),
           });
         } catch (err) {
@@ -860,6 +881,7 @@ export function useDiagramEditing(
     onToggleEdgeLabelHidden,
     onToggleEdgeHidden,
     onToggleNodeLabelHidden,
+    onZOrderOp,
     onNewFlow,
     onToggleRecording,
     onAddBranch,

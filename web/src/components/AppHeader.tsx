@@ -40,6 +40,7 @@ interface AppHeaderProps {
   selectedNodeIds: string[];
   onDeleteSelectedNode: () => void;
   onDuplicateSelectedNodes: () => void;
+  onZOrderOp: (op: 'front' | 'forward' | 'backward' | 'back') => void;
   onShowTour: () => void;
   grid: boolean;
   onToggleGrid: () => void;
@@ -126,6 +127,7 @@ export function AppHeader({
   selectedNodeIds,
   onDeleteSelectedNode,
   onDuplicateSelectedNodes,
+  onZOrderOp,
   onShowTour,
   grid,
   onToggleGrid,
@@ -229,6 +231,30 @@ export function AppHeader({
           label: selectedNodeIds.length > 1 ? `Duplicate ${selectedNodeIds.length} nodes` : 'Duplicate node',
           testId: 'menu-duplicate-node',
           onSelect: onDuplicateSelectedNodes,
+          disabled: selectedNodeIds.length === 0 && !selectedNodeId,
+        },
+        {
+          label: 'Bring to front',
+          testId: 'menu-bring-to-front',
+          onSelect: () => onZOrderOp('front'),
+          disabled: selectedNodeIds.length === 0 && !selectedNodeId,
+        },
+        {
+          label: 'Bring forward',
+          testId: 'menu-bring-forward',
+          onSelect: () => onZOrderOp('forward'),
+          disabled: selectedNodeIds.length === 0 && !selectedNodeId,
+        },
+        {
+          label: 'Send backward',
+          testId: 'menu-send-backward',
+          onSelect: () => onZOrderOp('backward'),
+          disabled: selectedNodeIds.length === 0 && !selectedNodeId,
+        },
+        {
+          label: 'Send to back',
+          testId: 'menu-send-to-back',
+          onSelect: () => onZOrderOp('back'),
           disabled: selectedNodeIds.length === 0 && !selectedNodeId,
         },
       ],

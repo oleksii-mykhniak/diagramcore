@@ -41,6 +41,14 @@ describe('renderDiagramSVGString', () => {
     expect(svg.slice(alphaIndex, alphaIndex + 10)).not.toContain('⊞');
   });
 
+  it('draws nodes in default order with no zOrder, and in zOrder-resolved order when given (PLAN4.md step 12.9)', () => {
+    const defaultSvg = renderDiagramSVGString(diagram, layout, positions);
+    expect(defaultSvg.indexOf('Alpha')).toBeLessThan(defaultSvg.indexOf('Beta'));
+
+    const reordered = renderDiagramSVGString(diagram, layout, positions, {}, { zOrder: ['B', 'A'] });
+    expect(reordered.indexOf('Beta')).toBeLessThan(reordered.indexOf('Alpha'));
+  });
+
   it('includes an animateMotion marker only when a highlighted active step is given', () => {
     const withoutHighlight = renderDiagramSVGString(diagram, layout, positions);
     expect(withoutHighlight).not.toContain('animateMotion');

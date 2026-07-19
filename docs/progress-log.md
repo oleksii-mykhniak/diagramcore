@@ -347,3 +347,49 @@
   test` — 117/121 passed, 3 skipped (drawio), 1 pre-existing failure
   (drill-down, з кроку 12.3, не зачеплено цим кроком).
 - Commit: phase12-step8: Core view — показ прихованих елементів примарою
+
+## phase12-step9 — Шари: z-порядок вузлів — 2026-07-19
+
+- Go `internal/layout.View.ZOrder []string` (bottом-to-top, не
+  обов'язково всі id) + схема + `Save` round-трип + тест.
+- Новий спільний `web/src/zOrder.ts` — єдине джерело правди для
+  резолву порядку, яким користуються і канва, і SVG-експорт:
+  - `resolveZOrder(nodeIds, zOrder)` — часткова, можливо застаріла
+    (id видалені/додані з моменту останньої z-order-дії) явна
+    послідовність групується в один суцільний блок на позиції першого
+    явного id в дефолтному порядку; решта — на своїх місцях.
+  - `resolveDrawOrder(nodes, zOrder)` — те саме, але DFS по дереву
+    parent/children, тож контейнер ЗАВЖДИ малюється одразу перед
+    своїми нащадками незалежно від zOrder (інваріант кроку 11.6:
+    zOrder впорядковує лише в межах одного рівня вкладеності).
+  - `applyZOrderOp(nodeIds, zOrder, ids, op)` — Bring to front/forward,
+    Send backward/to back; мультивиділення рухається як єдиний блок
+    (forward/backward — по одному сусідньому невиділеному id за раз).
+    Кожна дія персистить ПОВНИЙ поточний резолвлений порядок (не лише
+    зачеплені id) — наступний резолв стає просто дрейф-корекцією.
+- Канва (`FlowCanvas.tsx`): `zIndexById` з `resolveDrawOrder` стає RF
+  `zIndex` кожного вузла. SVG-експорт (`svgExport.ts`) використовує
+  той самий `resolveDrawOrder` для порядку `<g>`-елементів.
+- UI: Edit-меню (Bring to front/forward, Send backward/to back,
+  disabled без виділення) + мінімальне контекстне меню правого кліку
+  по вузлу (`NodeContextMenu.tsx`) з тими самими z-order-пунктами +
+  Delete/Duplicate — right-click поза поточним мультивиділенням
+  замінює виділення на клікнутий вузол.
+- Всі точки round-trip (buildLevel/onOpenNative/onImportLayout/
+  onRestoreAutosave/share-link/onSave/onShare) оновлені тим самим
+  списком, що й hiddenEdges/hiddenNodeLabels у кроці 12.7 — на
+  відміну від `hidden*` (Set, union-мердж), `zOrder` — список, і нова
+  порція ЗАМІНЮЄ стару (вона вже сама по собі повний знімок).
+- Нові тести: Go `layout_test.go` (round-trip ZOrder), web unit
+  `zOrder.test.ts` (12: resolve/apply/draw-order, зокрема інваріант
+  контейнер-під-дітьми), `svgExport.test.ts` (порядок `<g>` за
+  замовчуванням і з zOrder), e2e `z-order.spec.ts` (3: Send to back
+  міняє zIndex на канві й порядок у SVG-експорті, виживає Save→Open;
+  діти контейнера завжди над ним; контекстне меню відкривається і
+  працює).
+- Регресія: `go test ./...`, `go vet ./...`, `./dc validate
+  examples/*.dc.yaml`, `make wasm && make wasm-test` — OK; `npm test`
+  (116 passed), `npm run build`, `npx playwright test` — 120/124
+  passed, 3 skipped (drawio), 1 pre-existing failure (drill-down, з
+  кроку 12.3, не зачеплено цим кроком).
+- Commit: phase12-step9: шари — z-порядок вузлів (zOrder)
