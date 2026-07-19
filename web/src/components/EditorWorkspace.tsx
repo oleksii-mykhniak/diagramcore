@@ -88,6 +88,10 @@ interface EditorWorkspaceProps {
   onDeleteSelectedNode: () => void;
   onDuplicateSelectedNodes: () => void;
   onZOrderOp: (op: 'front' | 'forward' | 'backward' | 'back') => void;
+  canGroupSelected: boolean;
+  canUngroupSelected: boolean;
+  onGroupSelected: () => void;
+  onUngroupSelected: () => void;
   onSetNodeImage: (file: File) => void;
   onRemoveNodeImage: () => void;
   onUpdateLink: (index: number, patch: Partial<DiagramLink>) => void;
@@ -179,6 +183,10 @@ export function EditorWorkspace({
   onDeleteSelectedNode,
   onDuplicateSelectedNodes,
   onZOrderOp,
+  canGroupSelected,
+  canUngroupSelected,
+  onGroupSelected,
+  onUngroupSelected,
   onSetNodeImage,
   onRemoveNodeImage,
   onUpdateLink,
@@ -287,6 +295,10 @@ export function EditorWorkspace({
                 coreView={coreView}
                 zOrder={current.zOrder}
                 onZOrderOp={onZOrderOp}
+                canGroupSelected={canGroupSelected}
+                canUngroupSelected={canUngroupSelected}
+                onGroupSelected={onGroupSelected}
+                onUngroupSelected={onUngroupSelected}
                 onDeleteSelectedNode={onDeleteSelectedNode}
                 onDuplicateSelectedNodes={onDuplicateSelectedNodes}
                 onEdgeLabelDragStop={onEdgeLabelDragStop}

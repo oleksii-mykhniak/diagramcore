@@ -142,6 +142,10 @@ interface Props {
   /** Right-click node context menu (PLAN4.md step 12.9) — z-order +
    * Delete/Duplicate, "minimal" per plan (grows in later steps). */
   onZOrderOp?: (op: 'front' | 'forward' | 'backward' | 'back') => void;
+  canGroupSelected?: boolean;
+  canUngroupSelected?: boolean;
+  onGroupSelected?: () => void;
+  onUngroupSelected?: () => void;
   onDeleteSelectedNode?: () => void;
   onDuplicateSelectedNodes?: () => void;
   /** View → "Core view" (PLAN4.md step 12.8): shows every hidden
@@ -210,6 +214,10 @@ function FlowCanvasInner({
   hiddenNodeLabels,
   zOrder,
   onZOrderOp,
+  canGroupSelected,
+  canUngroupSelected,
+  onGroupSelected,
+  onUngroupSelected,
   onDeleteSelectedNode,
   onDuplicateSelectedNodes,
   coreView = false,
@@ -281,9 +289,31 @@ function FlowCanvasInner({
     return new Map(order.map((id, i) => [id, i]));
   }, [layout.nodes, zOrder]);
 
+  // React Flow requires a parent node to appear before its children in
+  // the `nodes` array, or parent-drag no longer cascades to children
+  // (children silently stay put on drag-stop). `diagram.nodes` doesn't
+  // guarantee that order — a freshly created group (step 12.11) is
+  // appended at the end via `addNode`, after the nodes that become its
+  // children — so sort by parent-depth here rather than relying on
+  // source order.
+  const depthOrderedNodes = useMemo(() => {
+    const depthOf = (id: string): number => {
+      let depth = 0;
+      let cur = geometry.layoutNodeById.get(id)?.parent;
+      const seen = new Set<string>();
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        depth += 1;
+        cur = geometry.layoutNodeById.get(cur)?.parent;
+      }
+      return depth;
+    };
+    return [...layout.nodes].sort((a, b) => depthOf(a.id) - depthOf(b.id));
+  }, [layout.nodes, geometry.layoutNodeById]);
+
   const rfNodes: Node<DcNodeData | ContainerNodeData>[] = useMemo(
     () =>
-      layout.nodes.map((n) => {
+      depthOrderedNodes.map((n) => {
         const dcNode = nodeById.get(n.id);
         const abs = geometry.absoluteById.get(n.id) ?? n;
         const size = geometry.sizeById.get(n.id) ?? { width: n.width, height: n.height };
@@ -380,7 +410,7 @@ function FlowCanvasInner({
         };
       }),
     [
-      layout.nodes,
+      depthOrderedNodes,
       nodeById,
       geometry,
       activeStep,
@@ -642,6 +672,45 @@ function FlowCanvasInner({
     }
 
     const parentChanged = newParent !== (oldParent ?? null);
+
+    // A container's children are stored as *absolute* positions (like
+    // every other node — PLAN3.md step 11.6's `computeLayout` comment),
+    // not relative to their parent. Committing only the container's own
+    // new position therefore leaves children rendering at their old
+    // absolute spot: the per-child relative offset React Flow needs gets
+    // recomputed from the (unchanged) child absolute minus the
+    // (changed) parent absolute, which exactly cancels the parent's
+    // move. Dragging a container has to shift every descendant's stored
+    // absolute position by the same delta, committed as one multi-node
+    // update (`onGroupDragStop`, the same path a multi-selection drag
+    // already uses) so it's a single history entry. Skipped when the
+    // container itself is being reparented — out of scope here, same as
+    // group-selection drags already skip the reparent check entirely.
+    if (!parentChanged && geometry.containerIds.has(id)) {
+      const oldAbs = geometry.absoluteById.get(id) ?? absPosition;
+      const dx = absPosition.x - oldAbs.x;
+      const dy = absPosition.y - oldAbs.y;
+      const descendantIds: string[] = [];
+      const collectDescendants = (parentId: string) => {
+        for (const childId of geometry.childrenOf.get(parentId) ?? []) {
+          descendantIds.push(childId);
+          collectDescendants(childId);
+        }
+      };
+      collectDescendants(id);
+      if (descendantIds.length > 0) {
+        const updates = [
+          { id, pos: absPosition },
+          ...descendantIds.map((childId) => {
+            const childAbs = geometry.absoluteById.get(childId) ?? { x: 0, y: 0 };
+            return { id: childId, pos: { x: childAbs.x + dx, y: childAbs.y + dy } };
+          }),
+        ];
+        onGroupDragStop?.(updates);
+        return;
+      }
+    }
+
     onNodeDragStop?.(id, absPosition, parentChanged ? newParent : undefined);
   };
 
@@ -788,6 +857,10 @@ function FlowCanvasInner({
           onSendToBack={() => onZOrderOp?.('back')}
           onDelete={() => onDeleteSelectedNode?.()}
           onDuplicate={() => onDuplicateSelectedNodes?.()}
+          canGroup={canGroupSelected}
+          canUngroup={canUngroupSelected}
+          onGroup={onGroupSelected}
+          onUngroup={onUngroupSelected}
         />
       )}
     </div>

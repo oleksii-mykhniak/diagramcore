@@ -68,6 +68,10 @@ export default function App() {
     onGroupNodeDragStop,
     onDuplicateSelectedNodes,
     onZOrderOp,
+    canGroupSelected,
+    canUngroupSelected,
+    onGroupSelected,
+    onUngroupSelected,
     onSetNodeImage,
     onRemoveNodeImage,
     hoveredLinkIndex,
@@ -186,6 +190,10 @@ export default function App() {
         onDeleteSelectedNode={onDeleteSelectedNode}
         onDuplicateSelectedNodes={onDuplicateSelectedNodes}
         onZOrderOp={onZOrderOp}
+        canGroupSelected={canGroupSelected}
+        canUngroupSelected={canUngroupSelected}
+        onGroupSelected={onGroupSelected}
+        onUngroupSelected={onUngroupSelected}
         onShowTour={() => setShowTour(true)}
         grid={view.grid}
         onToggleGrid={view.toggleGrid}
@@ -290,6 +298,10 @@ export default function App() {
         onDeleteSelectedNode={onDeleteSelectedNode}
         onDuplicateSelectedNodes={onDuplicateSelectedNodes}
         onZOrderOp={onZOrderOp}
+        canGroupSelected={canGroupSelected}
+        canUngroupSelected={canUngroupSelected}
+        onGroupSelected={onGroupSelected}
+        onUngroupSelected={onUngroupSelected}
         onSetNodeImage={onSetNodeImage}
         onRemoveNodeImage={onRemoveNodeImage}
         onUpdateLink={onUpdateLink}

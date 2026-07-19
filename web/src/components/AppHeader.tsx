@@ -41,6 +41,10 @@ interface AppHeaderProps {
   onDeleteSelectedNode: () => void;
   onDuplicateSelectedNodes: () => void;
   onZOrderOp: (op: 'front' | 'forward' | 'backward' | 'back') => void;
+  canGroupSelected: boolean;
+  canUngroupSelected: boolean;
+  onGroupSelected: () => void;
+  onUngroupSelected: () => void;
   onShowTour: () => void;
   grid: boolean;
   onToggleGrid: () => void;
@@ -128,6 +132,10 @@ export function AppHeader({
   onDeleteSelectedNode,
   onDuplicateSelectedNodes,
   onZOrderOp,
+  canGroupSelected,
+  canUngroupSelected,
+  onGroupSelected,
+  onUngroupSelected,
   onShowTour,
   grid,
   onToggleGrid,
@@ -257,6 +265,8 @@ export function AppHeader({
           onSelect: () => onZOrderOp('back'),
           disabled: selectedNodeIds.length === 0 && !selectedNodeId,
         },
+        { label: 'Group', testId: 'menu-group', onSelect: onGroupSelected, disabled: !canGroupSelected },
+        { label: 'Ungroup', testId: 'menu-ungroup', onSelect: onUngroupSelected, disabled: !canUngroupSelected },
       ],
     },
     {

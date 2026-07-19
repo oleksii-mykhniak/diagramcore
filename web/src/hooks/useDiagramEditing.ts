@@ -4,7 +4,7 @@ import type { ChangeEvent } from 'react';
 import { parseDiagram } from '../parseDiagram';
 import { validateDiagram } from '../wasmValidate';
 import type { ValidationError } from '../wasmValidate';
-import { computeLayout } from '../layout';
+import { computeLayout, NODE_HEIGHT, NODE_WIDTH } from '../layout';
 import type { Diagram, DiagramNode, DiagramLink, DiagramNoteDef } from '../types';
 import { fromLayoutSizes, parseLayoutFile } from '../layoutFile';
 import type { LayoutPosition } from '../layoutFile';
@@ -373,6 +373,101 @@ export function useDiagramEditing(
     setSelectedNodeId(newIds.length === 1 ? newIds[0] : null);
   }, [current, selectedNodeId, selectedNodeIds, applyOps]);
 
+  /** Ctrl/Cmd+G (PLAN4.md step 12.11) is only enabled for ≥2 selected
+   * nodes that all share the same nesting level (same `parent`,
+   * including "no parent" as one level) — grouping across levels would
+   * leave an ambiguous container hierarchy, so the plan blocks it
+   * outright rather than picking an arbitrary interpretation. */
+  const canGroupSelected =
+    selectedNodeIds.length >= 2 &&
+    Boolean(current) &&
+    (() => {
+      const nodesById = new Map(current!.diagram.nodes.map((n) => [n.id, n]));
+      const parents = new Set(selectedNodeIds.map((id) => nodesById.get(id)?.parent ?? ''));
+      return parents.size === 1;
+    })();
+
+  /** Ctrl/Cmd+Shift+G is only enabled when the selected node actually
+   * has children (i.e. is a container in the first place). */
+  const canUngroupSelected = Boolean(
+    current && selectedNodeId && current.diagram.nodes.some((n) => n.parent === selectedNodeId),
+  );
+
+  /** Ctrl/Cmd+G — creates a new `type: component` container node (the
+   * same convention `examples/nested.dc.yaml` already uses; containers
+   * are recognized purely by having children via `parent:`, not by
+   * `type` — PLAN3.md step 11.6) that the selection becomes children
+   * of. The container's bbox is computed from the selection's CURRENT
+   * positions/sizes — which, per step 12.1's invariant, don't move as
+   * part of this op; only the new container gets a (manual) position/
+   * size, sized to enclose them with padding. */
+  const onGroupSelected = useCallback(() => {
+    if (!current || !canGroupSelected) return;
+    const ids = selectedNodeIds;
+    const nodesById = new Map(current.diagram.nodes.map((n) => [n.id, n]));
+    const sharedParent = nodesById.get(ids[0])?.parent;
+
+    const existingIds = new Set(current.diagram.nodes.map((n) => n.id));
+    let n = 1;
+    let groupId = `group-${n}`;
+    while (existingIds.has(groupId)) {
+      n += 1;
+      groupId = `group-${n}`;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const id of ids) {
+      const pos = current.positions[id] ?? { x: 0, y: 0 };
+      const size = current.sizes[id] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + size.width);
+      maxY = Math.max(maxY, pos.y + size.height);
+    }
+    const pad = 32;
+    const groupPos = { x: minX - pad, y: minY - pad };
+    const groupSize = { width: maxX - minX + pad * 2, height: maxY - minY + pad * 2 };
+
+    const ops: PatchOp[] = [
+      {
+        op: 'addNode',
+        node: { id: groupId, type: 'component', label: 'Group', ...(sharedParent ? { parent: sharedParent } : {}) },
+      },
+      ...ids.map((id) => ({ op: 'updateNode' as const, id, patch: { parent: groupId } })),
+    ];
+    void applyOps(ops, { manualPositions: [{ id: groupId, pos: groupPos }] }).then(() => {
+      const level = levelRef.current;
+      if (!level || level.fileName !== current.fileName) return;
+      updateCurrentLevel({ sizes: { ...level.sizes, [groupId]: groupSize } });
+    });
+    setSelectedNodeId(groupId);
+    setSelectedNodeIds([groupId]);
+  }, [current, canGroupSelected, selectedNodeIds, applyOps, levelRef, updateCurrentLevel]);
+
+  /** Ctrl/Cmd+Shift+G — reparents the group's children to the group's
+   * OWN parent (or clears `parent:` entirely if the group was
+   * top-level) and removes the now-empty group node. Children's
+   * positions are already absolute (`current.positions` never stores
+   * parent-relative coordinates — only the canvas's live RF node
+   * objects do, computed on the fly), so ungrouping never moves them. */
+  const onUngroupSelected = useCallback(() => {
+    if (!current || !canUngroupSelected || !selectedNodeId) return;
+    const children = current.diagram.nodes.filter((n) => n.parent === selectedNodeId);
+    const group = current.diagram.nodes.find((n) => n.id === selectedNodeId);
+    const grandParent = group?.parent;
+    const ops: PatchOp[] = [
+      ...children.map((c) => ({ op: 'updateNode' as const, id: c.id, patch: { parent: grandParent } })),
+      { op: 'removeNode', id: selectedNodeId },
+    ];
+    const childIds = children.map((c) => c.id);
+    void applyOps(ops);
+    setSelectedNodeId(null);
+    setSelectedNodeIds(childIds);
+  }, [current, canUngroupSelected, selectedNodeId, applyOps]);
+
   /** Esc clears the selection (PLAN3.md step 11.10); Delete/Backspace
    * and Cmd/Ctrl+D drive the two actions above from anywhere except an
    * editable field (so typing in a text input, the color picker, etc.
@@ -409,11 +504,30 @@ export function useDiagramEditing(
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && (selectedNodeIds.length > 0 || selectedNodeId)) {
         e.preventDefault();
         onDuplicateSelectedNodes();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
+        if (e.shiftKey && canUngroupSelected) {
+          e.preventDefault();
+          onUngroupSelected();
+        } else if (!e.shiftKey && canGroupSelected) {
+          e.preventDefault();
+          onGroupSelected();
+        }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedNodeId, selectedNodeIds, onDeleteSelectedNode, onDuplicateSelectedNodes]);
+  }, [
+    selectedNodeId,
+    selectedNodeIds,
+    onDeleteSelectedNode,
+    onDuplicateSelectedNodes,
+    canGroupSelected,
+    onGroupSelected,
+    canUngroupSelected,
+    onUngroupSelected,
+  ]);
 
   const onConnectNodes = useCallback(
     (source: string, target: string) => {
@@ -947,6 +1061,10 @@ export function useDiagramEditing(
     onZOrderOp,
     onSetNodeImage,
     onRemoveNodeImage,
+    canGroupSelected,
+    canUngroupSelected,
+    onGroupSelected,
+    onUngroupSelected,
     onNewFlow,
     onToggleRecording,
     onAddBranch,

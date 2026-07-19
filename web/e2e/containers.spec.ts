@@ -91,15 +91,31 @@ test('dragging a container moves its children together', async ({ page }) => {
 
   const beforeContainer = (await page.getByTestId('rf-node-namespace').boundingBox())!;
   const beforeChild = (await page.getByTestId('rf-node-api').boundingBox())!;
+  const beforeWorker = (await page.getByTestId('rf-node-worker').boundingBox())!;
   const offsetX = beforeChild.x - beforeContainer.x;
   const offsetY = beforeChild.y - beforeContainer.y;
 
   const dx = 60;
   const dy = 40;
-  await dragNode(page, 'rf-node-namespace', beforeContainer.x + beforeContainer.width / 2 + dx, beforeContainer.y + beforeContainer.height / 2 + dy);
+  // Grab a point in the container's own top padding strip, not its
+  // center — "namespace" is tightly nested around its "api"/"worker"
+  // children, so a center-of-box grab can land on a child's DOM element
+  // instead of the container's, silently dragging the child (or nothing
+  // at all) rather than the container.
+  const topOfChildren = Math.min(beforeChild.y, beforeWorker.y);
+  const grabX = beforeContainer.x + beforeContainer.width / 2;
+  const grabY = (beforeContainer.y + topOfChildren) / 2;
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await page.mouse.move(grabX + dx, grabY + dy, { steps: 10 });
+  await page.mouse.up();
 
   const afterContainer = (await page.getByTestId('rf-node-namespace').boundingBox())!;
   const afterChild = (await page.getByTestId('rf-node-api').boundingBox())!;
+  // The container itself actually moved (a same-offset assertion alone
+  // would trivially pass if the drag silently failed to register and
+  // nothing moved at all).
+  expect(afterContainer.x).toBeGreaterThan(beforeContainer.x + 20);
   // The child kept the same offset relative to its container — it moved
   // together with it, not independently (PLAN3.md step 11.6).
   expect(afterChild.x - afterContainer.x).toBeCloseTo(offsetX, 0);

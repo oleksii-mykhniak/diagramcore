@@ -14,6 +14,10 @@ interface Props {
   onSendToBack: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  canGroup?: boolean;
+  canUngroup?: boolean;
+  onGroup?: () => void;
+  onUngroup?: () => void;
 }
 
 const itemStyle: React.CSSProperties = {
@@ -41,6 +45,10 @@ export function NodeContextMenu({
   onSendToBack,
   onDelete,
   onDuplicate,
+  canGroup,
+  canUngroup,
+  onGroup,
+  onUngroup,
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -94,6 +102,35 @@ export function NodeContextMenu({
       <button type="button" role="menuitem" data-testid="context-send-to-back" style={itemStyle} onClick={runAndClose(onSendToBack)}>
         Send to back
       </button>
+      {(onGroup || onUngroup) && (
+        <>
+          <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-1) 0' }} />
+          {onGroup && (
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="context-group"
+              style={canGroup ? itemStyle : { ...itemStyle, color: 'var(--dc-text-muted)', cursor: 'default' }}
+              disabled={!canGroup}
+              onClick={runAndClose(onGroup)}
+            >
+              Group
+            </button>
+          )}
+          {onUngroup && (
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="context-ungroup"
+              style={canUngroup ? itemStyle : { ...itemStyle, color: 'var(--dc-text-muted)', cursor: 'default' }}
+              disabled={!canUngroup}
+              onClick={runAndClose(onUngroup)}
+            >
+              Ungroup
+            </button>
+          )}
+        </>
+      )}
       <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-1) 0' }} />
       <button type="button" role="menuitem" data-testid="context-duplicate" style={itemStyle} onClick={runAndClose(onDuplicate)}>
         Duplicate
