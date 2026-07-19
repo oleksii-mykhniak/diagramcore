@@ -50,6 +50,11 @@ export function useDiagramEditing(
   const [focusRequest, setFocusRequest] = useState<
     { kind: 'node'; id: string; nonce: number } | { kind: 'line'; line: number; nonce: number } | null
   >(null);
+  /** F2 on the selected node (PLAN4.md step 12.4) — opens the same
+   * inline label editor a dblclick does, bumping `nonce` (not just `id`)
+   * so pressing F2 again on the same already-selected node re-opens it
+   * even if a previous edit was cancelled without changing selection. */
+  const [editNodeRequest, setEditNodeRequest] = useState<{ id: string; nonce: number } | null>(null);
 
   /** Applies structured YAML patches (PLAN.md step 7.1) to the current
    * level: re-parses/re-validates the patched text and re-derives layout,
@@ -255,6 +260,17 @@ export function useDiagramEditing(
     [selectedNodeId, applyOps],
   );
 
+  /** Inline label edit commit (PLAN4.md step 12.4) — unlike
+   * `onUpdateSelectedNode`, targets `id` directly rather than the
+   * current selection: a dblclick can open the editor for a node that
+   * isn't (yet) selected. */
+  const onUpdateNodeLabel = useCallback(
+    (id: string, label: string) => {
+      void applyOps([{ op: 'updateNode', id, patch: { label } }]);
+    },
+    [applyOps],
+  );
+
   /** Delete key / Edit menu "Delete" / Properties panel "Delete node"
    * (PLAN3.md step 11.10 generalizes this from a single node to the
    * whole current selection — `selectedNodeIds` when non-empty, falling
@@ -367,6 +383,11 @@ export function useDiagramEditing(
       if (e.key === 'Escape') {
         setSelectedNodeId(null);
         setSelectedNodeIds([]);
+        return;
+      }
+      if (e.key === 'F2' && selectedNodeId) {
+        e.preventDefault();
+        setEditNodeRequest({ id: selectedNodeId, nonce: Date.now() });
         return;
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedNodeIds.length > 0 || selectedNodeId)) {
@@ -511,19 +532,15 @@ export function useDiagramEditing(
     [current, updateCurrentLevel],
   );
 
-  /** Double-click an edge label (PLAN3.md step 11.9): prompts for new
-   * text and patches the link's `label` in the YAML — mirrors
-   * `onNoteDoubleClick`. */
-  const onEdgeLabelDoubleClick = useCallback(
-    (linkIndex: number) => {
-      if (!current) return;
-      const link = current.diagram.links[linkIndex];
-      if (!link) return;
-      const next = window.prompt('Link label', link.label ?? '');
-      if (next === null) return;
-      void applyOps([{ op: 'updateLink', index: linkIndex, patch: { label: next } }]);
+  /** Edge label inline-edit commit (PLAN4.md step 12.4, replaces the old
+   * `window.prompt`-based `onEdgeLabelDoubleClick` — the dblclick now
+   * opens an input in place, owned by `DcEdge` itself; this just
+   * commits it). Empty text removes the link's `label` entirely. */
+  const onEdgeLabelCommit = useCallback(
+    (linkIndex: number, label: string) => {
+      void applyOps([{ op: 'updateLink', index: linkIndex, patch: { label: label.trim() === '' ? undefined : label } }]);
     },
-    [current, applyOps],
+    [applyOps],
   );
 
   /** Individual label show/hide (PLAN3.md step 11.9) — independent of
@@ -714,6 +731,7 @@ export function useDiagramEditing(
     recording,
     branchTarget,
     focusRequest,
+    editNodeRequest,
     recordingFlow,
     applyOps,
     applyTextReplace,
@@ -723,6 +741,7 @@ export function useDiagramEditing(
     onNoteDoubleClick,
     onNodeClick,
     onUpdateSelectedNode,
+    onUpdateNodeLabel,
     onDeleteSelectedNode,
     onConnectNodes,
     onUpdateLink,
@@ -734,7 +753,7 @@ export function useDiagramEditing(
     onUpdateEdgeStyle,
     onResetEdgeStyle,
     onEdgeLabelDragStop,
-    onEdgeLabelDoubleClick,
+    onEdgeLabelCommit,
     onToggleEdgeLabelHidden,
     onNewFlow,
     onToggleRecording,

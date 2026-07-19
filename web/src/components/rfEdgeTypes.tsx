@@ -28,7 +28,9 @@ export interface DcEdgeData extends Record<string, unknown> {
   showLabel?: boolean;
   /** Committed once per label-drag gesture, on release. */
   onLabelDragStop?: (offset: { x: number; y: number }) => void;
-  onLabelDoubleClick?: () => void;
+  /** Inline edit commit (PLAN4.md step 12.4) — fires on Enter/blur of the
+   * dblclick-opened input; empty text removes the link's `label`. */
+  onLabelCommit?: (label: string) => void;
 }
 
 const DASH_ARRAY: Record<LineStyle, string | undefined> = {
@@ -53,6 +55,10 @@ export const DcEdge = memo(function DcEdge({
   const { getZoom } = useReactFlow();
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
+  // Inline label edit (PLAN4.md step 12.4) — replaces the old
+  // `window.prompt`-based flow; dblclick opens an input right where the
+  // label already sits, Enter/blur commits, Escape cancels.
+  const [isEditingLabel, setIsEditingLabel] = useState(false);
 
   const [smoothPath, labelX, labelY] = getSmoothStepPath({
     sourceX,
@@ -114,28 +120,65 @@ export const DcEdge = memo(function DcEdge({
       )}
       {edgeData?.label && edgeData.showLabel !== false && (
         <EdgeLabelRenderer>
-          <div
-            data-testid={`rf-edge-label-${id}`}
-            onPointerDown={handleLabelPointerDown}
-            onPointerMove={handleLabelPointerMove}
-            onPointerUp={handleLabelPointerUp}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              edgeData.onLabelDoubleClick?.();
-            }}
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX + effectiveOffset.x}px,${labelY + effectiveOffset.y}px)`,
-              fontSize: 'var(--dc-font-size-sm)',
-              background: 'var(--dc-surface)',
-              color: 'var(--dc-text)',
-              padding: '0 2px',
-              cursor: 'grab',
-              pointerEvents: 'auto',
-            }}
-          >
-            {edgeData.label}
-          </div>
+          {isEditingLabel ? (
+            <input
+              data-testid={`rf-edge-label-input-${id}`}
+              autoFocus
+              defaultValue={edgeData.label}
+              onFocus={(e) => e.currentTarget.select()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={(e) => {
+                setIsEditingLabel(false);
+                edgeData.onLabelCommit?.(e.currentTarget.value.trim());
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') {
+                  setIsEditingLabel(false);
+                  edgeData.onLabelCommit?.(e.currentTarget.value.trim());
+                } else if (e.key === 'Escape') {
+                  setIsEditingLabel(false);
+                }
+              }}
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${labelX + effectiveOffset.x}px,${labelY + effectiveOffset.y}px)`,
+                fontSize: 'var(--dc-font-size-sm)',
+                font: 'inherit',
+                background: 'var(--dc-surface)',
+                color: 'var(--dc-text)',
+                border: '1px solid var(--dc-accent)',
+                borderRadius: 2,
+                padding: '0 2px',
+                width: `${Math.max(4, edgeData.label.length)}ch`,
+                pointerEvents: 'auto',
+              }}
+            />
+          ) : (
+            <div
+              data-testid={`rf-edge-label-${id}`}
+              onPointerDown={handleLabelPointerDown}
+              onPointerMove={handleLabelPointerMove}
+              onPointerUp={handleLabelPointerUp}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setIsEditingLabel(true);
+              }}
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${labelX + effectiveOffset.x}px,${labelY + effectiveOffset.y}px)`,
+                fontSize: 'var(--dc-font-size-sm)',
+                background: 'var(--dc-surface)',
+                color: 'var(--dc-text)',
+                padding: '0 2px',
+                cursor: 'grab',
+                pointerEvents: 'auto',
+              }}
+            >
+              {edgeData.label}
+            </div>
+          )}
         </EdgeLabelRenderer>
       )}
     </>

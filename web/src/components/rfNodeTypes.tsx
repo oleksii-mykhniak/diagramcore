@@ -35,6 +35,12 @@ export interface DcNodeData extends Record<string, unknown> {
   /** Fires once, on resize release (mirrors `onNodeDragStop`'s
    * single-commit-per-gesture pattern from step 11.1). */
   onResizeEnd?: (size: { width: number; height: number; x: number; y: number }) => void;
+  /** Inline label editing (PLAN4.md step 12.4) — `FlowCanvas` owns which
+   * node is being edited and patches these three fields directly onto
+   * the live node state (see its `editingNodeId` effect). */
+  isEditing?: boolean;
+  onEditCommit?: (label: string) => void;
+  onEditCancel?: () => void;
 }
 
 interface ShellProps {
@@ -149,15 +155,47 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
           pointerEvents: 'none',
         }}
       >
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--dc-space-1)' }}>
-          {IconComponent && (
-            <span data-testid={`rf-node-icon-${id}`} style={{ display: 'inline-flex' }}>
-              <IconComponent size={14} />
-            </span>
-          )}
-          {data.label}
-          {data.hasDetails && <span data-testid={`rf-details-marker-${id}`}> ⊞</span>}
-        </span>
+        {data.isEditing ? (
+          <input
+            data-testid={`rf-node-label-input-${id}`}
+            autoFocus
+            defaultValue={data.label}
+            onFocus={(e) => e.currentTarget.select()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={(e) => data.onEditCommit?.(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              } else if (e.key === 'Escape') {
+                data.onEditCancel?.();
+              }
+            }}
+            style={{
+              width: '90%',
+              font: 'inherit',
+              fontSize: 'var(--dc-font-size-base)',
+              textAlign: 'center',
+              background: 'var(--dc-surface)',
+              color: 'var(--dc-text)',
+              border: '1px solid var(--dc-accent)',
+              borderRadius: 2,
+              pointerEvents: 'auto',
+            }}
+          />
+        ) : (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--dc-space-1)' }}>
+            {IconComponent && (
+              <span data-testid={`rf-node-icon-${id}`} style={{ display: 'inline-flex' }}>
+                <IconComponent size={14} />
+              </span>
+            )}
+            {data.label}
+            {data.hasDetails && <span data-testid={`rf-details-marker-${id}`}> ⊞</span>}
+          </span>
+        )}
         {data.showDescription && data.description && (
           <span
             data-testid={`rf-node-description-${id}`}

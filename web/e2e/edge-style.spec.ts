@@ -123,17 +123,45 @@ test('dragging an edge label moves it independently and the offset survives Expo
   expect(offset.x).toBeGreaterThan(30);
 });
 
-test('double-clicking an edge label edits its text, patching the YAML label', async ({ page }) => {
+test('double-clicking an edge label opens an inline input (no window.prompt) that patches the YAML label on Enter', async ({
+  page,
+}) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles(authSystemPath);
   await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
 
-  page.once('dialog', (dialog) => dialog.accept('New label text'));
+  let dialogFired = false;
+  page.on('dialog', (dialog) => {
+    dialogFired = true;
+    void dialog.dismiss();
+  });
+
   await page.getByTestId('rf-edge-label-link-0-User-Gateway').dispatchEvent('dblclick');
 
+  const input = page.getByTestId('rf-edge-label-input-link-0-User-Gateway');
+  await expect(input).toBeVisible();
+  await input.fill('New label text');
+  await input.press('Enter');
+
+  expect(dialogFired).toBe(false);
   await expect(page.getByTestId('rf-edge-label-link-0-User-Gateway')).toHaveText('New label text');
   const yaml = await page.getByTestId('yaml-source').inputValue();
   expect(yaml).toContain('New label text');
+});
+
+test('Escape cancels an in-progress edge label edit, leaving the label untouched', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('file-input').setInputFiles(authSystemPath);
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
+
+  await page.getByTestId('rf-edge-label-link-0-User-Gateway').dispatchEvent('dblclick');
+  const input = page.getByTestId('rf-edge-label-input-link-0-User-Gateway');
+  await input.fill('should not be committed');
+  await input.press('Escape');
+
+  await expect(page.getByTestId('rf-edge-label-link-0-User-Gateway')).not.toHaveText('should not be committed');
+  const yaml = await page.getByTestId('yaml-source').inputValue();
+  expect(yaml).not.toContain('should not be committed');
 });
 
 test('View → Connection labels hides every label; the per-edge hide checkbox hides just one', async ({ page }) => {

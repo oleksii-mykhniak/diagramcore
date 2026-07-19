@@ -55,6 +55,8 @@ interface EditorWorkspaceProps {
   onResetNodeStyle: () => void;
   onNodeDoubleClick: (node: DiagramNode) => void;
   onNodeClick: (node: DiagramNode) => void;
+  onNodeLabelCommit: (id: string, label: string) => void;
+  editNodeRequest: { id: string; nonce: number } | null;
   onDropNodeType: (type: string, pos: LayoutPosition) => void;
   onDropNoteType: (pos: LayoutPosition) => void;
   onNoteDrag: (id: string, pos: LayoutPosition) => void;
@@ -69,7 +71,7 @@ interface EditorWorkspaceProps {
   onUpdateEdgeStyle: (patch: Partial<EdgeStyleOverride>) => void;
   onResetEdgeStyle: () => void;
   onEdgeLabelDragStop: (linkIndex: number, offset: LayoutPosition) => void;
-  onEdgeLabelDoubleClick: (linkIndex: number) => void;
+  onEdgeLabelCommit: (linkIndex: number, label: string) => void;
   onToggleEdgeLabelHidden: (linkIndex: number) => void;
   showEdgeLabels: boolean;
   focusRequest: { kind: 'node'; id: string; nonce: number } | { kind: 'line'; line: number; nonce: number } | null;
@@ -133,6 +135,8 @@ export function EditorWorkspace({
   onResetNodeStyle,
   onNodeDoubleClick,
   onNodeClick,
+  onNodeLabelCommit,
+  editNodeRequest,
   onDropNodeType,
   onDropNoteType,
   onNoteDrag,
@@ -147,7 +151,7 @@ export function EditorWorkspace({
   onUpdateEdgeStyle,
   onResetEdgeStyle,
   onEdgeLabelDragStop,
-  onEdgeLabelDoubleClick,
+  onEdgeLabelCommit,
   onToggleEdgeLabelHidden,
   showEdgeLabels,
   focusRequest,
@@ -230,6 +234,9 @@ export function EditorWorkspace({
                 styles={current.styles}
                 onNodeDoubleClick={onNodeDoubleClick}
                 onNodeClick={onNodeClick}
+                onNodeLabelCommit={onNodeLabelCommit}
+                editNodeRequestId={editNodeRequest?.id ?? null}
+                editNodeRequestNonce={editNodeRequest?.nonce}
                 selectedNodeIds={selectedNodeIds}
                 onSelectionChange={onSelectionChange}
                 onGroupDragStop={onGroupNodeDragStop}
@@ -243,7 +250,7 @@ export function EditorWorkspace({
                 hiddenEdgeLabels={current.hiddenEdgeLabels}
                 showEdgeLabels={showEdgeLabels}
                 onEdgeLabelDragStop={onEdgeLabelDragStop}
-                onEdgeLabelDoubleClick={onEdgeLabelDoubleClick}
+                onEdgeLabelCommit={onEdgeLabelCommit}
                 focusNodeId={focusRequest?.kind === 'node' ? focusRequest.id : null}
                 focusNonce={focusRequest?.nonce}
                 activeStep={highlight?.activeStep ?? undefined}

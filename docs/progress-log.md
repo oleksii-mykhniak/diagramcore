@@ -141,3 +141,45 @@
   pre-existing failure (drill-down, див. вище, не пов'язаний з цим
   кроком).
 - Commit: phase12-step3: чесний dirty-стан і синхронізація з диском
+
+## phase12-step4 — Інлайн-редагування тексту на канві — 2026-07-19
+
+- Лейбл вузла: dblclick на вузлі БЕЗ `details:` відкриває інлайн
+  `<input>` поверх лейбла (замінює `<span>` в `NodeShell`, той самий
+  DOM-вузол/testid); Enter комітить через `applyOps` (`updateNode`
+  `label`), Esc/blur без змін скасовує. Вузол З `details:` і далі
+  відкриває drill-down по dblclick (без змін); F2 на виділеному вузлі
+  відкриває той самий редактор для БУДЬ-ЯКОГО вузла (з деталями чи без).
+  Контейнери — окремий рендер-компонент без інлайн-редагування, dblclick
+  на них лишається no-op (як і було).
+- Лейбл ребра: dblclick відкриває інлайн `<input>` НА МІСЦІ лейбла
+  (замінює `onLabelDoubleClick`, що робив `window.prompt`); Enter/blur
+  комітить через `onUpdateLink`, Esc скасовує, порожній текст видаляє
+  `label` з лінка.
+- Реалізація: `FlowCanvas.tsx` тримає `editingNodeId`, патчить
+  `isEditing`/`onEditCommit`/`onEditCancel` напряму в живий `nodes`-стан
+  (той самий патерн, що вже був для `isSelected` — щоб не зачіпати
+  `allNodes`/позиції під час драгу); F2 іде окремим шляхом
+  (`editNodeRequest` у `useDiagramEditing.ts`, `{id, nonce}` — nonce,
+  щоб повторний F2 на тому самому вузлі знову відкривав редактор).
+  Едж-лейбл — стан локальний у `DcEdge` (`rfEdgeTypes.tsx`), без
+  проброшування через пропси нагору.
+- **Знайдена пастка (не в АС, але важлива):** `data-selected`
+  (drivено `selectedNodeIds`, через RF-івський майже миттєвий
+  `onSelectionChange`) стає `true` РАНІШЕ за `selectedNodeId`
+  (однина, джерело для F2/Properties) — той комітиться лише після
+  250мс debounce-таймера кліку (розрізнення click/dblclick, крок 7.2).
+  E2E, що чекає на F2 одразу після `data-selected`, ловить
+  `selectedNodeId === null`. Тест написано так, щоб чекати
+  `properties-panel` (яка й похідна від `selectedNodeId`), а не
+  `data-selected`.
+- Оновлено `edge-style.spec.ts`'s dblclick-тест (був на
+  `window.prompt`/`dialog.accept`) — тепер заповнює/комітить інлайн
+  `<input>`, плюс новий тест на Escape-скасування.
+- Нові тести: e2e `inline-label-edit.spec.ts` (4: dblclick-редагування
+  вузла + Enter, Escape-скасування, undo одним кроком, F2 для вузла з
+  details і без).
+- Регресія: `npm test` (97 passed), `npm run build`, `npx playwright
+  test` — 106/110 passed, 3 skipped (drawio), 1 pre-existing failure
+  (drill-down, задокументовано в кроці 12.3, не зачеплено цим кроком).
+- Commit: phase12-step4: інлайн-редагування тексту вузлів і лейблів ребер

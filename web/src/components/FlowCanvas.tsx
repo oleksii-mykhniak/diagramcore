@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import {
   Background,
@@ -89,6 +89,14 @@ interface Props {
   activeStep?: ActiveStep;
   onNodeDoubleClick?: (node: DiagramNode) => void;
   onNodeClick?: (node: DiagramNode) => void;
+  /** Inline label edit commit (PLAN4.md step 12.4) — dblclick on a node
+   * without `details:`, or F2 on the selected node either way. */
+  onNodeLabelCommit?: (id: string, label: string) => void;
+  /** F2 (PLAN4.md step 12.4): bump the nonce (any change) to open the
+   * inline editor for `editNodeRequestId` even if it's the same node as
+   * last time — mirrors `focusNodeId`/`focusNonce` above. */
+  editNodeRequestId?: string | null;
+  editNodeRequestNonce?: number;
   /** Multi-selection (PLAN3.md step 11.10), driven by React Flow's own
    * rubber-band select — drives the node highlight; a plain single click
    * sets this to a single-id array too (see `useDiagramEditing.ts`). */
@@ -118,7 +126,7 @@ interface Props {
   showEdgeLabels?: boolean;
   /** Committed once per label-drag gesture, on release. */
   onEdgeLabelDragStop?: (linkIndex: number, offset: LayoutPosition) => void;
-  onEdgeLabelDoubleClick?: (linkIndex: number) => void;
+  onEdgeLabelCommit?: (linkIndex: number, label: string) => void;
   /** Bump `focusNonce` (any change) alongside `focusNodeId` to re-trigger
    * the pan/zoom even if the same node is focused twice in a row
    * (PLAN.md step 7.6, Problems panel "click to focus"). */
@@ -156,6 +164,9 @@ function FlowCanvasInner({
   activeStep,
   onNodeDoubleClick,
   onNodeClick,
+  onNodeLabelCommit,
+  editNodeRequestId,
+  editNodeRequestNonce,
   selectedNodeIds,
   onSelectionChange,
   onGroupDragStop,
@@ -169,7 +180,7 @@ function FlowCanvasInner({
   hiddenEdgeLabels,
   showEdgeLabels = true,
   onEdgeLabelDragStop,
-  onEdgeLabelDoubleClick,
+  onEdgeLabelCommit,
   focusNodeId,
   focusNonce,
   showGrid = true,
@@ -365,7 +376,7 @@ function FlowCanvasInner({
           labelOffset: edgeLabelOffsets?.[linkKey],
           showLabel: showEdgeLabels && !hidden,
           onLabelDragStop: (offset) => onEdgeLabelDragStop?.(i, offset),
-          onLabelDoubleClick: () => onEdgeLabelDoubleClick?.(i),
+          onLabelCommit: (label: string) => onEdgeLabelCommit?.(i, label),
         };
         return {
           id: `link-${i}-${l.from}-${l.to}`,
@@ -397,7 +408,7 @@ function FlowCanvasInner({
       hiddenEdgeLabels,
       showEdgeLabels,
       onEdgeLabelDragStop,
-      onEdgeLabelDoubleClick,
+      onEdgeLabelCommit,
     ],
   );
 
@@ -442,6 +453,45 @@ function FlowCanvasInner({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeIds, allNodes, setNodes]);
+
+  // Inline label editing (PLAN4.md step 12.4) — same "patch the live
+  // `nodes` state directly" pattern as `isSelected` above, for the same
+  // reason: going through `allNodes` would make opening/closing the
+  // editor rebuild every node's position from the last-committed layout,
+  // clobbering an in-progress drag.
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  useEffect(() => {
+    setNodes((prev) =>
+      prev.map((n) => {
+        const isEditing = n.id === editingNodeId;
+        const prevIsEditing = (n.data as { isEditing?: boolean } | undefined)?.isEditing ?? false;
+        if (prevIsEditing === isEditing) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            isEditing,
+            onEditCommit: (label: string) => {
+              setEditingNodeId(null);
+              const trimmed = label.trim();
+              if (trimmed) onNodeLabelCommit?.(n.id, trimmed);
+            },
+            onEditCancel: () => setEditingNodeId(null),
+          },
+        };
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingNodeId, allNodes, setNodes]);
+
+  // F2 (PLAN4.md step 12.4) opens the same inline editor as a dblclick,
+  // for whichever node is currently selected — including a node with
+  // `details:`, whose dblclick is reserved for drill-down.
+  useEffect(() => {
+    if (!editNodeRequestId) return;
+    setEditingNodeId(editNodeRequestId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editNodeRequestId, editNodeRequestNonce]);
 
   // Rubber-band selection (PLAN3.md step 11.10) is derived from `nodes`
   // itself (already synced through `onNodesChange`'s own 'select' change
@@ -599,7 +649,15 @@ function FlowCanvasInner({
           // timer was just cleared above), so neither `selectedNodeId` nor
           // `selectedNodeIds` would move to the double-clicked node at all.
           onNodeClick?.(dcNode);
-          if (onNodeDoubleClick) onNodeDoubleClick(dcNode);
+          // PLAN4.md step 12.4: a node WITH `details:` keeps dblclick for
+          // drill-down (unchanged); a node without one opens the inline
+          // label editor instead — it never had a dblclick behavior to
+          // preserve, and F2 still reaches either kind.
+          if (dcNode.details) {
+            if (onNodeDoubleClick) onNodeDoubleClick(dcNode);
+          } else if (!geometry.containerIds.has(node.id)) {
+            setEditingNodeId(node.id);
+          }
         }}
         onNodeClick={(_, node) => {
           if (clickTimer.current) clearTimeout(clickTimer.current);

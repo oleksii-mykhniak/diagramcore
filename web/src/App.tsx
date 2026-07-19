@@ -74,6 +74,7 @@ export default function App() {
     recording,
     branchTarget,
     focusRequest,
+    editNodeRequest,
     recordingFlow,
     applyTextReplace,
     onDropNodeType,
@@ -82,6 +83,7 @@ export default function App() {
     onNoteDoubleClick,
     onNodeClick,
     onUpdateSelectedNode,
+    onUpdateNodeLabel,
     onDeleteSelectedNode,
     onConnectNodes,
     onUpdateLink,
@@ -93,7 +95,7 @@ export default function App() {
     onUpdateEdgeStyle,
     onResetEdgeStyle,
     onEdgeLabelDragStop,
-    onEdgeLabelDoubleClick,
+    onEdgeLabelCommit,
     onToggleEdgeLabelHidden,
     onNewFlow,
     onToggleRecording,
@@ -245,6 +247,8 @@ export default function App() {
         onResetNodeStyle={onResetNodeStyle}
         onNodeDoubleClick={(node) => void openDetails(node)}
         onNodeClick={onNodeClick}
+        onNodeLabelCommit={onUpdateNodeLabel}
+        editNodeRequest={editNodeRequest}
         onDropNodeType={onDropNodeType}
         onDropNoteType={onDropNoteType}
         onNoteDrag={onNoteDrag}
@@ -259,7 +263,7 @@ export default function App() {
         onUpdateEdgeStyle={onUpdateEdgeStyle}
         onResetEdgeStyle={onResetEdgeStyle}
         onEdgeLabelDragStop={onEdgeLabelDragStop}
-        onEdgeLabelDoubleClick={onEdgeLabelDoubleClick}
+        onEdgeLabelCommit={onEdgeLabelCommit}
         onToggleEdgeLabelHidden={onToggleEdgeLabelHidden}
         showEdgeLabels={view.showEdgeLabels}
         focusRequest={focusRequest}
