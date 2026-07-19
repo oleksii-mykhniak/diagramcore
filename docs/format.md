@@ -213,15 +213,25 @@ D2/ELK.
         "Gateway": { "w": 220, "h": 90 }
       },
       "styles": {
-        "Gateway": { "fill": "#f5a623", "stroke": "#8a5a00", "strokeWidth": 2, "lineStyle": "dashed", "rounded": true }
+        "Gateway": {
+          "fill": "#f5a623", "stroke": "#8a5a00", "strokeWidth": 2, "lineStyle": "dashed", "rounded": true,
+          "text": { "fontSize": 14, "bold": true, "color": "#8a5a00", "align": "center" },
+          "image": "assets/Gateway-icon.png"
+        }
       },
       "edgeStyles": {
-        "User->Gateway:request": { "markerStart": "none", "markerEnd": "open-arrow", "lineStyle": "dotted", "strokeWidth": 3, "color": "#8a5a00" }
+        "User->Gateway:request": {
+          "markerStart": "none", "markerEnd": "open-arrow", "lineStyle": "dotted", "strokeWidth": 3, "color": "#8a5a00",
+          "text": { "fontSize": 12, "italic": true }
+        }
       },
       "edgeLabelOffsets": {
         "User->Gateway:request": { "x": 12, "y": -8 }
       },
-      "hiddenEdgeLabels": ["User->Gateway:request"]
+      "hiddenEdgeLabels": ["User->Gateway:request"],
+      "hiddenEdges": ["Gateway->AuthService:call"],
+      "hiddenNodeLabels": ["OAuthProvider"],
+      "zOrder": ["Gateway", "User", "AuthService"]
     }
   },
   "renderStyle": "sketch"
@@ -240,33 +250,58 @@ D2/ELK.
   вузлів, розмір яких користувач змінив вручну; решта лишається на
   розмірі автолейауту за замовчуванням.
 - `styles` — мапа `nodeId → {fill?, stroke?, strokeWidth?, lineStyle?,
-  rounded?}` (фаза 11, крок 11.8) — інстанс-рівневий оверрайд стилю,
-  пріоритетніший за `custom_types` цього типу; лише для вузлів, які
-  користувач фактично стилізував.
+  rounded?, text?, image?}` (фаза 11, крок 11.8) — інстанс-рівневий
+  оверрайд стилю, пріоритетніший за `custom_types` цього типу; лише
+  для вузлів, які користувач фактично стилізував.
+  - `text` — `{fontSize?, bold?, italic?, color?, align?}` (фаза 12,
+    крок 12.5), де `align` — `"left" | "center" | "right"` (лейбла
+    вузла; для ребра поле присутнє в типі, але ігнорується).
+  - `image` — відносний шлях (від `.dc.yaml`-файлу діаграми, напр.
+    `assets/icon.png`) до кастомної картинки вузла (фаза 12, крок
+    12.10) — **ніколи** data URI; сам файл не входить у layout-файл,
+    веб-редактор резолвить шлях у байти лише в межах сесії
+    (`imageAssets`, не персиститься). Відсутність файлу на диску не
+    ламає рендер — вузол малює звичайну фігуру.
 - `edgeStyles` — мапа `linkKey → {markerStart?, markerEnd?, lineStyle?,
-  strokeWidth?, color?}` (фаза 11, крок 11.9), де `markerStart`/
-  `markerEnd` — `"none" | "arrow" | "open-arrow"` (`"arrow"` — закритий/
-  залитий трикутник, `"open-arrow"` — незалитий шеврон). `linkKey` —
-  `"<from>-><to>:<type>"` (формат посилань не має власного `id`, тож
-  ключ виводиться зі змісту лінку; два однакові лінки з тим самим
-  from/to/type ділять один запис — прийнятний рідкісний крайній випадок).
+  strokeWidth?, color?, text?}` (фаза 11, крок 11.9 + text — фаза 12,
+  крок 12.5), де `markerStart`/`markerEnd` — `"none" | "arrow" |
+  "open-arrow"` (`"arrow"` — закритий/залитий трикутник, `"open-arrow"`
+  — незалитий шеврон). `linkKey` — `"<from>-><to>:<type>"` (формат
+  посилань не має власного `id`, тож ключ виводиться зі змісту лінку;
+  два однакові лінки з тим самим from/to/type ділять один запис —
+  прийнятний рідкісний крайній випадок).
 - `edgeLabelOffsets` — мапа `linkKey → {x, y}` (фаза 11, крок 11.9) —
   зсув лейбла ребра відносно його середньої точки; лише для лейблів,
   які користувач фактично перетягнув.
 - `hiddenEdgeLabels` — масив `linkKey` (фаза 11, крок 11.9), чий лейбл
   індивідуально прихований — незалежно від глобального View →
   "Connection labels" перемикача (той — суто UI-preference, у layout-
-  файлі не зберігається). **Ніколи** не враховується `dc context`/
-  AI-експортом: вони читають лише ядро діаграми (`model.Diagram`/
-  `Diagram`), а не layout-файл, тож лейбли завжди присутні там повністю.
+  файлі не зберігається).
+- `hiddenEdges` — масив `linkKey` (фаза 12, крок 12.7), чий цілий
+  конектор (лінія + маркери + лейбл) прихований на канві/в SVG-
+  експорті — на відміну від `hiddenEdgeLabels`, ховає весь зв'язок, не
+  тільки текст.
+- `hiddenNodeLabels` — масив `nodeId` (фаза 12, крок 12.7), чий
+  текстовий лейбл прихований — сама фігура вузла лишається видимою.
+- `zOrder` — масив `nodeId` знизу вгору (фаза 12, крок 12.9) —
+  презентаційний порядок малювання на канві/в SVG-експорті; не
+  обов'язково покриває всі вузли (ті, кого немає в масиві, малюються
+  за замовчуванням, у порядку появи в `nodes:`). Дитина контейнера
+  завжди малюється поверх свого контейнера незалежно від `zOrder`.
+  `hiddenEdgeLabels`/`hiddenEdges`/`hiddenNodeLabels`/`zOrder`
+  **ніколи** не враховуються `dc context`/AI-експортом: вони читають
+  лише ядро діаграми (`model.Diagram`/`Diagram`), а не layout-файл,
+  тож усі лінки/лейбли завжди присутні там повністю, незалежно від
+  прихованості на канві.
 - `renderStyle` — `"clean"` (типово, поле відсутнє) або `"sketch"` (фаза
   10, крок 10.12) — стиль того, як намальована вся діаграма у
   web-редакторі; top-level (не per-view), оскільки стосується вигляду
   діаграми в цілому. `dc render` це поле ігнорує (стосується лише
   web-редактора); `layout.Save` (Go) зберігає всі web-редакторські поля
   (`notePositions`, `sizes`, `styles`, `edgeStyles`, `edgeLabelOffsets`,
-  `hiddenEdgeLabels`, `renderStyle`) як є, якщо вони вже були у файлі, а
-  не перезаписує лише `positions`.
+  `hiddenEdgeLabels`, `hiddenEdges`, `hiddenNodeLabels`, `zOrder`,
+  `renderStyle`) як є, якщо вони вже були у файлі, а не перезаписує
+  лише `positions`.
 - Вузол, чий `id` **відсутній** у `positions`, лягає автоматичним
   layout-движком (dagre/elk) як завжди — часткові layout-файли є
   нормальним станом (напр. після ручного переміщення лише кількох
