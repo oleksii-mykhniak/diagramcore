@@ -72,6 +72,13 @@ export interface DiagramLevel {
    * independent of the global "Connection labels" show/hide-all view
    * setting. */
   hiddenEdgeLabels: Set<string>;
+  /** Link-keys whose whole connector (line + marker + label) is hidden
+   * (PLAN4.md step 12.7) — presentation only, layout-file state; never
+   * seen by `dc context`/validation/YAML. */
+  hiddenEdges: Set<string>;
+  /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
+   * shape itself still renders. */
+  hiddenNodeLabels: Set<string>;
   /** Diagram style preset (PLAN.md step 10.12), persisted in the layout
    * file/share link — see `layoutFile.ts`'s `RenderStyle`. */
   renderStyle: RenderStyle;
@@ -233,6 +240,8 @@ export function useDiagramStack() {
       edgeStyles: {},
       edgeLabelOffsets: {},
       hiddenEdgeLabels: new Set<string>(),
+      hiddenEdges: new Set<string>(),
+      hiddenNodeLabels: new Set<string>(),
       renderStyle: 'clean',
       savedRawText: text,
       savedLayoutSnapshot: '',
@@ -455,6 +464,11 @@ export function useDiagramStack() {
             ...level.hiddenEdgeLabels,
             ...(imported.views.default?.hiddenEdgeLabels ?? []),
           ]);
+          level.hiddenEdges = new Set([...level.hiddenEdges, ...(imported.views.default?.hiddenEdges ?? [])]);
+          level.hiddenNodeLabels = new Set([
+            ...level.hiddenNodeLabels,
+            ...(imported.views.default?.hiddenNodeLabels ?? []),
+          ]);
           if (imported.renderStyle) level.renderStyle = imported.renderStyle;
           level.savedLayoutSnapshot = layoutSnapshotOf(level);
         }
@@ -484,7 +498,9 @@ export function useDiagramStack() {
       Object.keys(current.styles).length > 0 ||
       Object.keys(current.edgeStyles).length > 0 ||
       Object.keys(current.edgeLabelOffsets).length > 0 ||
-      current.hiddenEdgeLabels.size > 0;
+      current.hiddenEdgeLabels.size > 0 ||
+      current.hiddenEdges.size > 0 ||
+      current.hiddenNodeLabels.size > 0;
     // A real Save makes any pending/stored local autosave draft moot
     // (PLAN3.md step 11.3) — cancel the debounced write and clear
     // whatever's already in IndexedDB for this file.
@@ -584,6 +600,8 @@ export function useDiagramStack() {
         edgeStyles: current.edgeStyles,
         edgeLabelOffsets: current.edgeLabelOffsets,
         hiddenEdgeLabels: Array.from(current.hiddenEdgeLabels),
+        hiddenEdges: Array.from(current.hiddenEdges),
+        hiddenNodeLabels: Array.from(current.hiddenNodeLabels),
       },
       (savedAt) => setAutosavedByTab((prev) => ({ ...prev, [fileName]: { rawText, layoutSnapshot, savedAt } })),
     );
@@ -662,6 +680,8 @@ export function useDiagramStack() {
     level.edgeStyles = { ...level.edgeStyles, ...record.edgeStyles };
     level.edgeLabelOffsets = { ...level.edgeLabelOffsets, ...record.edgeLabelOffsets };
     level.hiddenEdgeLabels = new Set([...level.hiddenEdgeLabels, ...(record.hiddenEdgeLabels ?? [])]);
+    level.hiddenEdges = new Set([...level.hiddenEdges, ...(record.hiddenEdges ?? [])]);
+    level.hiddenNodeLabels = new Set([...level.hiddenNodeLabels, ...(record.hiddenNodeLabels ?? [])]);
     level.renderStyle = record.renderStyle;
     // Deliberately NOT `layoutSnapshotOf(level)` — that would be the
     // draft's own layout, making the indicator lie that a just-restored,
@@ -703,6 +723,14 @@ export function useDiagramStack() {
         level.hiddenEdgeLabels = new Set([
           ...level.hiddenEdgeLabels,
           ...(shared.layout.views.default?.hiddenEdgeLabels ?? []),
+        ]);
+        level.hiddenEdges = new Set([
+          ...level.hiddenEdges,
+          ...(shared.layout.views.default?.hiddenEdges ?? []),
+        ]);
+        level.hiddenNodeLabels = new Set([
+          ...level.hiddenNodeLabels,
+          ...(shared.layout.views.default?.hiddenNodeLabels ?? []),
         ]);
         if (shared.layout.renderStyle) level.renderStyle = shared.layout.renderStyle;
         level.savedLayoutSnapshot = layoutSnapshotOf(level);

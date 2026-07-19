@@ -15,6 +15,10 @@ interface Props {
   onResetTextStyle: () => void;
   labelHidden: boolean;
   onToggleLabelHidden: () => void;
+  /** "Hide connection" (PLAN4.md step 12.7) — hides the whole connector
+   * (line + marker + label), not just the label. */
+  connectionHidden: boolean;
+  onToggleConnectionHidden: () => void;
 }
 
 /** Link properties (PLAN4.md step 12.6) — Properties panel's edge form,
@@ -36,6 +40,8 @@ export function LinkProperties({
   onResetTextStyle,
   labelHidden,
   onToggleLabelHidden,
+  connectionHidden,
+  onToggleConnectionHidden,
 }: Props) {
   return (
     <aside
@@ -72,6 +78,15 @@ export function LinkProperties({
       <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--dc-space-1)', marginBottom: 'var(--dc-space-2)' }}>
         <input type="checkbox" data-testid="link-edit-hide-label" checked={labelHidden} onChange={onToggleLabelHidden} />
         Hide this label
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--dc-space-1)', marginBottom: 'var(--dc-space-2)' }}>
+        <input
+          type="checkbox"
+          data-testid="link-edit-hide-connection"
+          checked={connectionHidden}
+          onChange={onToggleConnectionHidden}
+        />
+        Hide connection
       </label>
       <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-3) 0' }} />
       <h4 style={{ fontSize: 'var(--dc-font-size-base)', margin: `0 0 var(--dc-space-2)` }}>Style</h4>

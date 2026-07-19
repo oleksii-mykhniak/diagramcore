@@ -37,6 +37,10 @@ export interface DcNodeData extends Record<string, unknown> {
    * `resolveNodeStyle` the same way canvas/SVG-export share every other
    * style field, so the two never render text differently. */
   text?: TextStyleOverride;
+  /** "Hide label" (PLAN4.md step 12.7) — the shape still renders, only
+   * the text label is suppressed. Doesn't affect the inline editor
+   * (`isEditing` still shows the input with the real label). */
+  labelHidden?: boolean;
   /** Fires once, on resize release (mirrors `onNodeDragStop`'s
    * single-commit-per-gesture pattern from step 11.1). */
   onResizeEnd?: (size: { width: number; height: number; x: number; y: number }) => void;
@@ -201,6 +205,11 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
               pointerEvents: 'auto',
             }}
           />
+        ) : data.labelHidden ? (
+          // "Hide label" (PLAN4.md step 12.7) — shape only, no text at
+          // all; still gets the testid so a caller can assert absence
+          // of the visible span without the whole node disappearing.
+          <span data-testid={`rf-node-label-${id}`} data-hidden="true" style={{ display: 'none' }} />
         ) : (
           <span
             data-testid={`rf-node-label-${id}`}

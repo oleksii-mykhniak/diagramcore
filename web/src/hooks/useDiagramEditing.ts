@@ -387,6 +387,10 @@ export function useDiagramEditing(
       if (e.key === 'Escape') {
         setSelectedNodeId(null);
         setSelectedNodeIds([]);
+        // Properties is contextual (PLAN4.md step 12.6) — clearing only
+        // the node selection would leave a stale link selection showing
+        // its own form instead of falling back to the overview.
+        setSelectedLinkIndex(null);
         return;
       }
       if (e.key === 'F2' && selectedNodeId) {
@@ -619,6 +623,33 @@ export function useDiagramEditing(
     [current, updateCurrentLevel],
   );
 
+  /** "Hide connection" (PLAN4.md step 12.7) — hides the whole connector
+   * (line + marker + label), not just its label; presentation-only,
+   * layout-file state, same as `onToggleEdgeLabelHidden`. */
+  const onToggleEdgeHidden = useCallback(
+    (linkIndex: number) => {
+      if (!current) return;
+      const link = current.diagram.links[linkIndex];
+      if (!link) return;
+      const key = edgeLinkKey(link);
+      const hiddenEdges = new Set(current.hiddenEdges);
+      if (hiddenEdges.has(key)) hiddenEdges.delete(key);
+      else hiddenEdges.add(key);
+      updateCurrentLevel({ hiddenEdges });
+    },
+    [current, updateCurrentLevel],
+  );
+
+  /** "Hide label" for the selected node (PLAN4.md step 12.7) — the
+   * shape still renders, only its text label is hidden. */
+  const onToggleNodeLabelHidden = useCallback(() => {
+    if (!current || !selectedNodeId) return;
+    const hiddenNodeLabels = new Set(current.hiddenNodeLabels);
+    if (hiddenNodeLabels.has(selectedNodeId)) hiddenNodeLabels.delete(selectedNodeId);
+    else hiddenNodeLabels.add(selectedNodeId);
+    updateCurrentLevel({ hiddenNodeLabels });
+  }, [current, selectedNodeId, updateCurrentLevel]);
+
   const recordingFlow =
     current?.flowPlayerState.flowIndex != null ? current.diagram.flows?.[current.flowPlayerState.flowIndex] ?? null : null;
 
@@ -765,6 +796,11 @@ export function useDiagramEditing(
               ...current.hiddenEdgeLabels,
               ...(imported.views.default?.hiddenEdgeLabels ?? []),
             ]),
+            hiddenEdges: new Set([...current.hiddenEdges, ...(imported.views.default?.hiddenEdges ?? [])]),
+            hiddenNodeLabels: new Set([
+              ...current.hiddenNodeLabels,
+              ...(imported.views.default?.hiddenNodeLabels ?? []),
+            ]),
             ...(imported.renderStyle ? { renderStyle: imported.renderStyle } : {}),
           });
         } catch (err) {
@@ -822,6 +858,8 @@ export function useDiagramEditing(
     onEdgeLabelDragStop,
     onEdgeLabelCommit,
     onToggleEdgeLabelHidden,
+    onToggleEdgeHidden,
+    onToggleNodeLabelHidden,
     onNewFlow,
     onToggleRecording,
     onAddBranch,

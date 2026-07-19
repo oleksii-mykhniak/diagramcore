@@ -79,6 +79,13 @@ export interface LayoutFile {
        * step 11.9), independent of the global "Connection labels"
        * show/hide-all view setting. */
       hiddenEdgeLabels?: string[];
+      /** Link-keys whose whole connector (line + marker + label) is
+       * hidden (PLAN4.md step 12.7) — presentation only; `dc context`/
+       * validation/YAML never see this. */
+      hiddenEdges?: string[];
+      /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
+       * shape itself still renders. */
+      hiddenNodeLabels?: string[];
     };
   };
   /** Diagram style preset (PLAN.md step 10.12) — top-level, not per-view,
@@ -98,10 +105,23 @@ export interface BuildLayoutFileInput {
   edgeStyles?: Record<string, LayoutEdgeStyle>;
   edgeLabelOffsets?: Record<string, LayoutPosition>;
   hiddenEdgeLabels?: string[];
+  hiddenEdges?: string[];
+  hiddenNodeLabels?: string[];
 }
 
 export function buildLayoutFile(input: BuildLayoutFileInput): LayoutFile {
-  const { positions, notePositions, renderStyle, sizes, styles, edgeStyles, edgeLabelOffsets, hiddenEdgeLabels } = input;
+  const {
+    positions,
+    notePositions,
+    renderStyle,
+    sizes,
+    styles,
+    edgeStyles,
+    edgeLabelOffsets,
+    hiddenEdgeLabels,
+    hiddenEdges,
+    hiddenNodeLabels,
+  } = input;
   return {
     views: {
       [DEFAULT_VIEW]: {
@@ -112,6 +132,8 @@ export function buildLayoutFile(input: BuildLayoutFileInput): LayoutFile {
         ...(edgeStyles && Object.keys(edgeStyles).length > 0 ? { edgeStyles } : {}),
         ...(edgeLabelOffsets && Object.keys(edgeLabelOffsets).length > 0 ? { edgeLabelOffsets } : {}),
         ...(hiddenEdgeLabels && hiddenEdgeLabels.length > 0 ? { hiddenEdgeLabels } : {}),
+        ...(hiddenEdges && hiddenEdges.length > 0 ? { hiddenEdges } : {}),
+        ...(hiddenNodeLabels && hiddenNodeLabels.length > 0 ? { hiddenNodeLabels } : {}),
       },
     },
     ...(renderStyle && renderStyle !== 'clean' ? { renderStyle } : {}),
@@ -133,6 +155,8 @@ export interface LayoutFileSource {
   edgeStyles: Record<string, LayoutEdgeStyle>;
   edgeLabelOffsets: Record<string, LayoutPosition>;
   hiddenEdgeLabels: Set<string>;
+  hiddenEdges: Set<string>;
+  hiddenNodeLabels: Set<string>;
 }
 
 export function buildLayoutFileFromLevel(level: LayoutFileSource): LayoutFile {
@@ -145,6 +169,8 @@ export function buildLayoutFileFromLevel(level: LayoutFileSource): LayoutFile {
     edgeStyles: level.edgeStyles,
     edgeLabelOffsets: level.edgeLabelOffsets,
     hiddenEdgeLabels: Array.from(level.hiddenEdgeLabels),
+    hiddenEdges: Array.from(level.hiddenEdges),
+    hiddenNodeLabels: Array.from(level.hiddenNodeLabels),
   });
 }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Diagram, DiagramLink } from '../types';
 import { nodeLabel } from '../types';
+import { edgeLinkKey } from '../edgeStyle';
 
 const LINK_TYPES = ['request', 'call', 'query', 'event', 'dataflow', 'inherits', 'contains'];
 
@@ -10,6 +11,10 @@ interface Props {
   onHoverLink: (index: number | null) => void;
   onSelectNode: (id: string) => void;
   onSelectLink: (index: number) => void;
+  /** Link-keys whose connector is hidden (PLAN4.md step 12.7) — marked
+   * with an eye-slash badge here, since they're not on the canvas to
+   * click. */
+  hiddenEdges: Set<string>;
 }
 
 const rowStyle = (hovered: boolean): React.CSSProperties => ({
@@ -25,7 +30,7 @@ const rowStyle = (hovered: boolean): React.CSSProperties => ({
  * the diagram, then a compact filterable node list and link list.
  * Clicking either selects it, which flips Properties over to that
  * element's own form (`PropertiesPanel`/`LinkProperties`). */
-export function DiagramOverview({ diagram, hoveredLinkIndex, onHoverLink, onSelectNode, onSelectLink }: Props) {
+export function DiagramOverview({ diagram, hoveredLinkIndex, onHoverLink, onSelectNode, onSelectLink, hiddenEdges }: Props) {
   const [typeFilter, setTypeFilter] = useState('');
   const [nodeFilter, setNodeFilter] = useState('');
 
@@ -100,6 +105,15 @@ export function DiagramOverview({ diagram, hoveredLinkIndex, onHoverLink, onSele
             style={rowStyle(hoveredLinkIndex === index)}
           >
             {link.from} → {link.to} <em style={{ color: 'var(--dc-text-muted)' }}>({link.type})</em>
+            {hiddenEdges.has(edgeLinkKey(link)) && (
+              <span
+                data-testid={`overview-link-hidden-${index}`}
+                title="Hidden connection"
+                style={{ marginLeft: 'var(--dc-space-1)', color: 'var(--dc-text-muted)' }}
+              >
+                🙈
+              </span>
+            )}
           </li>
         ))}
       </ul>

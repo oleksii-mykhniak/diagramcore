@@ -186,6 +186,26 @@ describe('renderDiagramSVGString', () => {
     expect(tag).toContain('fill="#00ff00"');
   });
 
+  it('a hidden connector (PLAN4.md step 12.7) is skipped entirely — no line, marker, or label', () => {
+    const labeledDiagram: Diagram = { ...diagram, links: [{ from: 'A', to: 'B', type: 'request', label: 'fetches' }] };
+    const svg = renderDiagramSVGString(labeledDiagram, layout, positions, {}, { hiddenEdges: new Set(['A->B:request']) });
+    expect(svg).not.toContain('<polyline');
+    expect(svg).not.toContain('fetches');
+    expect(svg).not.toContain('marker-end');
+  });
+
+  it('a visible connector is unaffected when a DIFFERENT edge is hidden', () => {
+    const svg = renderDiagramSVGString(diagram, layout, positions, {}, { hiddenEdges: new Set(['X->Y:request']) });
+    expect(svg).toContain('<polyline');
+  });
+
+  it('a hidden node label (PLAN4.md step 12.7) draws the shape without its text', () => {
+    const svg = renderDiagramSVGString(diagram, layout, positions, {}, { hiddenNodeLabels: new Set(['A']) });
+    expect(svg).not.toContain('Alpha');
+    expect(svg).toContain('Beta');
+    expect(svg).toContain('<ellipse'); // Alpha's actor shape still renders
+  });
+
   it('draws the edge label at its offset, respecting global and per-edge visibility (PLAN3.md step 11.9)', () => {
     const labeledDiagram: Diagram = { ...diagram, links: [{ from: 'A', to: 'B', type: 'request', label: 'fetches' }] };
 

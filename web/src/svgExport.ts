@@ -34,6 +34,13 @@ export interface RenderOptions {
   edgeLabelOffsets?: Record<string, LayoutPosition>;
   /** Link-keys whose label is individually hidden (PLAN3.md step 11.9). */
   hiddenEdgeLabels?: Set<string>;
+  /** Link-keys whose whole connector is hidden (PLAN4.md step 12.7) —
+   * skipped entirely, same as the canvas (Core view, step 12.8, doesn't
+   * apply here: export always shows the normal, non-Core-view look). */
+  hiddenEdges?: Set<string>;
+  /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
+   * shape still renders. */
+  hiddenNodeLabels?: Set<string>;
   /** View → "Connection labels" show/hide-all (PLAN3.md step 11.9) —
    * defaults to showing every label with a non-empty `label`, same as
    * before this step. `dc context`/AI export never see this: they read
@@ -164,10 +171,16 @@ export function renderDiagramSVGString(
     : '';
 
   const hiddenEdgeLabels = options.hiddenEdgeLabels ?? new Set<string>();
+  const hiddenEdges = options.hiddenEdges ?? new Set<string>();
+  const hiddenNodeLabels = options.hiddenNodeLabels ?? new Set<string>();
   const showEdgeLabels = options.showEdgeLabels ?? true;
 
   let markerDefsSvg = '';
   const edgesSvg = layout.edges
+    .filter((e) => {
+      const link: DiagramLink | undefined = diagram.links[Number((e.id ?? '').slice(1))];
+      return !link || !hiddenEdges.has(edgeLinkKey(link));
+    })
     .map((e, edgeSlot) => {
       const key = pairKey(e.from, e.to);
       const isActive = key === activeKey;
@@ -260,6 +273,10 @@ export function renderDiagramSVGString(
       const fontWeight = resolved.text?.bold ? 'bold' : 'normal';
       const fontStyle = resolved.text?.italic ? 'italic' : 'normal';
       const textFill = resolved.text?.color ?? theme.text;
+      // "Hide label" (PLAN4.md step 12.7) — shape only, no text.
+      const labelSvg = hiddenNodeLabels.has(n.id)
+        ? ''
+        : `<text x="${textX}" y="${labelY}" text-anchor="${textAnchor}" dominant-baseline="middle" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" font-family="system-ui, sans-serif" fill="${textFill}">${label}</text>`;
       return (
         `<g transform="translate(${pos.x},${pos.y})">` +
         shape.renderSvgInner(n.width, n.height, {
@@ -271,7 +288,7 @@ export function renderDiagramSVGString(
           rounded: resolved.rounded,
         }) +
         inner +
-        `<text x="${textX}" y="${labelY}" text-anchor="${textAnchor}" dominant-baseline="middle" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" font-family="system-ui, sans-serif" fill="${textFill}">${label}</text>` +
+        labelSvg +
         descriptionSvg +
         `</g>`
       );

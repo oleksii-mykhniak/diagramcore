@@ -101,6 +101,8 @@ export default function App() {
     onEdgeLabelDragStop,
     onEdgeLabelCommit,
     onToggleEdgeLabelHidden,
+    onToggleEdgeHidden,
+    onToggleNodeLabelHidden,
     onNewFlow,
     onToggleRecording,
     onAddBranch,
@@ -273,6 +275,8 @@ export default function App() {
         onEdgeLabelDragStop={onEdgeLabelDragStop}
         onEdgeLabelCommit={onEdgeLabelCommit}
         onToggleEdgeLabelHidden={onToggleEdgeLabelHidden}
+        onToggleEdgeHidden={onToggleEdgeHidden}
+        onToggleNodeLabelHidden={onToggleNodeLabelHidden}
         showEdgeLabels={view.showEdgeLabels}
         focusRequest={focusRequest}
         onUpdateSelectedNode={onUpdateSelectedNode}

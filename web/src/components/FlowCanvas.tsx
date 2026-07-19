@@ -122,6 +122,12 @@ interface Props {
   edgeLabelOffsets?: Record<string, LayoutPosition>;
   /** Link-keys whose label is individually hidden (PLAN3.md step 11.9). */
   hiddenEdgeLabels?: Set<string>;
+  /** Link-keys whose whole connector is hidden (PLAN4.md step 12.7) —
+   * filtered out of `rfEdges` entirely, unless `coreView` is on. */
+  hiddenEdges?: Set<string>;
+  /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
+   * shape still renders. */
+  hiddenNodeLabels?: Set<string>;
   /** View → "Connection labels" show/hide-all (PLAN3.md step 11.9). */
   showEdgeLabels?: boolean;
   /** Committed once per label-drag gesture, on release. */
@@ -178,6 +184,8 @@ function FlowCanvasInner({
   edgeStyles,
   edgeLabelOffsets,
   hiddenEdgeLabels,
+  hiddenEdges,
+  hiddenNodeLabels,
   showEdgeLabels = true,
   onEdgeLabelDragStop,
   onEdgeLabelCommit,
@@ -309,6 +317,7 @@ function FlowCanvasInner({
                 showDescription: showDescriptions,
                 renderStyle,
                 text: resolvedStyle?.text,
+                labelHidden: hiddenNodeLabels?.has(n.id) ?? false,
                 onResizeEnd: (next: { width: number; height: number; x: number; y: number }) =>
                   onNodeResizeStop?.(
                     n.id,
@@ -339,6 +348,7 @@ function FlowCanvasInner({
       renderStyle,
       onNodeResizeStop,
       styles,
+      hiddenNodeLabels,
     ],
   );
 
@@ -355,11 +365,16 @@ function FlowCanvasInner({
 
   const rfEdges = useMemo(
     () =>
-      diagram.links.map((l, i) => {
+      diagram.links
+        .map((l, i) => {
+        const linkKey = edgeLinkKey(l);
+        // Hidden connector (PLAN4.md step 12.7) — filtered out entirely
+        // (line + marker + label), not just faded: `dc context`/YAML
+        // still see it, this is presentation-only.
+        if (hiddenEdges?.has(linkKey)) return null;
         const key = pairKey(l.from, l.to);
         const isActive = key === activeKey;
         const isVisited = !isActive && (visitedStepKeys?.has(key) ?? false);
-        const linkKey = edgeLinkKey(l);
         const resolved = resolveEdgeStyle(edgeStyles?.[linkKey]);
         const hidden = hiddenEdgeLabels?.has(linkKey) ?? false;
         const isHovered = hoveredLinkIndex === i;
@@ -398,7 +413,8 @@ function FlowCanvasInner({
           selected: false,
           data,
         };
-      }),
+        })
+        .filter((e): e is NonNullable<typeof e> => e !== null),
     [
       diagram.links,
       activeKey,
@@ -408,6 +424,7 @@ function FlowCanvasInner({
       edgeStyles,
       edgeLabelOffsets,
       hiddenEdgeLabels,
+      hiddenEdges,
       showEdgeLabels,
       onEdgeLabelDragStop,
       onEdgeLabelCommit,

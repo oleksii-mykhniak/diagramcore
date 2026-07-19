@@ -57,6 +57,8 @@ export function useDiagramExports(current: DiagramLevel | null, showEdgeLabels =
           edgeStyles: current.edgeStyles,
           edgeLabelOffsets: current.edgeLabelOffsets,
           hiddenEdgeLabels: current.hiddenEdgeLabels,
+          hiddenEdges: current.hiddenEdges,
+          hiddenNodeLabels: current.hiddenNodeLabels,
           showEdgeLabels,
         },
         current.diagram.notes,
@@ -101,6 +103,8 @@ export function useDiagramExports(current: DiagramLevel | null, showEdgeLabels =
             edgeStyles: current.edgeStyles,
             edgeLabelOffsets: current.edgeLabelOffsets,
             hiddenEdgeLabels: current.hiddenEdgeLabels,
+            hiddenEdges: current.hiddenEdges,
+            hiddenNodeLabels: current.hiddenNodeLabels,
             showEdgeLabels,
           },
           current.diagram.notes,
@@ -140,7 +144,9 @@ export function useDiagramExports(current: DiagramLevel | null, showEdgeLabels =
       Object.keys(current.styles).length > 0 ||
       Object.keys(current.edgeStyles).length > 0 ||
       Object.keys(current.edgeLabelOffsets).length > 0 ||
-      current.hiddenEdgeLabels.size > 0
+      current.hiddenEdgeLabels.size > 0 ||
+      current.hiddenEdges.size > 0 ||
+      current.hiddenNodeLabels.size > 0
         ? buildLayoutFileFromLevel(current)
         : null;
     const { fragment, size } = encodeShareState({ fileName: current.fileName, yaml: current.rawText, layout });

@@ -22,6 +22,9 @@ interface Props {
    * edited/reset independently of the rest of the Style section. */
   onUpdateTextStyle: (patch: Partial<TextStyleOverride>) => void;
   onResetTextStyle: () => void;
+  /** "Hide label" (PLAN4.md step 12.7) — shape stays, text label doesn't. */
+  labelHidden: boolean;
+  onToggleLabelHidden: () => void;
 }
 
 /** Node properties panel (PLAN.md step 7.2): edits label/type/description/
@@ -40,6 +43,8 @@ export function PropertiesPanel({
   onResetStyle,
   onUpdateTextStyle,
   onResetTextStyle,
+  labelHidden,
+  onToggleLabelHidden,
 }: Props) {
   const customTypeNames = normalizeCustomTypes(diagram.diagram).map((t) => t.name);
   return (
@@ -101,6 +106,10 @@ export function PropertiesPanel({
           }
           style={{ display: 'block', width: '100%' }}
         />
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--dc-space-1)', marginBottom: 'var(--dc-space-2)' }}>
+        <input type="checkbox" data-testid="prop-hide-label" checked={labelHidden} onChange={onToggleLabelHidden} />
+        Hide label
       </label>
       <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-3) 0' }} />
       <h4 style={{ fontSize: 'var(--dc-font-size-base)', margin: `0 0 var(--dc-space-2)` }}>Style</h4>

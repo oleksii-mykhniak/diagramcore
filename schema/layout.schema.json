@@ -55,6 +55,16 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Link-keys whose label is individually hidden (phase 11, step 11.9), independent of any global show/hide-all view setting. Never consulted by `dc context`/AI export."
+        },
+        "hiddenEdges": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Link-keys whose whole connector (line + marker + label) is hidden (phase 12, step 12.7) — presentation only, never consulted by `dc context`/AI export."
+        },
+        "hiddenNodeLabels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Node ids whose text label is hidden (phase 12, step 12.7) — the shape itself still renders. Never consulted by `dc context`/AI export."
         }
       }
     },

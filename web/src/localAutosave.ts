@@ -25,6 +25,12 @@ export interface AutosaveData {
   /** Individually-hidden edge label link-keys (PLAN3.md step 11.9).
    * Optional so records written before this field existed still decode. */
   hiddenEdgeLabels?: string[];
+  /** Link-keys whose whole connector is hidden (PLAN4.md step 12.7).
+   * Optional so records written before this field existed still decode. */
+  hiddenEdges?: string[];
+  /** Node ids whose text label is hidden (PLAN4.md step 12.7). Optional
+   * so records written before this field existed still decode. */
+  hiddenNodeLabels?: string[];
 }
 
 export interface AutosaveRecord extends AutosaveData {

@@ -66,6 +66,8 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 				EdgeStyles:       map[string]EdgeStyle{"User->Gateway:request": {MarkerEnd: "open-arrow", Color: "#123456", Text: &TextStyle{Italic: true, Color: "#abcdef"}}},
 				EdgeLabelOffsets: map[string]Position{"User->Gateway:request": {X: 10, Y: -5}},
 				HiddenEdgeLabels: []string{"User->Gateway:request"},
+				HiddenEdges:      []string{"Gateway->AuthService:call"},
+				HiddenNodeLabels: []string{"DB"},
 			},
 		},
 		RenderStyle: "sketch",
@@ -111,6 +113,12 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 	}
 	if len(view.HiddenEdgeLabels) != 1 || view.HiddenEdgeLabels[0] != "User->Gateway:request" {
 		t.Errorf("HiddenEdgeLabels = %v, want preserved [User->Gateway:request]", view.HiddenEdgeLabels)
+	}
+	if len(view.HiddenEdges) != 1 || view.HiddenEdges[0] != "Gateway->AuthService:call" {
+		t.Errorf("HiddenEdges = %v, want preserved [Gateway->AuthService:call]", view.HiddenEdges)
+	}
+	if len(view.HiddenNodeLabels) != 1 || view.HiddenNodeLabels[0] != "DB" {
+		t.Errorf("HiddenNodeLabels = %v, want preserved [DB]", view.HiddenNodeLabels)
 	}
 }
 

@@ -275,3 +275,49 @@
   test` — 111/115 passed, 3 skipped (drawio), 1 pre-existing failure
   (drill-down, з кроку 12.3, не зачеплено цим кроком).
 - Commit: phase12-step6: об'єднання Links у контекстну панель Properties
+
+## phase12-step7 — Приховування конектів і текстів вузлів — 2026-07-19
+
+- Go `internal/layout`: `View.HiddenEdges []string` (link-keys) і
+  `HiddenNodeLabels []string` (id вузлів) поруч із наявним
+  `HiddenEdgeLabels`; `Save` уже round-трипить весь `View` (без
+  пофайлового розбору полів для нових масивів окремо — додано лише в
+  явний список полів, що копіюються). Схема + `TestSavePreservesWebEditorOnlyFields`
+  розширені.
+- Веб-дзеркало: `layoutFile.ts` (`hiddenEdges`/`hiddenNodeLabels` у
+  `LayoutFile`/`BuildLayoutFileInput`/`LayoutFileSource`),
+  `useDiagramStack.ts` (`DiagramLevel.hiddenEdges/hiddenNodeLabels`,
+  round-трип у buildLevel/onOpenNative/onRestoreAutosave/share-link),
+  `localAutosave.ts` (`AutosaveData`). **Критична точка, яку step 11.8
+  вже раз ловив на цьому самому — `onImportLayout`
+  (`useDiagramEditing.ts`, «Import layout» пункт меню) — окрема від
+  `onOpenNative`, легко пропустити:** додано мердж і туди.
+- Канва (`FlowCanvas.tsx`): приховане ребро повністю виключається з
+  `rfEdges` (лінія + маркер + лейбл — не рендериться взагалі, а не
+  просто ховається стилями); вузол з прихованим лейблом рендерить
+  фігуру без тексту (`DcNodeData.labelHidden`, `NodeShell` в
+  rfNodeTypes.tsx). SVG-експорт (`svgExport.ts`) — та сама логіка:
+  `layout.edges` фільтрується перед рендером, `hiddenNodeLabels`
+  пропускає лише `<text>` лейбла вузла.
+- UI: чекбокс «Hide connection» у `LinkProperties.tsx`, «Hide label» у
+  `PropertiesPanel.tsx`; `DiagramOverview.tsx` позначає приховані лінки
+  бейджем 🙈.
+- **Знайдені пастки:** (1) клік по вузлу й клік по ребру далі не
+  скидали `selectedLinkIndex`/`selectedNodeId` одне одного повністю —
+  Escape теж їх не чіпав (`useDiagramEditing.ts`'s keydown-хендлер
+  скидав лише `selectedNodeId`/`Ids`) — додано `setSelectedLinkIndex(null)`.
+  (2) Escape — узагалі no-op, поки фокус лишається на чекбоксі/іншому
+  editable-елементі (`isEditableTarget`-гвард, свідомо з кроку 7.2) —
+  зафіксовано в e2e-тесті явним `.blur()` перед Escape, а не як баг.
+- Нові тести: Go `layout_test.go` (round-trip нових полів), web unit
+  `svgExport.test.ts` (3: приховане ребро зникає повністю; видиме ребро
+  не зачіпається чужим hiddenEdges; прихований лейбл вузла — фігура без
+  тексту), e2e `hide-elements.spec.ts` (4: hide/unhide конекта +
+  YAML/SVG незмінні, Export→Import зберігає, бейдж 👁 в огляді,
+  hide/unhide лейбла вузла + SVG).
+- Регресія: `go test ./...`, `go vet ./...`, `./dc validate
+  examples/*.dc.yaml`, `make wasm && make wasm-test` — OK; `npm test`
+  (103 passed), `npm run build`, `npx playwright test` — 115/119
+  passed, 3 skipped (drawio), 1 pre-existing failure (drill-down, з
+  кроку 12.3, не зачеплено цим кроком).
+- Commit: phase12-step7: приховування конектів і текстів вузлів

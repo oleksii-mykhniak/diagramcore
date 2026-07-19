@@ -12,6 +12,8 @@ function baseSource(): LayoutFileSource {
     edgeStyles: {},
     edgeLabelOffsets: {},
     hiddenEdgeLabels: new Set<string>(),
+    hiddenEdges: new Set<string>(),
+    hiddenNodeLabels: new Set<string>(),
   };
 }
 

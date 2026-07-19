@@ -79,6 +79,8 @@ interface EditorWorkspaceProps {
   onEdgeLabelDragStop: (linkIndex: number, offset: LayoutPosition) => void;
   onEdgeLabelCommit: (linkIndex: number, label: string) => void;
   onToggleEdgeLabelHidden: (linkIndex: number) => void;
+  onToggleEdgeHidden: (linkIndex: number) => void;
+  onToggleNodeLabelHidden: () => void;
   showEdgeLabels: boolean;
   focusRequest: { kind: 'node'; id: string; nonce: number } | { kind: 'line'; line: number; nonce: number } | null;
   onUpdateSelectedNode: (patch: Partial<DiagramNode>) => void;
@@ -163,6 +165,8 @@ export function EditorWorkspace({
   onEdgeLabelDragStop,
   onEdgeLabelCommit,
   onToggleEdgeLabelHidden,
+  onToggleEdgeHidden,
+  onToggleNodeLabelHidden,
   showEdgeLabels,
   focusRequest,
   onUpdateSelectedNode,
@@ -266,6 +270,8 @@ export function EditorWorkspace({
                 edgeStyles={current.edgeStyles}
                 edgeLabelOffsets={current.edgeLabelOffsets}
                 hiddenEdgeLabels={current.hiddenEdgeLabels}
+                hiddenEdges={current.hiddenEdges}
+                hiddenNodeLabels={current.hiddenNodeLabels}
                 showEdgeLabels={showEdgeLabels}
                 onEdgeLabelDragStop={onEdgeLabelDragStop}
                 onEdgeLabelCommit={onEdgeLabelCommit}
@@ -301,6 +307,8 @@ export function EditorWorkspace({
                     onResetStyle={onResetNodeStyle}
                     onUpdateTextStyle={onUpdateNodeTextStyle}
                     onResetTextStyle={onResetNodeTextStyle}
+                    labelHidden={current.hiddenNodeLabels.has(selectedNode.id)}
+                    onToggleLabelHidden={onToggleNodeLabelHidden}
                   />
                 ) : selectedLink ? (
                   <LinkProperties
@@ -314,6 +322,8 @@ export function EditorWorkspace({
                     onResetTextStyle={onResetEdgeTextStyle}
                     labelHidden={current.hiddenEdgeLabels.has(edgeLinkKey(selectedLink))}
                     onToggleLabelHidden={() => onToggleEdgeLabelHidden(selectedLinkIndex!)}
+                    connectionHidden={current.hiddenEdges.has(edgeLinkKey(selectedLink))}
+                    onToggleConnectionHidden={() => onToggleEdgeHidden(selectedLinkIndex!)}
                   />
                 ) : (
                   <DiagramOverview
@@ -322,6 +332,7 @@ export function EditorWorkspace({
                     onHoverLink={onEdgeHover}
                     onSelectNode={onSelectOverviewNode}
                     onSelectLink={onSelectLinkIndex}
+                    hiddenEdges={current.hiddenEdges}
                   />
                 )
               }

@@ -87,6 +87,16 @@ type View struct {
 	// above. Never consulted by `dc context`/AI export: those always
 	// include every label regardless of this web-only display setting.
 	HiddenEdgeLabels []string `json:"hiddenEdgeLabels,omitempty"`
+	// HiddenEdges holds link-keys whose whole connector (line + marker +
+	// label) is hidden (phase 12, step 12.7) — presentation only, same
+	// round-tripping rule as NotePositions above. Never consulted by
+	// `dc context`/AI export.
+	HiddenEdges []string `json:"hiddenEdges,omitempty"`
+	// HiddenNodeLabels holds node ids whose text label is hidden (phase
+	// 12, step 12.7) — the shape itself still renders. Same
+	// round-tripping rule as NotePositions above; never consulted by
+	// `dc context`/AI export.
+	HiddenNodeLabels []string `json:"hiddenNodeLabels,omitempty"`
 }
 
 // File is the decoded contents of a <name>.layout.json file.
@@ -171,6 +181,8 @@ func Save(path string, positions map[string]Position) error {
 				EdgeStyles:       v.EdgeStyles,
 				EdgeLabelOffsets: v.EdgeLabelOffsets,
 				HiddenEdgeLabels: v.HiddenEdgeLabels,
+				HiddenEdges:      v.HiddenEdges,
+				HiddenNodeLabels: v.HiddenNodeLabels,
 			}
 		}
 	}
