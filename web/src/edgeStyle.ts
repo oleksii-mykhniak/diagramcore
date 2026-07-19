@@ -41,3 +41,22 @@ export function resolveEdgeStyle(override?: EdgeStyleOverride): ResolvedEdgeStyl
     color: override?.color,
   };
 }
+
+/** Single source of truth for an edge's stroke color precedence
+ * (active flow > visited flow > hover > instance color override >
+ * default border) — PLAN4.md step 12.2. Used both for the edge's own
+ * line (`DcEdge`'s `stroke`) and for its arrowhead marker, so the two
+ * never drift out of sync on the canvas (and the CSS custom properties
+ * it returns resolve identically to the resolved-theme colors used by
+ * `svgExport.ts`). */
+export function resolveEdgeColor(opts: {
+  isActive?: boolean;
+  isVisited?: boolean;
+  isHovered?: boolean;
+  color?: string;
+}): string {
+  if (opts.isActive) return 'var(--dc-flow-active)';
+  if (opts.isVisited) return 'var(--dc-flow-visited)';
+  if (opts.isHovered) return 'var(--dc-accent)';
+  return opts.color ?? 'var(--dc-node-border)';
+}

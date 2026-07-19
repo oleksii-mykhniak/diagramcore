@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { edgeLinkKey, resolveEdgeStyle } from './edgeStyle';
+import { edgeLinkKey, resolveEdgeColor, resolveEdgeStyle } from './edgeStyle';
 
 describe('edgeLinkKey', () => {
   it('is stable for the same from/to/type and distinct across type', () => {
@@ -23,5 +23,17 @@ describe('resolveEdgeStyle', () => {
     expect(resolved.markerEnd).toBe('none');
     expect(resolved.color).toBe('#123456');
     expect(resolved.lineStyle).toBeUndefined();
+  });
+});
+
+describe('resolveEdgeColor', () => {
+  it('prioritizes active flow > visited flow > hover > instance override > default border (PLAN4.md step 12.2)', () => {
+    expect(resolveEdgeColor({ isActive: true, isVisited: true, isHovered: true, color: '#123456' })).toBe(
+      'var(--dc-flow-active)',
+    );
+    expect(resolveEdgeColor({ isVisited: true, isHovered: true, color: '#123456' })).toBe('var(--dc-flow-visited)');
+    expect(resolveEdgeColor({ isHovered: true, color: '#123456' })).toBe('var(--dc-accent)');
+    expect(resolveEdgeColor({ color: '#123456' })).toBe('#123456');
+    expect(resolveEdgeColor({})).toBe('var(--dc-node-border)');
   });
 });

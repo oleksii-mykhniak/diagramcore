@@ -23,19 +23,24 @@ import { nodeTypes, resolveNodeType } from './rfNodeTypes';
 import type { ContainerNodeData, DcNodeData, NoteNodeData } from './rfNodeTypes';
 import { resolveNodeStyle } from '../shapes';
 import type { RenderStyle, StyleOverride } from '../shapes';
-import { edgeLinkKey, resolveEdgeStyle } from '../edgeStyle';
+import { edgeLinkKey, resolveEdgeColor, resolveEdgeStyle } from '../edgeStyle';
 import type { EdgeMarker, EdgeStyleOverride } from '../edgeStyle';
 import { edgeTypes } from './rfEdgeTypes';
 import type { DcEdgeData } from './rfEdgeTypes';
 
-function toRfMarker(kind: EdgeMarker): MarkerType | undefined {
+/** Marker as an object (not a bare `MarkerType`) so it carries an
+ * explicit `color` — React Flow's default marker otherwise falls back
+ * to a fixed CSS var untouched by this edge's own stroke color, so a
+ * colored/active/visited/hovered edge would draw its line in one color
+ * and its arrowhead in another (PLAN4.md step 12.2). */
+function toRfMarker(kind: EdgeMarker, color: string): { type: MarkerType; color: string } | undefined {
   switch (kind) {
     case 'none':
       return undefined;
     case 'arrow':
-      return MarkerType.ArrowClosed;
+      return { type: MarkerType.ArrowClosed, color };
     case 'open-arrow':
-      return MarkerType.Arrow;
+      return { type: MarkerType.Arrow, color };
   }
 }
 
@@ -345,12 +350,14 @@ function FlowCanvasInner({
         const linkKey = edgeLinkKey(l);
         const resolved = resolveEdgeStyle(edgeStyles?.[linkKey]);
         const hidden = hiddenEdgeLabels?.has(linkKey) ?? false;
+        const isHovered = hoveredLinkIndex === i;
+        const markerColor = resolveEdgeColor({ isActive, isVisited, isHovered, color: resolved.color });
         const data: DcEdgeData = {
           label: l.label,
           linkType: l.type,
           isActive,
           isVisited,
-          isHovered: hoveredLinkIndex === i,
+          isHovered,
           renderStyle,
           color: resolved.color,
           strokeWidthOverride: resolved.strokeWidth,
@@ -365,8 +372,8 @@ function FlowCanvasInner({
           source: l.from,
           target: l.to,
           type: 'dc-edge',
-          markerEnd: toRfMarker(resolved.markerEnd),
-          markerStart: toRfMarker(resolved.markerStart),
+          markerEnd: toRfMarker(resolved.markerEnd, markerColor),
+          markerStart: toRfMarker(resolved.markerStart, markerColor),
           // React Flow's own `selected` flag, explicitly unconditional
           // (PLAN3.md step 11.10 doesn't add edge multi-select) — for the
           // same reason node objects now set `selected` too: leaving it

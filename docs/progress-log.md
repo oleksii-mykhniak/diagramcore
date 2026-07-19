@@ -54,3 +54,34 @@
   test` на drag-layout/containers/multi-select/resize/undo-redo/
   node-crud/no-layout-jump (24+3 passed).
 - Commit: phase12-step1: фікс «стрибання» діаграми при структурних правках
+
+## phase12-step2 — Баг: стрілки конектів — уніфікація канва ↔ експорт — 2026-07-19
+
+- Причина: тип дефолтного маркера вже збігався (закрита стрілка) з
+  кроку 11.9, але справжнє розходження було в кольорі — канва
+  передавала React Flow голий `MarkerType` без `color`, тож RF малював
+  маркер фіксованим кольором, що не стежив за per-edge стилем
+  (активний/visited/hover/кольоровий оверрайд); SVG-експорт натомість
+  завжди коректно фарбував маркер у той самий `stroke`, що й лінію.
+  Тобто на канві кольорове/підсвічене ребро мало кольорову лінію, але
+  сірий наконечник — розбіжність саме там, де AC вимагав перевірку
+  («маркери успадковують колір ребра»).
+- Фікс: нова спільна `resolveEdgeColor` (`web/src/edgeStyle.ts`) —
+  один пріоритет (active > visited > hover > оверрайд > дефолтна межа)
+  — використовується і `DcEdge` для лінії, і `FlowCanvas.tsx`'s
+  `toRfMarker`, який тепер повертає `{ type, color }` замість голого
+  `MarkerType`. Розмір/позиція маркера відносно `strokeWidth` вже
+  збігались і без змін (обидва рендери використовують SVG-дефолт
+  `markerUnits="strokeWidth"`).
+- Записано в `docs/deviations.md` (крок 11.9 — розходження закрито).
+- Нові тести: `edgeStyle.test.ts` (`resolveEdgeColor` пріоритет),
+  `svgExport.test.ts` (дефолтний маркер = закрита стрілка кольору межі;
+  маркер успадковує колір активного flow), e2e
+  `web/e2e/edge-marker-parity.spec.ts` (4 тести: дефолт, кольоровий
+  оверрайд, `open-arrow`, `none` — канва й експорт порівнюються
+  напряму через DOM `<marker>`/inline style і текст експортованого
+  SVG).
+- Регресія: `npm test` (94 passed), `npm run build`, `npx playwright
+  test` на edge-style/edge-marker-parity/export-dialog/flow-player
+  (16 passed).
+- Commit: phase12-step2: уніфікація кольору стрілок конектів канва ↔ експорт

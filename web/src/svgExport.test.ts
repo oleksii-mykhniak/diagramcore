@@ -139,6 +139,20 @@ describe('renderDiagramSVGString', () => {
     expect(svg).toContain('fill="none" stroke="#123456"');
   });
 
+  it('draws the default edge (no override) with the same closed-triangle marker as the canvas default (PLAN4.md step 12.2)', () => {
+    const svg = renderDiagramSVGString(diagram, layout, positions);
+    expect(svg).toContain('marker-end="url(#dc-marker-end-0)"');
+    expect(svg).not.toContain('marker-start=');
+    // Closed/filled triangle, matching the canvas's MarkerType.ArrowClosed.
+    expect(svg).toContain('<path d="M0,0 L10,5 L0,10 z" fill="#333333" />');
+  });
+
+  it('the arrowhead marker inherits the active-flow highlight color, not just an instance color override (PLAN4.md step 12.2)', () => {
+    const svg = renderDiagramSVGString(diagram, layout, positions, { activeStep: { from: 'A', to: 'B' } });
+    expect(svg).toContain('stroke="#e04b4b"');
+    expect(svg).toContain('<path d="M0,0 L10,5 L0,10 z" fill="#e04b4b" />');
+  });
+
   it('draws the edge label at its offset, respecting global and per-edge visibility (PLAN3.md step 11.9)', () => {
     const labeledDiagram: Diagram = { ...diagram, links: [{ from: 'A', to: 'B', type: 'request', label: 'fetches' }] };
 

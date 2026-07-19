@@ -4,6 +4,7 @@ import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useReactFlow } from '@x
 import type { EdgeProps } from '@xyflow/react';
 import { sketchEdgeD } from '../sketch';
 import type { LineStyle, RenderStyle } from '../shapes';
+import { resolveEdgeColor } from '../edgeStyle';
 
 export interface DcEdgeData extends Record<string, unknown> {
   label?: string;
@@ -65,13 +66,7 @@ export const DcEdge = memo(function DcEdge({
   const isActive = edgeData?.isActive ?? false;
   const isVisited = edgeData?.isVisited ?? false;
   const isHovered = edgeData?.isHovered ?? false;
-  const stroke = isActive
-    ? 'var(--dc-flow-active)'
-    : isVisited
-      ? 'var(--dc-flow-visited)'
-      : isHovered
-        ? 'var(--dc-accent)'
-        : (edgeData?.color ?? 'var(--dc-node-border)');
+  const stroke = resolveEdgeColor({ isActive, isVisited, isHovered, color: edgeData?.color });
   const strokeWidth = isActive ? 3 : isVisited || isHovered ? 2.5 : (edgeData?.strokeWidthOverride ?? 1.5);
   const dashArray = edgeData?.lineStyle ? DASH_ARRAY[edgeData.lineStyle] : undefined;
 
