@@ -18,10 +18,11 @@ import type { DiagramNode, DiagramLink, DiagramNoteDef, Flow } from '../types';
 import type { LayoutPosition } from '../layoutFile';
 import { computeFlowHighlight } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
-import type { DiagramLevel } from '../hooks/useDiagramStack';
+import type { DiagramLevel, HistoryStep } from '../hooks/useDiagramStack';
 import type { StyleOverride } from '../shapes';
 import { edgeLinkKey } from '../edgeStyle';
 import type { EdgeStyleOverride } from '../edgeStyle';
+import { HistoryPanel } from './HistoryPanel';
 
 interface EditorWorkspaceProps {
   loadError: string | null;
@@ -96,6 +97,9 @@ interface EditorWorkspaceProps {
   canDistributeSelected: boolean;
   onAlignSelected: (edge: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
   onDistributeSelected: (axis: 'horizontal' | 'vertical') => void;
+  historySteps: HistoryStep[];
+  historyCursor: number;
+  onJumpToHistoryStep: (index: number) => void;
   onSetNodeImage: (file: File) => void;
   onRemoveNodeImage: () => void;
   onUpdateLink: (index: number, patch: Partial<DiagramLink>) => void;
@@ -195,6 +199,9 @@ export function EditorWorkspace({
   canDistributeSelected,
   onAlignSelected,
   onDistributeSelected,
+  historySteps,
+  historyCursor,
+  onJumpToHistoryStep,
   onSetNodeImage,
   onRemoveNodeImage,
   onUpdateLink,
@@ -400,6 +407,7 @@ export function EditorWorkspace({
                   />
                 </>
               }
+              historyContent={<HistoryPanel steps={historySteps} cursor={historyCursor} onJumpTo={onJumpToHistoryStep} />}
               yamlContent={
                 <div style={{ height: '100%', padding: 'var(--dc-space-2) var(--dc-space-3)' }}>
                   <YamlPanel

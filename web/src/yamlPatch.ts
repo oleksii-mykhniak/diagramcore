@@ -31,6 +31,86 @@ export type PatchOp =
   | { op: 'updateNote'; id: string; patch: Partial<DiagramNoteDef> }
   | { op: 'removeNote'; id: string };
 
+/** Human-readable label for a batch of `PatchOp`s (PLAN4.md step 12.13),
+ * shown in the History panel and passed to `updateCurrentLevel`'s
+ * `historyLabel`. `beforeNodesById`, when given, lets a single
+ * `updateNode` that touches `label` show the old→new text ("Edit label
+ * a→b" per the plan's own example) instead of just the node id — omitted
+ * call sites (or nodes not found in it) fall back to the id-only form.
+ * Not exhaustive for every possible mix of ops; uncommon combinations
+ * fall back to a generic "Edit diagram (N changes)". */
+export function describePatchOps(ops: PatchOp[], beforeNodesById?: Map<string, DiagramNode>): string {
+  if (ops.length === 0) return 'Edit diagram';
+  if (ops.length === 1) return describeSingleOp(ops[0], beforeNodesById);
+
+  const addNodeOps = ops.filter((op): op is Extract<PatchOp, { op: 'addNode' }> => op.op === 'addNode');
+  if (addNodeOps.length === ops.length) {
+    return addNodeOps.length === 1 ? `Add node ${addNodeOps[0].node.id}` : `Add ${addNodeOps.length} nodes`;
+  }
+  const removeNodeOps = ops.filter((op): op is Extract<PatchOp, { op: 'removeNode' }> => op.op === 'removeNode');
+  if (removeNodeOps.length > 0 && ops.every((op) => op.op === 'removeNode' || op.op === 'removeLink')) {
+    return removeNodeOps.length === 1 ? `Delete node ${removeNodeOps[0].id}` : `Delete ${removeNodeOps.length} nodes`;
+  }
+  // Group (PLAN4.md step 12.11): one addNode for the container + one
+  // updateNode per child re-parented onto it.
+  if (
+    ops[0].op === 'addNode' &&
+    ops.slice(1).every((op) => op.op === 'updateNode' && op.patch.parent === (ops[0] as Extract<PatchOp, { op: 'addNode' }>).node.id)
+  ) {
+    return `Group ${ops.length - 1} nodes`;
+  }
+  // Paste (PLAN4.md step 12.12): a run of addNode followed by a run of
+  // addLink.
+  if (ops.every((op) => op.op === 'addNode' || op.op === 'addLink')) {
+    return `Paste ${addNodeOps.length} node${addNodeOps.length === 1 ? '' : 's'}`;
+  }
+  return `Edit diagram (${ops.length} changes)`;
+}
+
+function describeSingleOp(op: PatchOp, beforeNodesById?: Map<string, DiagramNode>): string {
+  switch (op.op) {
+    case 'addNode':
+      return `Add node ${op.node.id}`;
+    case 'removeNode':
+      return `Delete node ${op.id}`;
+    case 'updateNode': {
+      if (typeof op.patch.label === 'string') {
+        const before = beforeNodesById?.get(op.id);
+        const oldLabel = before?.label ?? before?.id ?? op.id;
+        return `Edit label ${oldLabel}→${op.patch.label}`;
+      }
+      if (op.patch.parent !== undefined) return `Move ${op.id} into ${op.patch.parent}`;
+      return `Edit node ${op.id}`;
+    }
+    case 'addLink':
+      return `Add link ${op.link.from}→${op.link.to}`;
+    case 'updateLink':
+      return 'Edit link';
+    case 'removeLink':
+      return `Delete link ${op.from}→${op.to}`;
+    case 'addFlow':
+      return `Add flow ${op.name}`;
+    case 'addBranch':
+      return 'Add branch';
+    case 'addFlowStep':
+      return 'Add flow step';
+    case 'updateFlowStep':
+      return 'Edit flow step';
+    case 'removeFlowStep':
+      return 'Delete flow step';
+    case 'renameNodeId':
+      return `Rename ${op.oldId}→${op.newId}`;
+    case 'addNote':
+      return 'Add note';
+    case 'updateNote':
+      return 'Edit note';
+    case 'removeNote':
+      return 'Delete note';
+    default:
+      return 'Edit diagram';
+  }
+}
+
 function nodesSeq(doc: Document): YAMLSeq {
   const seq = doc.get('nodes', true) as YAMLSeq | undefined;
   if (!seq) throw new Error('document has no nodes[] section');

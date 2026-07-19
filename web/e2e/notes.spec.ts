@@ -61,6 +61,11 @@ test('adding a note from the palette adds it to the YAML, drag moves it, and und
   const layout = await exportLayout(page);
   expect(layout.views.default.notePositions.note1).toBeTruthy();
 
+  // History is now layout-aware (PLAN4.md step 12.13): the drag is its
+  // own undoable step, separate from adding the note — one undo only
+  // reverts the move, a second removes the note itself.
+  await page.getByTestId('undo').click();
+  await expect(page.getByTestId('rf-note-note1')).toBeVisible();
   await page.getByTestId('undo').click();
   await expect(page.getByTestId('rf-note-note1')).toHaveCount(0);
   const afterUndo = await page.getByTestId('yaml-source').inputValue();

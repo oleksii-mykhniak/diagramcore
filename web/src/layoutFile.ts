@@ -218,6 +218,31 @@ export function fromLayoutSizes(sizes?: Record<string, LayoutSize>): Record<stri
   return Object.fromEntries(Object.entries(sizes ?? {}).map(([id, s]) => [id, { width: s.w, height: s.h }]));
 }
 
+/** The `LayoutFileSource` fields, in their `DiagramLevel` shapes — the
+ * exact inverse of `buildLayoutFileFromLevel`. Used to REPLACE a level's
+ * whole layout state wholesale (PLAN4.md step 12.13's History
+ * restore) — unlike `onImportLayout`'s merge semantics, every field here
+ * defaults to empty rather than falling back to the level's current
+ * value, since a history snapshot is a complete point-in-time capture:
+ * a field missing from it (because `buildLayoutFile` omits empty
+ * collections) means "empty at that point", not "unchanged". */
+export function layoutFileToLevelPatch(file: LayoutFile, view = DEFAULT_VIEW): LayoutFileSource {
+  const v = file.views[view] ?? { positions: {} };
+  return {
+    positions: v.positions,
+    notePositions: v.notePositions ?? {},
+    renderStyle: file.renderStyle ?? 'clean',
+    sizes: fromLayoutSizes(v.sizes),
+    styles: v.styles ?? {},
+    edgeStyles: v.edgeStyles ?? {},
+    edgeLabelOffsets: v.edgeLabelOffsets ?? {},
+    hiddenEdgeLabels: new Set(v.hiddenEdgeLabels ?? []),
+    hiddenEdges: new Set(v.hiddenEdges ?? []),
+    hiddenNodeLabels: new Set(v.hiddenNodeLabels ?? []),
+    zOrder: v.zOrder ?? [],
+  };
+}
+
 export function parseLayoutFile(text: string): LayoutFile {
   const parsed = JSON.parse(text) as Partial<LayoutFile>;
   if (!parsed.views || typeof parsed.views !== 'object') {

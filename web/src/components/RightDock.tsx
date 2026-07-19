@@ -3,13 +3,14 @@ import type { ReactNode } from 'react';
 /** No standalone "Links" tab since PLAN4.md step 12.6 — its content
  * (link form, and the diagram-wide link list) folded into Properties,
  * which is now contextual: node selected -> node form, link selected ->
- * link form, nothing selected -> diagram overview. History joins in
+ * link form, nothing selected -> diagram overview. History joined in
  * step 12.13. */
-export type RightDockTab = 'properties' | 'flows' | 'yaml';
+export type RightDockTab = 'properties' | 'flows' | 'history' | 'yaml';
 
 const TABS: { id: RightDockTab; label: string }[] = [
   { id: 'properties', label: 'Properties' },
   { id: 'flows', label: 'Flows' },
+  { id: 'history', label: 'History' },
   { id: 'yaml', label: 'YAML' },
 ];
 
@@ -20,6 +21,7 @@ interface RightDockProps {
   onToggleCollapsed: () => void;
   propertiesContent: ReactNode;
   flowsContent: ReactNode;
+  historyContent: ReactNode;
   yamlContent: ReactNode;
 }
 
@@ -32,6 +34,7 @@ export function RightDock({
   onToggleCollapsed,
   propertiesContent,
   flowsContent,
+  historyContent,
   yamlContent,
 }: RightDockProps) {
   return (
@@ -90,6 +93,7 @@ export function RightDock({
         <div data-testid="right-dock-content" style={{ flex: 1, overflow: 'auto' }}>
           {tab === 'properties' && propertiesContent}
           {tab === 'flows' && flowsContent}
+          {tab === 'history' && historyContent}
           {tab === 'yaml' && yamlContent}
         </div>
       )}

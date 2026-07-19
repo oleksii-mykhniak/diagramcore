@@ -12,7 +12,7 @@ import type { StyleOverride } from '../shapes';
 import { edgeLinkKey } from '../edgeStyle';
 import type { EdgeStyleOverride } from '../edgeStyle';
 import type { FlowPlayerState } from '../flowPlayer';
-import { applyPatch } from '../yamlPatch';
+import { applyPatch, describePatchOps } from '../yamlPatch';
 import type { PatchOp } from '../yamlPatch';
 import { findNodeDependents } from '../dependents';
 import { applyZOrderOp } from '../zOrder';
@@ -31,8 +31,7 @@ export function useDiagramEditing(
   current: DiagramLevel | null,
   levelRef: MutableRefObject<DiagramLevel | null>,
   runMutation: (run: () => Promise<void>) => Promise<void>,
-  updateCurrentLevel: (patch: Partial<DiagramLevel>) => void,
-  pushHistory: (previousText: string) => void,
+  updateCurrentLevel: (patch: Partial<DiagramLevel>, historyLabel?: string) => void,
   setLoadError: (error: string | null) => void,
 ) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -91,20 +90,23 @@ export function useDiagramEditing(
         const notePositions = opts?.notePosition
           ? { ...level.notePositions, [opts.notePosition.id]: opts.notePosition.pos }
           : level.notePositions;
-        if (newText !== level.rawText) pushHistory(level.rawText);
-        updateCurrentLevel({
-          rawText: newText,
-          diagram: newDiagram,
-          errors: newErrors,
-          layout: recomputed,
-          positions,
-          manualPositionIds,
-          notePositions,
-        });
+        const beforeNodesById = new Map(level.diagram.nodes.map((n) => [n.id, n]));
+        updateCurrentLevel(
+          {
+            rawText: newText,
+            diagram: newDiagram,
+            errors: newErrors,
+            layout: recomputed,
+            positions,
+            manualPositionIds,
+            notePositions,
+          },
+          newText !== level.rawText ? describePatchOps(ops, beforeNodesById) : undefined,
+        );
       };
       return runMutation(run);
     },
-    [levelRef, runMutation, updateCurrentLevel, pushHistory],
+    [levelRef, runMutation, updateCurrentLevel],
   );
 
   /** Commits arbitrary already-valid YAML text (from the YAML panel,
@@ -129,19 +131,21 @@ export function useDiagramEditing(
         for (const n of recomputed.nodes) {
           positions[n.id] = level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
         }
-        if (text !== level.rawText) pushHistory(level.rawText);
-        updateCurrentLevel({
-          rawText: text,
-          diagram: newDiagram,
-          errors: newErrors,
-          layout: recomputed,
-          positions,
-          manualPositionIds,
-        });
+        updateCurrentLevel(
+          {
+            rawText: text,
+            diagram: newDiagram,
+            errors: newErrors,
+            layout: recomputed,
+            positions,
+            manualPositionIds,
+          },
+          text !== level.rawText ? 'Edit YAML' : undefined,
+        );
       };
       return runMutation(run);
     },
-    [levelRef, runMutation, updateCurrentLevel, pushHistory],
+    [levelRef, runMutation, updateCurrentLevel],
   );
 
   const onDropNodeType = useCallback(
@@ -213,7 +217,7 @@ export function useDiagramEditing(
         positions[id] = pos;
         manualPositionIds.add(id);
       }
-      updateCurrentLevel({ positions, manualPositionIds });
+      updateCurrentLevel({ positions, manualPositionIds }, updates.length === 1 ? 'Move node' : `Move ${updates.length} nodes`);
     },
     [current, updateCurrentLevel],
   );
@@ -239,7 +243,7 @@ export function useDiagramEditing(
   const onNoteDrag = useCallback(
     (id: string, pos: LayoutPosition) => {
       if (!current) return;
-      updateCurrentLevel({ notePositions: { ...current.notePositions, [id]: pos } });
+      updateCurrentLevel({ notePositions: { ...current.notePositions, [id]: pos } }, 'Move note');
     },
     [current, updateCurrentLevel],
   );
@@ -526,7 +530,10 @@ export function useDiagramEditing(
         }
         positions[id] = next;
       }
-      updateCurrentLevel({ positions, manualPositionIds: new Set([...current.manualPositionIds, ...selectedNodeIds]) });
+      updateCurrentLevel(
+        { positions, manualPositionIds: new Set([...current.manualPositionIds, ...selectedNodeIds]) },
+        `Align ${edge}`,
+      );
     },
     [current, selectedNodeIds, updateCurrentLevel],
   );
@@ -556,7 +563,10 @@ export function useDiagramEditing(
         positions[id] = { ...pos, [key]: cursor };
         cursor += size[dim] + gap;
       }
-      updateCurrentLevel({ positions, manualPositionIds: new Set([...current.manualPositionIds, ...selectedNodeIds]) });
+      updateCurrentLevel(
+        { positions, manualPositionIds: new Set([...current.manualPositionIds, ...selectedNodeIds]) },
+        `Distribute ${axis}`,
+      );
     },
     [current, selectedNodeIds, updateCurrentLevel],
   );
@@ -776,10 +786,13 @@ export function useDiagramEditing(
         });
         return;
       }
-      updateCurrentLevel({
-        positions: { ...current.positions, [id]: pos },
-        manualPositionIds: new Set(current.manualPositionIds).add(id),
-      });
+      updateCurrentLevel(
+        {
+          positions: { ...current.positions, [id]: pos },
+          manualPositionIds: new Set(current.manualPositionIds).add(id),
+        },
+        'Move node',
+      );
     },
     [current, updateCurrentLevel, applyOps],
   );
@@ -793,11 +806,14 @@ export function useDiagramEditing(
   const onNodeResizeStop = useCallback(
     (id: string, size: { width: number; height: number }, pos: LayoutPosition) => {
       if (!current) return;
-      updateCurrentLevel({
-        sizes: { ...current.sizes, [id]: size },
-        positions: { ...current.positions, [id]: pos },
-        manualPositionIds: new Set(current.manualPositionIds).add(id),
-      });
+      updateCurrentLevel(
+        {
+          sizes: { ...current.sizes, [id]: size },
+          positions: { ...current.positions, [id]: pos },
+          manualPositionIds: new Set(current.manualPositionIds).add(id),
+        },
+        'Resize',
+      );
     },
     [current, updateCurrentLevel],
   );
@@ -810,7 +826,19 @@ export function useDiagramEditing(
     (patch: Partial<StyleOverride>) => {
       if (!current || !selectedNodeId) return;
       const existing = current.styles[selectedNodeId] ?? {};
-      updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: { ...existing, ...patch } } });
+      const label =
+        patch.fill !== undefined
+          ? 'Fill color'
+          : patch.stroke !== undefined
+            ? 'Stroke color'
+            : patch.strokeWidth !== undefined
+              ? 'Stroke width'
+              : patch.lineStyle !== undefined
+                ? 'Line style'
+                : patch.rounded !== undefined
+                  ? 'Corner style'
+                  : 'Node style';
+      updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: { ...existing, ...patch } } }, label);
     },
     [current, selectedNodeId, updateCurrentLevel],
   );
@@ -825,9 +853,12 @@ export function useDiagramEditing(
       if (!current || !selectedNodeId) return;
       const existing = current.styles[selectedNodeId] ?? {};
       const existingText = existing.text ?? {};
-      updateCurrentLevel({
-        styles: { ...current.styles, [selectedNodeId]: { ...existing, text: { ...existingText, ...patch } } },
-      });
+      updateCurrentLevel(
+        {
+          styles: { ...current.styles, [selectedNodeId]: { ...existing, text: { ...existingText, ...patch } } },
+        },
+        'Text style',
+      );
     },
     [current, selectedNodeId, updateCurrentLevel],
   );
@@ -839,7 +870,7 @@ export function useDiagramEditing(
     if (!(selectedNodeId in current.styles)) return;
     const styles = { ...current.styles };
     delete styles[selectedNodeId];
-    updateCurrentLevel({ styles });
+    updateCurrentLevel({ styles }, 'Reset style');
   }, [current, selectedNodeId, updateCurrentLevel]);
 
   /** "Reset text" — drops only the selected node's text override,
@@ -849,7 +880,7 @@ export function useDiagramEditing(
     const existing = current.styles[selectedNodeId];
     if (!existing?.text) return;
     const { text: _text, ...rest } = existing;
-    updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: rest } });
+    updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: rest } }, 'Reset text');
   }, [current, selectedNodeId, updateCurrentLevel]);
 
   /** Links panel/edge Style section (PLAN3.md step 11.9): patches an
@@ -862,7 +893,17 @@ export function useDiagramEditing(
       if (!link) return;
       const key = edgeLinkKey(link);
       const existing = current.edgeStyles[key] ?? {};
-      updateCurrentLevel({ edgeStyles: { ...current.edgeStyles, [key]: { ...existing, ...patch } } });
+      const label =
+        patch.color !== undefined
+          ? 'Line color'
+          : patch.markerStart !== undefined || patch.markerEnd !== undefined
+            ? 'Arrow style'
+            : patch.lineStyle !== undefined
+              ? 'Line style'
+              : patch.strokeWidth !== undefined
+                ? 'Line width'
+                : 'Edge style';
+      updateCurrentLevel({ edgeStyles: { ...current.edgeStyles, [key]: { ...existing, ...patch } } }, label);
     },
     [current, selectedLinkIndex, updateCurrentLevel],
   );
@@ -876,7 +917,7 @@ export function useDiagramEditing(
     if (!(key in current.edgeStyles)) return;
     const edgeStyles = { ...current.edgeStyles };
     delete edgeStyles[key];
-    updateCurrentLevel({ edgeStyles });
+    updateCurrentLevel({ edgeStyles }, 'Reset style');
   }, [current, selectedLinkIndex, updateCurrentLevel]);
 
   /** Links panel Text section (PLAN4.md step 12.5) — same nested-merge
@@ -889,9 +930,12 @@ export function useDiagramEditing(
       const key = edgeLinkKey(link);
       const existing = current.edgeStyles[key] ?? {};
       const existingText = existing.text ?? {};
-      updateCurrentLevel({
-        edgeStyles: { ...current.edgeStyles, [key]: { ...existing, text: { ...existingText, ...patch } } },
-      });
+      updateCurrentLevel(
+        {
+          edgeStyles: { ...current.edgeStyles, [key]: { ...existing, text: { ...existingText, ...patch } } },
+        },
+        'Text style',
+      );
     },
     [current, selectedLinkIndex, updateCurrentLevel],
   );
@@ -905,7 +949,7 @@ export function useDiagramEditing(
     const existing = current.edgeStyles[key];
     if (!existing?.text) return;
     const { text: _text, ...rest } = existing;
-    updateCurrentLevel({ edgeStyles: { ...current.edgeStyles, [key]: rest } });
+    updateCurrentLevel({ edgeStyles: { ...current.edgeStyles, [key]: rest } }, 'Reset text');
   }, [current, selectedLinkIndex, updateCurrentLevel]);
 
   /** Edge label drag (PLAN3.md step 11.9): committed once, on release —
@@ -916,7 +960,7 @@ export function useDiagramEditing(
       const link = current.diagram.links[linkIndex];
       if (!link) return;
       const key = edgeLinkKey(link);
-      updateCurrentLevel({ edgeLabelOffsets: { ...current.edgeLabelOffsets, [key]: offset } });
+      updateCurrentLevel({ edgeLabelOffsets: { ...current.edgeLabelOffsets, [key]: offset } }, 'Move edge label');
     },
     [current, updateCurrentLevel],
   );
@@ -941,9 +985,10 @@ export function useDiagramEditing(
       if (!link) return;
       const key = edgeLinkKey(link);
       const hiddenEdgeLabels = new Set(current.hiddenEdgeLabels);
-      if (hiddenEdgeLabels.has(key)) hiddenEdgeLabels.delete(key);
+      const wasHidden = hiddenEdgeLabels.has(key);
+      if (wasHidden) hiddenEdgeLabels.delete(key);
       else hiddenEdgeLabels.add(key);
-      updateCurrentLevel({ hiddenEdgeLabels });
+      updateCurrentLevel({ hiddenEdgeLabels }, wasHidden ? 'Show label' : 'Hide label');
     },
     [current, updateCurrentLevel],
   );
@@ -958,9 +1003,10 @@ export function useDiagramEditing(
       if (!link) return;
       const key = edgeLinkKey(link);
       const hiddenEdges = new Set(current.hiddenEdges);
-      if (hiddenEdges.has(key)) hiddenEdges.delete(key);
+      const wasHidden = hiddenEdges.has(key);
+      if (wasHidden) hiddenEdges.delete(key);
       else hiddenEdges.add(key);
-      updateCurrentLevel({ hiddenEdges });
+      updateCurrentLevel({ hiddenEdges }, wasHidden ? 'Show connection' : 'Hide connection');
     },
     [current, updateCurrentLevel],
   );
@@ -970,9 +1016,10 @@ export function useDiagramEditing(
   const onToggleNodeLabelHidden = useCallback(() => {
     if (!current || !selectedNodeId) return;
     const hiddenNodeLabels = new Set(current.hiddenNodeLabels);
-    if (hiddenNodeLabels.has(selectedNodeId)) hiddenNodeLabels.delete(selectedNodeId);
+    const wasHidden = hiddenNodeLabels.has(selectedNodeId);
+    if (wasHidden) hiddenNodeLabels.delete(selectedNodeId);
     else hiddenNodeLabels.add(selectedNodeId);
-    updateCurrentLevel({ hiddenNodeLabels });
+    updateCurrentLevel({ hiddenNodeLabels }, wasHidden ? 'Show label' : 'Hide label');
   }, [current, selectedNodeId, updateCurrentLevel]);
 
   /** Arrange → z-order (PLAN4.md step 12.9): Bring to front/forward,
@@ -989,7 +1036,8 @@ export function useDiagramEditing(
       if (ids.length === 0) return;
       const nodeIds = current.diagram.nodes.map((n) => n.id);
       const zOrder = applyZOrderOp(nodeIds, current.zOrder, ids, op);
-      updateCurrentLevel({ zOrder });
+      const label = { front: 'Bring to front', forward: 'Bring forward', backward: 'Send backward', back: 'Send to back' }[op];
+      updateCurrentLevel({ zOrder }, label);
     },
     [current, selectedNodeId, selectedNodeIds, updateCurrentLevel],
   );
@@ -1021,10 +1069,13 @@ export function useDiagramEditing(
         });
         const path = `assets/${selectedNodeId}-${file.name}`;
         const existing = current.styles[selectedNodeId] ?? {};
-        updateCurrentLevel({
-          styles: { ...current.styles, [selectedNodeId]: { ...existing, image: path } },
-          imageAssets: { ...current.imageAssets, [path]: dataUrl },
-        });
+        updateCurrentLevel(
+          {
+            styles: { ...current.styles, [selectedNodeId]: { ...existing, image: path } },
+            imageAssets: { ...current.imageAssets, [path]: dataUrl },
+          },
+          'Set image',
+        );
         if (isNativeFsSupported()) {
           try {
             const handle = await pickImageSaveHandle(path.split('/').pop()!);
@@ -1052,7 +1103,7 @@ export function useDiagramEditing(
     const existing = current.styles[selectedNodeId];
     if (!existing?.image) return;
     const { image: _image, ...rest } = existing;
-    updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: rest } });
+    updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: rest } }, 'Remove image');
   }, [current, selectedNodeId, updateCurrentLevel]);
 
   const recordingFlow =
@@ -1163,7 +1214,7 @@ export function useDiagramEditing(
         positions[n.id] = { x: n.x, y: n.y };
       }
     }
-    updateCurrentLevel({ layout: recomputed, positions });
+    updateCurrentLevel({ layout: recomputed, positions }, 'Re-layout');
   }, [current, updateCurrentLevel]);
 
   /** Arrange → "Re-layout all" (PLAN.md step 10.3): unlike `onRelayout`,
@@ -1176,7 +1227,7 @@ export function useDiagramEditing(
     for (const n of recomputed.nodes) {
       positions[n.id] = { x: n.x, y: n.y };
     }
-    updateCurrentLevel({ layout: recomputed, positions, manualPositionIds: new Set<string>() });
+    updateCurrentLevel({ layout: recomputed, positions, manualPositionIds: new Set<string>() }, 'Re-layout all');
   }, [current, updateCurrentLevel]);
 
   const onImportLayout = useCallback(
@@ -1208,7 +1259,7 @@ export function useDiagramEditing(
             ]),
             ...(imported.views.default?.zOrder?.length ? { zOrder: imported.views.default.zOrder } : {}),
             ...(imported.renderStyle ? { renderStyle: imported.renderStyle } : {}),
-          });
+          }, 'Import layout');
         } catch (err) {
           setLoadError(err instanceof Error ? err.message : String(err));
         }

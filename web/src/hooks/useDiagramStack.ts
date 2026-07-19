@@ -11,6 +11,7 @@ import {
   downloadLayoutFile,
   fromLayoutSizes,
   layoutFileName,
+  layoutFileToLevelPatch,
   layoutSnapshotOf,
   parseLayoutFile,
 } from '../layoutFile';
@@ -126,7 +127,26 @@ function detailsBasename(details: string): string {
 
 const HISTORY_LIMIT = 50;
 
-type HistoryEntry = { past: string[]; future: string[] };
+/** One checkpoint in a tab's history (PLAN4.md step 12.13) — a full
+ * point-in-time snapshot (YAML text + the entire serialized layout
+ * state, same shape `layoutSnapshotOf` already produces for dirty-
+ * tracking), not a diff. `label` is the human-readable name of the
+ * operation that produced this state ("Add node api2", "Move node",
+ * "Fill color"…), shown in the History panel. */
+export interface HistoryStep {
+  label: string;
+  at: number;
+  rawText: string;
+  layoutSnapshot: string;
+}
+
+/** `steps[0]` is always the state right after the tab was opened
+ * (before any edit); `cursor` points at the step the tab is currently
+ * showing. Undo/redo/History-panel-click are all the same operation:
+ * move `cursor` and restore `steps[cursor]`. A new edit truncates
+ * everything past `cursor` (the old redo branch) before appending,
+ * same as the previous two-stack model did. */
+type HistoryEntry = { steps: HistoryStep[]; cursor: number };
 
 /** Owns every currently open diagram tab (PLAN3.md step 11.7 — a main
  * file plus every `details:` sub-diagram reachable from it, all parsed
@@ -183,30 +203,42 @@ export function useDiagramStack() {
     return next;
   }, []);
 
-  /** Undo/redo (PLAN.md step 7.7): one `{past, future}` stack per tab
-   * (PLAN3.md step 11.7), covering every YAML-document mutation
-   * regardless of whether it came from the canvas (`applyOps`) or the
-   * YAML panel (`applyTextReplace`) — node drag/layout-only changes
-   * don't touch `rawText`, so they're outside undo's scope. Capped at 50
-   * entries per tab. `historyRef.current` always points at the *active*
-   * tab's entry (reassigned on every switch), so `useHistory` (which
-   * only ever mutates `historyRef.current` directly) needs no per-tab
-   * awareness of its own. */
+  /** History (PLAN.md step 7.7, refactored PLAN4.md step 12.13): one
+   * `{steps, cursor}` timeline per tab (PLAN3.md step 11.7), covering
+   * EVERY mutation now — YAML-document edits (`applyOps`/
+   * `applyTextReplace`) as well as layout-only ones (drag, resize,
+   * style, hide, align…), each pushed via `updateCurrentLevel`'s
+   * `historyLabel` param. `historyRef.current` always points at the
+   * *active* tab's entry (reassigned on every switch), so `useHistory`
+   * (which only ever mutates `historyRef.current` directly) needs no
+   * per-tab awareness of its own. */
   const historyByTab = useRef<Map<string, HistoryEntry>>(new Map());
-  const historyRef = useRef<HistoryEntry>({ past: [], future: [] });
+  const historyRef = useRef<HistoryEntry>({ steps: [], cursor: -1 });
   const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
+  /** Same underlying `historyRef`, mirrored into React state so the
+   * History panel (which needs the actual step list/cursor, not just
+   * counts) re-renders on every push/jump. */
+  const [historyView, setHistoryView] = useState<HistoryEntry>({ steps: [], cursor: -1 });
 
-  const historyFor = useCallback((fileName: string): HistoryEntry => {
+  /** Lazily seeds a tab's history on first access with a single "Open"
+   * checkpoint captured from `level` — everything pushed after that is
+   * an actual edit. */
+  const historyFor = useCallback((fileName: string, level: DiagramLevel): HistoryEntry => {
     let h = historyByTab.current.get(fileName);
     if (!h) {
-      h = { past: [], future: [] };
+      h = {
+        steps: [{ label: 'Open', at: Date.now(), rawText: level.rawText, layoutSnapshot: layoutSnapshotOf(level) }],
+        cursor: 0,
+      };
       historyByTab.current.set(fileName, h);
     }
     return h;
   }, []);
 
   const syncHistoryCounts = useCallback(() => {
-    setHistoryCounts({ past: historyRef.current.past.length, future: historyRef.current.future.length });
+    const h = historyRef.current;
+    setHistoryCounts({ past: Math.max(h.cursor, 0), future: Math.max(h.steps.length - 1 - h.cursor, 0) });
+    setHistoryView({ steps: h.steps, cursor: h.cursor });
   }, []);
 
   /** Discards *every* tab's history — only on a fresh load (Open/drop/
@@ -215,20 +247,27 @@ export function useDiagramStack() {
    * (see `switchTab`) — each tab's undo stack survives being switched
    * away from and back to. */
   const resetAllHistory = useCallback(
-    (activeFileName: string | null) => {
+    (activeFileName: string | null, level: DiagramLevel | null) => {
       historyByTab.current.clear();
-      historyRef.current = activeFileName ? historyFor(activeFileName) : { past: [], future: [] };
+      historyRef.current = activeFileName && level ? historyFor(activeFileName, level) : { steps: [], cursor: -1 };
       syncHistoryCounts();
     },
     [historyFor, syncHistoryCounts],
   );
 
+  /** Appends a new checkpoint after `level` (the state right after some
+   * mutation completed), labeled `label` — truncates any redo branch
+   * past the current cursor first, same as the old two-stack model's
+   * "push clears future". Called from `updateCurrentLevel`, never
+   * directly. */
   const pushHistory = useCallback(
-    (previousText: string) => {
+    (label: string, level: DiagramLevel) => {
       const h = historyRef.current;
-      h.past.push(previousText);
-      if (h.past.length > HISTORY_LIMIT) h.past.shift();
-      h.future = [];
+      const step: HistoryStep = { label, at: Date.now(), rawText: level.rawText, layoutSnapshot: layoutSnapshotOf(level) };
+      let steps = [...h.steps.slice(0, h.cursor + 1), step];
+      if (steps.length > HISTORY_LIMIT + 1) steps = steps.slice(steps.length - (HISTORY_LIMIT + 1));
+      h.steps = steps;
+      h.cursor = steps.length - 1;
       syncHistoryCounts();
     },
     [syncHistoryCounts],
@@ -346,7 +385,7 @@ export function useDiagramStack() {
       setTabParent(parents);
       setMainFileName(mainLevel.fileName);
       setActiveTab(mainLevel.fileName);
-      resetAllHistory(mainLevel.fileName);
+      resetAllHistory(mainLevel.fileName, mainLevel);
     },
     [loadReachableDetails, resetAllHistory],
   );
@@ -359,7 +398,7 @@ export function useDiagramStack() {
     setTabParent({});
     setMainFileName(null);
     setActiveTab(null);
-    resetAllHistory(null);
+    resetAllHistory(null, null);
   }, [resetAllHistory]);
 
   const openFiles = useCallback(
@@ -433,20 +472,69 @@ export function useDiagramStack() {
     e.preventDefault();
   }, []);
 
-  const updateCurrentLevel = useCallback((patch: Partial<DiagramLevel>) => {
-    if (!levelRef.current) return;
-    // Compute and assign the merged level to `levelRef` right here,
-    // synchronously — NOT inside the `setLevels` updater. React 18
-    // batches state updates and does not guarantee updater functions run
-    // synchronously at call time (they may run later, when the batch is
-    // flushed), so mirroring into `levelRef` from inside the updater let
-    // a second `applyOps`/`applyTextReplace` call — fired immediately
-    // after, before the batch flushed — read a stale `levelRef.current`
-    // and race the first one (see docs/deviations.md, step 7.7).
-    const merged = { ...levelRef.current, ...patch };
-    levelRef.current = merged;
-    setLevels((prev) => ({ ...prev, [merged.fileName]: merged }));
-  }, []);
+  /** `historyLabel`, when given, pushes a new History checkpoint for
+   * the state AFTER this patch (PLAN4.md step 12.13) — every call site
+   * that represents "one undoable user gesture" (a drag-stop, a style
+   * change, a structural YAML op…) passes one; internal bookkeeping
+   * patches (`savedRawText` after Save, autosave-restore snapshots,
+   * etc.) omit it and stay outside history, same as before this step. */
+  const updateCurrentLevel = useCallback(
+    (patch: Partial<DiagramLevel>, historyLabel?: string) => {
+      if (!levelRef.current) return;
+      // Compute and assign the merged level to `levelRef` right here,
+      // synchronously — NOT inside the `setLevels` updater. React 18
+      // batches state updates and does not guarantee updater functions run
+      // synchronously at call time (they may run later, when the batch is
+      // flushed), so mirroring into `levelRef` from inside the updater let
+      // a second `applyOps`/`applyTextReplace` call — fired immediately
+      // after, before the batch flushed — read a stale `levelRef.current`
+      // and race the first one (see docs/deviations.md, step 7.7).
+      const merged = { ...levelRef.current, ...patch };
+      levelRef.current = merged;
+      setLevels((prev) => ({ ...prev, [merged.fileName]: merged }));
+      if (historyLabel) pushHistory(historyLabel, merged);
+    },
+    [pushHistory],
+  );
+
+  /** Restores the tab to `steps[targetIndex]` — the single primitive
+   * behind Undo, Redo, and clicking an entry in the History panel; all
+   * three are "move the cursor and restore that checkpoint". Replaces
+   * the level's ENTIRE layout state (not just `positions`, unlike the
+   * pre-12.13 undo/redo) via `layoutFileToLevelPatch`, since a
+   * checkpoint is a full snapshot, not a diff. */
+  const jumpToHistoryStep = useCallback(
+    (targetIndex: number) => {
+      const run = async () => {
+        const level = levelRef.current;
+        const h = historyRef.current;
+        if (!level) return;
+        if (targetIndex < 0 || targetIndex >= h.steps.length || targetIndex === h.cursor) return;
+        const step = h.steps[targetIndex];
+        let newDiagram: Diagram;
+        try {
+          newDiagram = parseDiagram(step.rawText);
+        } catch {
+          return;
+        }
+        const newErrors = await validateDiagram(step.rawText);
+        const recomputed = await computeLayout(newDiagram);
+        const restoredLayout = layoutFileToLevelPatch(parseLayoutFile(step.layoutSnapshot));
+        h.cursor = targetIndex;
+        syncHistoryCounts();
+        updateCurrentLevel({
+          rawText: step.rawText,
+          diagram: newDiagram,
+          errors: newErrors,
+          layout: recomputed,
+          manualPositionIds: new Set(Object.keys(restoredLayout.positions)),
+          ...restoredLayout,
+        });
+      };
+      return runMutation(run);
+    },
+    [runMutation, syncHistoryCounts, updateCurrentLevel],
+  );
 
   /** "Open" via the File System Access API (PLAN.md step 8.1, Chromium
    * only): lets Save write straight back to the same files. Falls back
@@ -772,8 +860,9 @@ export function useDiagramStack() {
       if (!levels[fileName] && !tabErrors[fileName]) return;
       setDrillError(null);
       setActiveTab(fileName);
-      levelRef.current = levels[fileName] ?? null;
-      historyRef.current = historyFor(fileName);
+      const level = levels[fileName] ?? null;
+      levelRef.current = level;
+      historyRef.current = level ? historyFor(fileName, level) : { steps: [], cursor: -1 };
       syncHistoryCounts();
     },
     [levels, tabErrors, historyFor, syncHistoryCounts],
@@ -859,8 +948,10 @@ export function useDiagramStack() {
     runMutation,
     historyRef,
     historyCounts,
+    historySteps: historyView.steps,
+    historyCursor: historyView.cursor,
     syncHistoryCounts,
-    pushHistory,
+    jumpToHistoryStep,
     buildLevel,
     openFiles,
     openTextAsDiagram,

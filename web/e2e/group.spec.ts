@@ -103,8 +103,11 @@ test('Ctrl+G groups the selection into a container that encloses them; dragging 
   const userMoved = await page.getByTestId('rf-node-User').boundingBox();
   expect(userMoved?.x).toBeGreaterThan(userPreDrag.x + 50);
 
-  // Undo removes the whole group in one step (structural op — position
-  // drag above is layout-only and outside undo's YAML-scoped history).
+  // History is now layout-aware (PLAN4.md step 12.13): the drag above
+  // is its own undoable step, separate from the group's creation — one
+  // undo only reverts the move, a second removes the group itself.
+  await page.keyboard.press('Control+z');
+  await expect(groupNode).toBeVisible();
   await page.keyboard.press('Control+z');
   await expect(page.locator('[data-testid^="rf-node-group-"]')).toHaveCount(0);
   const yamlAfterUndo = await page.getByTestId('yaml-source').inputValue();

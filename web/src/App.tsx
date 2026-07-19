@@ -36,8 +36,9 @@ export default function App() {
     runMutation,
     historyRef,
     historyCounts,
-    syncHistoryCounts,
-    pushHistory,
+    historySteps,
+    historyCursor,
+    jumpToHistoryStep,
     openTextAsDiagram,
     onFileInput,
     onDrop,
@@ -59,7 +60,7 @@ export default function App() {
     onDiscardAutosave,
   } = useDiagramStack();
 
-  const { onUndo, onRedo } = useHistory(levelRef, runMutation, updateCurrentLevel, historyRef, syncHistoryCounts);
+  const { onUndo, onRedo } = useHistory(historyRef, jumpToHistoryStep);
 
   const {
     selectedNodeId,
@@ -132,7 +133,7 @@ export default function App() {
     onRelayoutAll,
     onImportLayout,
     onFlowPlayerChange,
-  } = useDiagramEditing(current, levelRef, runMutation, updateCurrentLevel, pushHistory, setLoadError);
+  } = useDiagramEditing(current, levelRef, runMutation, updateCurrentLevel, setLoadError);
 
   const { shareUrl, shareError, onExportLayout, onExportImage, onExportFlowStepsZip, onExportContext, onShare } =
     useDiagramExports(current, view.showEdgeLabels);
@@ -324,6 +325,9 @@ export default function App() {
         canDistributeSelected={canDistributeSelected}
         onAlignSelected={onAlignSelected}
         onDistributeSelected={onDistributeSelected}
+        historySteps={historySteps}
+        historyCursor={historyCursor}
+        onJumpToHistoryStep={jumpToHistoryStep}
         onSetNodeImage={onSetNodeImage}
         onRemoveNodeImage={onRemoveNodeImage}
         onUpdateLink={onUpdateLink}

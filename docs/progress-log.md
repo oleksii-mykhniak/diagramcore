@@ -571,3 +571,83 @@ abs(контейнер)`. Коміт драгу контейнера (`onNodeDra
   pre-existing failure (drill-down, з кроку 12.3, не зачеплено цим
   кроком).
 - Commit: phase12-step12: copy/paste + вирівнювання/розподіл
+
+## phase12-step13 — Панель History — 2026-07-20
+
+- **Рефактор історії** (`useDiagramStack.ts`): замінено пару стеків
+  `{past: string[], future: string[]}` на єдину лінійну шкалу
+  `{steps: HistoryStep[], cursor: number}`, де кожен `HistoryStep` —
+  ПОВНИЙ знімок (`{label, at, rawText, layoutSnapshot}`), а не diff;
+  `layoutSnapshot` — той самий JSON, що `layoutSnapshotOf` уже виводить
+  для dirty-tracking (12.3), тож не знадобився новий формат серіалізації.
+  `steps[0]` завжди — checkpoint одразу після відкриття вкладки
+  (лейбл "Open"), сідиться лениво в `historyFor(fileName, level)` при
+  першому зверненні до вкладки. Undo/Redo/клік по запису в History —
+  один і той самий примітив `jumpToHistoryStep(index)`: рухає `cursor`
+  і повністю ЗАМІНЮЄ layout-стан вкладки через новий
+  `layoutFileToLevelPatch` (`layoutFile.ts`, точний inverse
+  `buildLayoutFileFromLevel`) — на відміну від старого позиційного
+  undo (тільки `positions`), тепер відновлюються styles/sizes/
+  edgeStyles/hidden*/zOrder/renderStyle теж.
+- **Кожна мутація тепер пушить іменований крок**: `updateCurrentLevel`
+  отримав опційний `historyLabel` — коли переданий, після мержу
+  комітить `pushHistory(label, merged)`. Усі layout-only мутації
+  (drag/resize/style/text/hide/z-order/align/distribute/edge-label-
+  drag/image set-remove/re-layout/import-layout), які РАНІШЕ взагалі
+  не потрапляли в historyRAW, тепер undoable — головна мета кроку.
+  `applyOps`/`applyTextReplace` (структурні YAML-правки) генерують
+  лейбл через новий `describePatchOps` (`yamlPatch.ts`) — розпізнає
+  addNode/removeNode/addLink/removeLink/updateNode(label→«Edit label
+  a→b»)/групування (addNode+N×updateNode parent→«Group N nodes»)/
+  paste (addNode+addLink→«Paste N nodes») з фолбеком «Edit diagram
+  (N changes)» для нерозпізнаних комбінацій. Мультивузлові
+  жести (групове перетягування, paste-мердж стилів/розмірів після
+  applyOps, group-creation post-resolve size-set) навмисно НЕ пушать
+  другий крок — один History-запис на один жест користувача.
+- **Панель History** (`HistoryPanel.tsx`, нова 4-та вкладка дока
+  `RightDock.tsx`): плаский список знизу вгору (`steps[0]` найстаріший
+  першим), поточний підсвічений (accent-бордер, жирний), кроки після
+  cursor (redo-гілка) — притлумлені (opacity 0.6). Клік по будь-якому
+  запису викликає `jumpToHistoryStep` напряму — недеструктивно (redo-
+  гілка лишається, доки нова правка з середини не обріже її, як і
+  раніше в undo).
+- `useHistory.ts` спрощено до тонкої обгортки над
+  `jumpToHistoryStep(cursor±1)` + глобальний Ctrl/Cmd+Z шорткат.
+
+### Знайдений і виправлений баг (тестова методологія, не продакшн)
+
+Написання e2e для History виявило: клік по щойно доданому через
+палітру вузлу («User» одразу після drop нового вузла) міг застосувати
+наступну зміну стилю НЕ до того вузла, що очікувалось — сам drop
+синхронно виділяє новододаний вузол (`onDropNodeType`'s
+`setSelectedNodeId`), а звичайний клік по іншому вузлу коммітить
+виділення з де-факто затримкою ~250ms (де-дублювання
+click/dblclick, `FlowCanvas.tsx`, задокументовано ще в 12.4) — тест,
+що клікав і одразу заповнював колір без очікування, застосовував колір
+до СТАРОГО виділення. Виправлено очікуванням, що `properties-panel`
+показує саме потрібний `Node: <id>` (не просто `toBeVisible()`, який
+не відрізняє "вже видимий для іншого вузла" від переходу) — не
+продакшн-баг, сама механіка виділення коректна.
+
+### Оновлені існуючі тести під нову (правильнішу) грануляцію undo
+
+`notes.spec.ts` і `group.spec.ts` мали тести виду «одна дія додає щось
++ один драг → один Undo прибирає ВСЕ» — коректно за старою моделлю
+(драг взагалі не потрапляв в історію), але НЕ за новою (кожен жест —
+свій крок). Оновлено на два послідовні Undo з проміжною перевіркою
+(спочатку відкочується драг, потім структурна дія) — саме та
+поведінка, якої й вимагав цей крок.
+
+- Нові тести: e2e `history-panel.spec.ts` (1: 4 різнотипні правки →
+  History показує 5 записів (разом з "Open"), клік по першому
+  повертає canvas-стан ПОВНІСТЮ — і позицію, і колір; клік по
+  останньому — знову вперед, обидва без втрати redo-гілки). Unit
+  `yamlPatch.test.ts` не чіпався (нова `describePatchOps` — покрита
+  опосередковано через e2e-мітки; окремих unit-тестів на неї не
+  додавалося, приймальні критерії покриваються e2e).
+- Регресія: `go test ./...`, `go vet ./...`, `./dc validate
+  examples/*.dc.yaml` — OK; `npm test` (117 passed), `npm run build`,
+  `npx playwright test` — 133/137 passed, 3 skipped (drawio), 1
+  pre-existing failure (drill-down, з кроку 12.3, не зачеплено цим
+  кроком).
+- Commit: phase12-step13: панель History
