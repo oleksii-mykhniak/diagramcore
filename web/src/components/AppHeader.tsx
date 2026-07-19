@@ -49,6 +49,8 @@ interface AppHeaderProps {
   onToggleShowDescriptions: () => void;
   showEdgeLabels: boolean;
   onToggleShowEdgeLabels: () => void;
+  coreView: boolean;
+  onToggleCoreView: () => void;
   renderStyle: 'clean' | 'sketch';
   onToggleRenderStyle: () => void;
   onImportDrawio: (file: File) => void;
@@ -132,6 +134,8 @@ export function AppHeader({
   showDescriptions,
   onToggleShowDescriptions,
   showEdgeLabels,
+  coreView,
+  onToggleCoreView,
   onToggleShowEdgeLabels,
   renderStyle,
   onToggleRenderStyle,
@@ -257,6 +261,11 @@ export function AppHeader({
           label: showEdgeLabels ? 'Connection labels: shown' : 'Connection labels: hidden',
           testId: 'menu-show-edge-labels-toggle',
           onSelect: onToggleShowEdgeLabels,
+        },
+        {
+          label: coreView ? 'Core view: on' : 'Core view: off',
+          testId: 'menu-core-view-toggle',
+          onSelect: onToggleCoreView,
         },
         {
           label: `Diagram style: ${renderStyle === 'sketch' ? 'Sketch' : 'Clean'}`,

@@ -321,3 +321,29 @@
   passed, 3 skipped (drawio), 1 pre-existing failure (drill-down, з
   кроку 12.3, не зачеплено цим кроком).
 - Commit: phase12-step7: приховування конектів і текстів вузлів
+
+## phase12-step8 — Core view: режим «показати все приховане» — 2026-07-19
+
+- `useViewSettings.ts`: `coreView` (localStorage `dc.ui.coreView`,
+  той самий трафарет, що grid/snap); View-меню
+  `menu-core-view-toggle`.
+- `FlowCanvas.tsx`: приховане ребро (`hiddenEdges`) і прихований лейбл
+  вузла (`hiddenNodeLabels`) більше НЕ фільтруються, коли `coreView`
+  увімкнено — рендеряться як «примара» (`isGhost`/`labelGhost`):
+  напівпрозоро (opacity 0.4/0.35), пунктирна лінія для ребра, бейдж 👁
+  (`rf-edge-ghost-badge-*`/`rf-node-ghost-badge-*`), і лишаються
+  повністю клікабельними — клік по ghost-ребру відкриває його
+  властивості так само, як по звичайному. `hiddenEdgeLabels` (лейбл
+  ребра, з 11.9) теж примусово показується в Core view.
+  SVG-експорт (`svgExport.ts`) НЕ отримав жодного нового параметра —
+  Core view свідомо не проникає в `RenderOptions`, тож експорт завжди
+  малює звичайний (не-Core) вигляд, як і вимагав AC.
+- Нові тести: e2e `core-view.spec.ts` (2: ввімкнути Core view →
+  прихований конект і лейбл вузла видимі напівпрозоро з бейджем; клік
+  по ghost-конекту відкриває Properties; зняти Hide прямо в Core view;
+  вимкнути Core view → досі прихований лейбл знову ховається; SVG-
+  експорт при ввімкненому Core view не містить прихованих елементів).
+- Регресія: `npm test` (103 passed), `npm run build`, `npx playwright
+  test` — 117/121 passed, 3 skipped (drawio), 1 pre-existing failure
+  (drill-down, з кроку 12.3, не зачеплено цим кроком).
+- Commit: phase12-step8: Core view — показ прихованих елементів примарою

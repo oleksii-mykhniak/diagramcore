@@ -19,11 +19,18 @@ export function useViewSettings() {
    * pure UI preference (unlike per-edge hide, which is per-diagram
    * layout-file state), so it lives here alongside grid/snap. */
   const [showEdgeLabels, setShowEdgeLabels] = useState(() => readBool('dc.ui.showEdgeLabels', true));
+  /** View → "Core view" (PLAN4.md step 12.8) — shows every
+   * hidden-connector/hidden-label/hidden-edge-label element anyway,
+   * translucent with a badge, instead of filtering it out; a pure UI
+   * preference (the underlying hidden-state is still per-diagram
+   * layout-file state), so it lives here alongside grid/snap. */
+  const [coreView, setCoreView] = useState(() => readBool('dc.ui.coreView', false));
 
   useEffect(() => localStorage.setItem('dc.ui.grid', String(grid)), [grid]);
   useEffect(() => localStorage.setItem('dc.ui.snap', String(snap)), [snap]);
   useEffect(() => localStorage.setItem('dc.ui.showDescriptions', String(showDescriptions)), [showDescriptions]);
   useEffect(() => localStorage.setItem('dc.ui.showEdgeLabels', String(showEdgeLabels)), [showEdgeLabels]);
+  useEffect(() => localStorage.setItem('dc.ui.coreView', String(coreView)), [coreView]);
 
   return {
     grid,
@@ -34,5 +41,7 @@ export function useViewSettings() {
     toggleShowDescriptions: () => setShowDescriptions((d) => !d),
     showEdgeLabels,
     toggleShowEdgeLabels: () => setShowEdgeLabels((s) => !s),
+    coreView,
+    toggleCoreView: () => setCoreView((c) => !c),
   };
 }

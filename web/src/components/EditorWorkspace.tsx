@@ -82,6 +82,7 @@ interface EditorWorkspaceProps {
   onToggleEdgeHidden: (linkIndex: number) => void;
   onToggleNodeLabelHidden: () => void;
   showEdgeLabels: boolean;
+  coreView: boolean;
   focusRequest: { kind: 'node'; id: string; nonce: number } | { kind: 'line'; line: number; nonce: number } | null;
   onUpdateSelectedNode: (patch: Partial<DiagramNode>) => void;
   onDeleteSelectedNode: () => void;
@@ -168,6 +169,7 @@ export function EditorWorkspace({
   onToggleEdgeHidden,
   onToggleNodeLabelHidden,
   showEdgeLabels,
+  coreView,
   focusRequest,
   onUpdateSelectedNode,
   onDeleteSelectedNode,
@@ -273,6 +275,7 @@ export function EditorWorkspace({
                 hiddenEdges={current.hiddenEdges}
                 hiddenNodeLabels={current.hiddenNodeLabels}
                 showEdgeLabels={showEdgeLabels}
+                coreView={coreView}
                 onEdgeLabelDragStop={onEdgeLabelDragStop}
                 onEdgeLabelCommit={onEdgeLabelCommit}
                 focusNodeId={focusRequest?.kind === 'node' ? focusRequest.id : null}

@@ -41,6 +41,11 @@ export interface DcNodeData extends Record<string, unknown> {
    * the text label is suppressed. Doesn't affect the inline editor
    * (`isEditing` still shows the input with the real label). */
   labelHidden?: boolean;
+  /** Core view (PLAN4.md step 12.8) showing an otherwise-hidden label
+   * anyway, translucent with a badge — mutually exclusive with
+   * `labelHidden` (the caller sets `labelHidden: false` whenever this
+   * is true, so the label renders in the first place). */
+  labelGhost?: boolean;
   /** Fires once, on resize release (mirrors `onNodeDragStop`'s
    * single-commit-per-gesture pattern from step 11.1). */
   onResizeEnd?: (size: { width: number; height: number; x: number; y: number }) => void;
@@ -213,7 +218,14 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
         ) : (
           <span
             data-testid={`rf-node-label-${id}`}
-            style={{ ...labelTextStyle, display: 'inline-flex', alignItems: 'center', gap: 'var(--dc-space-1)' }}
+            data-ghost={data.labelGhost || undefined}
+            style={{
+              ...labelTextStyle,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 'var(--dc-space-1)',
+              opacity: data.labelGhost ? 0.35 : 1,
+            }}
           >
             {IconComponent && (
               <span data-testid={`rf-node-icon-${id}`} style={{ display: 'inline-flex' }}>
@@ -222,6 +234,12 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
             )}
             {data.label}
             {data.hasDetails && <span data-testid={`rf-details-marker-${id}`}> ⊞</span>}
+            {data.labelGhost && (
+              <span data-testid={`rf-node-ghost-badge-${id}`} title="Hidden label (Core view)">
+                {' '}
+                👁
+              </span>
+            )}
           </span>
         )}
         {data.showDescription && data.description && (

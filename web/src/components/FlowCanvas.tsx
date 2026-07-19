@@ -128,6 +128,11 @@ interface Props {
   /** Node ids whose text label is hidden (PLAN4.md step 12.7) — the
    * shape still renders. */
   hiddenNodeLabels?: Set<string>;
+  /** View → "Core view" (PLAN4.md step 12.8): shows every hidden
+   * connector/label anyway, translucent with a badge, instead of
+   * filtering it out — a view-only toggle, never affects the SVG
+   * export (which always renders the normal, non-Core-view look). */
+  coreView?: boolean;
   /** View → "Connection labels" show/hide-all (PLAN3.md step 11.9). */
   showEdgeLabels?: boolean;
   /** Committed once per label-drag gesture, on release. */
@@ -186,6 +191,7 @@ function FlowCanvasInner({
   hiddenEdgeLabels,
   hiddenEdges,
   hiddenNodeLabels,
+  coreView = false,
   showEdgeLabels = true,
   onEdgeLabelDragStop,
   onEdgeLabelCommit,
@@ -317,7 +323,10 @@ function FlowCanvasInner({
                 showDescription: showDescriptions,
                 renderStyle,
                 text: resolvedStyle?.text,
-                labelHidden: hiddenNodeLabels?.has(n.id) ?? false,
+                // Core view (PLAN4.md step 12.8): a hidden label still
+                // renders (ghosted) instead of being suppressed.
+                labelHidden: (hiddenNodeLabels?.has(n.id) ?? false) && !coreView,
+                labelGhost: coreView && (hiddenNodeLabels?.has(n.id) ?? false),
                 onResizeEnd: (next: { width: number; height: number; x: number; y: number }) =>
                   onNodeResizeStop?.(
                     n.id,
@@ -349,6 +358,7 @@ function FlowCanvasInner({
       onNodeResizeStop,
       styles,
       hiddenNodeLabels,
+      coreView,
     ],
   );
 
@@ -368,17 +378,20 @@ function FlowCanvasInner({
       diagram.links
         .map((l, i) => {
         const linkKey = edgeLinkKey(l);
+        const connectorHidden = hiddenEdges?.has(linkKey) ?? false;
         // Hidden connector (PLAN4.md step 12.7) — filtered out entirely
         // (line + marker + label), not just faded: `dc context`/YAML
-        // still see it, this is presentation-only.
-        if (hiddenEdges?.has(linkKey)) return null;
+        // still see it, this is presentation-only. Core view (step
+        // 12.8) instead keeps it, ghosted (translucent + badge).
+        if (connectorHidden && !coreView) return null;
         const key = pairKey(l.from, l.to);
         const isActive = key === activeKey;
         const isVisited = !isActive && (visitedStepKeys?.has(key) ?? false);
         const resolved = resolveEdgeStyle(edgeStyles?.[linkKey]);
-        const hidden = hiddenEdgeLabels?.has(linkKey) ?? false;
+        const labelHidden = hiddenEdgeLabels?.has(linkKey) ?? false;
         const isHovered = hoveredLinkIndex === i;
         const markerColor = resolveEdgeColor({ isActive, isVisited, isHovered, color: resolved.color });
+        const isGhost = coreView && (connectorHidden || labelHidden);
         const data: DcEdgeData = {
           label: l.label,
           linkType: l.type,
@@ -391,7 +404,8 @@ function FlowCanvasInner({
           lineStyle: resolved.lineStyle,
           text: resolved.text,
           labelOffset: edgeLabelOffsets?.[linkKey],
-          showLabel: showEdgeLabels && !hidden,
+          showLabel: showEdgeLabels && (!labelHidden || coreView),
+          isGhost,
           onLabelDragStop: (offset) => onEdgeLabelDragStop?.(i, offset),
           onLabelCommit: (label: string) => onEdgeLabelCommit?.(i, label),
         };
@@ -425,6 +439,7 @@ function FlowCanvasInner({
       edgeLabelOffsets,
       hiddenEdgeLabels,
       hiddenEdges,
+      coreView,
       showEdgeLabels,
       onEdgeLabelDragStop,
       onEdgeLabelCommit,

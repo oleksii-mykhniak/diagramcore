@@ -34,6 +34,10 @@ export interface DcEdgeData extends Record<string, unknown> {
   /** Inline edit commit (PLAN4.md step 12.4) — fires on Enter/blur of the
    * dblclick-opened input; empty text removes the link's `label`. */
   onLabelCommit?: (label: string) => void;
+  /** Core view (PLAN4.md step 12.8) rendering an otherwise-hidden
+   * connector/label anyway, translucent with a dashed line and a badge —
+   * still fully interactive (clickable to select and un-hide). */
+  isGhost?: boolean;
 }
 
 const DASH_ARRAY: Record<LineStyle, string | undefined> = {
@@ -77,7 +81,11 @@ export const DcEdge = memo(function DcEdge({
   const isHovered = edgeData?.isHovered ?? false;
   const stroke = resolveEdgeColor({ isActive, isVisited, isHovered, color: edgeData?.color });
   const strokeWidth = isActive ? 3 : isVisited || isHovered ? 2.5 : (edgeData?.strokeWidthOverride ?? 1.5);
-  const dashArray = edgeData?.lineStyle ? DASH_ARRAY[edgeData.lineStyle] : undefined;
+  const isGhost = edgeData?.isGhost ?? false;
+  // Core view (PLAN4.md step 12.8) — a hidden connector still draws, but
+  // faded and dashed to read as "not really there" while staying
+  // clickable to select/un-hide.
+  const dashArray = isGhost ? '4,4' : edgeData?.lineStyle ? DASH_ARRAY[edgeData.lineStyle] : undefined;
 
   const baseOffset = edgeData?.labelOffset ?? { x: 0, y: 0 };
   const effectiveOffset = dragOffset ?? baseOffset;
@@ -86,6 +94,7 @@ export const DcEdge = memo(function DcEdge({
     fontWeight: edgeData?.text?.bold ? 700 : 400,
     fontStyle: edgeData?.text?.italic ? 'italic' : 'normal',
     color: edgeData?.text?.color ?? 'var(--dc-text)',
+    opacity: isGhost ? 0.5 : 1,
   };
 
   const handleLabelPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -120,7 +129,13 @@ export const DcEdge = memo(function DcEdge({
         data-active={isActive || undefined}
         data-visited={isVisited || undefined}
         data-hovered={isHovered || undefined}
-        style={{ stroke, strokeWidth, ...(dashArray ? { strokeDasharray: dashArray } : {}) }}
+        data-ghost={isGhost || undefined}
+        style={{
+          stroke,
+          strokeWidth,
+          ...(dashArray ? { strokeDasharray: dashArray } : {}),
+          ...(isGhost ? { opacity: 0.4 } : {}),
+        }}
       />
       {isActive && (
         <circle r={5} fill="var(--dc-flow-active)" data-testid={`rf-flow-marker-${id}`}>
@@ -184,6 +199,12 @@ export const DcEdge = memo(function DcEdge({
               }}
             >
               {edgeData.label}
+              {isGhost && (
+                <span data-testid={`rf-edge-ghost-badge-${id}`} title="Hidden (Core view)">
+                  {' '}
+                  👁
+                </span>
+              )}
             </div>
           )}
         </EdgeLabelRenderer>

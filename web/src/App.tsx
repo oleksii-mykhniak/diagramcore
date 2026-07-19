@@ -191,6 +191,8 @@ export default function App() {
         onToggleShowDescriptions={view.toggleShowDescriptions}
         showEdgeLabels={view.showEdgeLabels}
         onToggleShowEdgeLabels={view.toggleShowEdgeLabels}
+        coreView={view.coreView}
+        onToggleCoreView={view.toggleCoreView}
         renderStyle={current?.renderStyle ?? 'clean'}
         onToggleRenderStyle={() => setRenderStyle(current?.renderStyle === 'sketch' ? 'clean' : 'sketch')}
         onImportDrawio={(file) => void onImportDrawio(file)}
@@ -278,6 +280,7 @@ export default function App() {
         onToggleEdgeHidden={onToggleEdgeHidden}
         onToggleNodeLabelHidden={onToggleNodeLabelHidden}
         showEdgeLabels={view.showEdgeLabels}
+        coreView={view.coreView}
         focusRequest={focusRequest}
         onUpdateSelectedNode={onUpdateSelectedNode}
         onDeleteSelectedNode={onDeleteSelectedNode}
