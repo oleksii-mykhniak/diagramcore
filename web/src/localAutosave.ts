@@ -81,15 +81,18 @@ const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Debounces one save per `fileName` (PLAN3.md step 11.1 pattern: a rapid
  * sequence of edits — e.g. typing in the YAML panel — collapses to a
- * single write ~1s after the last one). */
-export function scheduleAutosave(fileName: string, data: AutosaveData): void {
+ * single write ~1s after the last one). `onSaved` (PLAN4.md step 12.3)
+ * fires once the write actually lands in IndexedDB, letting callers
+ * distinguish "edited, draft not saved yet" from "edited, draft is safe"
+ * for the three-state save indicator. */
+export function scheduleAutosave(fileName: string, data: AutosaveData, onSaved?: (savedAt: number) => void): void {
   const existing = pendingTimers.get(fileName);
   if (existing) clearTimeout(existing);
   pendingTimers.set(
     fileName,
     setTimeout(() => {
       pendingTimers.delete(fileName);
-      void saveAutosave(fileName, data);
+      void saveAutosave(fileName, data).then(() => onSaved?.(Date.now()));
     }, AUTOSAVE_DEBOUNCE_MS),
   );
 }

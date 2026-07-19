@@ -1,4 +1,5 @@
 import type { DiagramLevel } from '../hooks/useDiagramStack';
+import { levelHasUnsavedChanges } from '../hooks/useDiagramStack';
 
 interface TabStripProps {
   openTabs: string[];
@@ -32,7 +33,7 @@ export function TabStrip({ openTabs, activeTab, mainFileName, levels, tabErrors,
         const level = levels[fileName];
         const hasError = Boolean(tabErrors[fileName]);
         const isActive = fileName === activeTab;
-        const unsaved = level ? level.rawText !== level.savedRawText : false;
+        const unsaved = level ? levelHasUnsavedChanges(level) : false;
         const title = level?.diagram.diagram.title ?? fileName;
         return (
           <div

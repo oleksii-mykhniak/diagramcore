@@ -134,6 +134,27 @@ export function buildLayoutFileFromLevel(level: LayoutFileSource): LayoutFile {
   });
 }
 
+/** Deterministic JSON serialization (object keys sorted at every level)
+ * of a `LayoutFileSource` — PLAN4.md step 12.3's dirty-state snapshot
+ * needs to compare "layout at last save/open" against "layout right
+ * now" by value, and two structurally-identical layouts built through
+ * different edit paths (e.g. spreading `styles` in a different order)
+ * must still compare equal — plain `JSON.stringify` doesn't guarantee
+ * that, since it preserves each object's own key insertion order. */
+export function layoutSnapshotOf(level: LayoutFileSource): string {
+  return JSON.stringify(buildLayoutFileFromLevel(level), (_key, value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return Object.keys(value)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, k) => {
+          acc[k] = (value as Record<string, unknown>)[k];
+          return acc;
+        }, {});
+    }
+    return value;
+  });
+}
+
 /** `DiagramLevel.sizes` (`{width,height}`) <-> `LayoutFile`'s `{w,h}` —
  * the level keeps the verbose, self-documenting shape; the file keeps
  * the terse one `internal/layout.Size` (Go) already committed to. */

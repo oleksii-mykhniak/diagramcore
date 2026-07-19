@@ -46,6 +46,10 @@ export default function App() {
     onOpenNative,
     onSave,
     hasUnsavedChanges,
+    saveStatus,
+    draftSavedAt,
+    autoSaveToFile,
+    toggleAutoSaveToFile,
     openDetails,
     switchTab,
     closeTab,
@@ -146,6 +150,10 @@ export default function App() {
         onNewDiagram={(text) => void openTextAsDiagram('untitled.dc.yaml', text)}
         current={current}
         hasUnsavedChanges={hasUnsavedChanges}
+        saveStatus={saveStatus}
+        draftSavedAt={draftSavedAt}
+        autoSaveToFile={autoSaveToFile}
+        onToggleAutoSaveToFile={toggleAutoSaveToFile}
         onSave={() => void onSave()}
         onExportLayout={onExportLayout}
         onImportLayout={onImportLayout}

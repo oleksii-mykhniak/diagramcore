@@ -16,6 +16,10 @@ interface AppHeaderProps {
   onNewDiagram: (text: string) => void;
   current: DiagramLevel | null;
   hasUnsavedChanges: boolean;
+  saveStatus: 'saved' | 'draft' | 'unsaved';
+  draftSavedAt?: number;
+  autoSaveToFile: boolean;
+  onToggleAutoSaveToFile: () => void;
   onSave: () => void;
   onExportLayout: () => void;
   onImportLayout: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -52,6 +56,15 @@ interface AppHeaderProps {
 
 const REPO_URL = 'https://github.com/oleksii-mykhniak/diagramcore';
 
+/** `HH:MM`, 24-hour, no locale dependence (PLAN4.md step 12.3's `Draft ·
+ * autosaved HH:MM` badge) — deterministic across test environments,
+ * unlike `toLocaleTimeString`. */
+function formatClockTime(ms: number | undefined): string {
+  if (ms === undefined) return '';
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 function toggleFullscreen() {
   if (document.fullscreenElement) {
     void document.exitFullscreen();
@@ -87,6 +100,10 @@ export function AppHeader({
   onNewDiagram,
   current,
   hasUnsavedChanges,
+  saveStatus,
+  draftSavedAt,
+  autoSaveToFile,
+  onToggleAutoSaveToFile,
   onSave,
   onExportLayout,
   onImportLayout,
@@ -131,6 +148,11 @@ export function AppHeader({
         { label: 'New', onSelect: () => onNewDiagram(BLANK_TEMPLATE) },
         { label: 'Open', testId: 'open-native', onSelect: () => onOpenNative(() => fileInputRef.current?.click()) },
         { label: `Save${hasUnsavedChanges ? ' •' : ''}`, testId: 'save', onSelect: onSave, disabled: !current },
+        {
+          label: `Auto-save to file: ${autoSaveToFile ? 'on' : 'off'}`,
+          testId: 'menu-auto-save-to-file-toggle',
+          onSelect: onToggleAutoSaveToFile,
+        },
         {
           label: 'Import layout',
           disabled: !current,
@@ -345,7 +367,16 @@ export function AppHeader({
         <button type="button" data-testid="theme-toggle" title="Toggle theme" onClick={toggleTheme} style={iconButtonStyle}>
           {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
         </button>
-        {hasUnsavedChanges && <span data-testid="unsaved-indicator">Unsaved changes</span>}
+        {hasUnsavedChanges && (
+          <span data-testid="unsaved-indicator">
+            {saveStatus === 'draft' ? `Draft · autosaved ${formatClockTime(draftSavedAt)}` : 'Unsaved changes'}
+          </span>
+        )}
+        {saveStatus === 'saved' && current && (
+          <span data-testid="saved-indicator" style={{ color: 'var(--dc-text-muted)' }}>
+            Saved
+          </span>
+        )}
         {shareUrl && (
           <input
             data-testid="share-url"

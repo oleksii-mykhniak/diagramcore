@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { parseDiagram } from '../parseDiagram';
 import { validateDiagram } from '../wasmValidate';
@@ -6,15 +6,36 @@ import type { ValidationError } from '../wasmValidate';
 import { computeLayout } from '../layout';
 import type { DiagramLayout } from '../layout';
 import type { Diagram, DiagramNode } from '../types';
-import { buildLayoutFileFromLevel, downloadLayoutFile, fromLayoutSizes, layoutFileName, parseLayoutFile } from '../layoutFile';
-import type { LayoutEdgeStyle, LayoutPosition, LayoutStyle, RenderStyle } from '../layoutFile';
+import {
+  buildLayoutFileFromLevel,
+  downloadLayoutFile,
+  fromLayoutSizes,
+  layoutFileName,
+  layoutSnapshotOf,
+  parseLayoutFile,
+} from '../layoutFile';
+import type { LayoutEdgeStyle, LayoutFileSource, LayoutPosition, LayoutStyle, RenderStyle } from '../layoutFile';
 import { initialFlowPlayerState } from '../flowPlayer';
 import type { FlowPlayerState } from '../flowPlayer';
 import { isNativeFsSupported, openDiagramFiles, pickSaveHandle, writeTextToHandle } from '../nativeFile';
 import { decodeShareState } from '../shareLink';
 import { downloadBlob } from '../svgExport';
-import { cancelScheduledAutosave, clearAutosave, loadAutosave, scheduleAutosave } from '../localAutosave';
+import { AUTOSAVE_DEBOUNCE_MS, cancelScheduledAutosave, clearAutosave, loadAutosave, scheduleAutosave } from '../localAutosave';
 import type { AutosaveRecord } from '../localAutosave';
+
+const AUTO_SAVE_TO_FILE_KEY = 'dc-auto-save-to-file';
+
+/** Whether a level has changes not yet reflected on disk (PLAN4.md step
+ * 12.3) — compares BOTH the YAML text and the serialized layout state
+ * (positions/sizes/styles/hidden-state/etc.) against the snapshot taken
+ * at the last successful Save or fresh Open. Drag/resize/style/hide are
+ * layout-only changes that never touch `rawText`, so a text-only
+ * comparison (the pre-12.3 behavior) missed them entirely. Exported for
+ * `TabStrip`, which needs the identical per-tab check for its `•`
+ * marker. */
+export function levelHasUnsavedChanges(level: LayoutFileSource & { rawText: string; savedRawText: string; savedLayoutSnapshot: string }): boolean {
+  return level.rawText !== level.savedRawText || layoutSnapshotOf(level) !== level.savedLayoutSnapshot;
+}
 
 export interface DiagramLevel {
   fileName: string;
@@ -63,6 +84,13 @@ export interface DiagramLevel {
   /** `rawText` at the last successful save (or at open/drop-in) — used
    * to show the unsaved-changes indicator. */
   savedRawText: string;
+  /** `layoutSnapshotOf(this)` at the last successful save (or at
+   * open/drop-in) — PLAN4.md step 12.3's other half of "unsaved": a
+   * drag/resize/style/hide never touches `rawText`, so dirty-tracking
+   * needs this too. Kept as a precomputed string (not recomputed from
+   * `savedRawText` alone) so restoring an autosave draft can leave it
+   * pointing at what's genuinely on disk instead of at the draft. */
+  savedLayoutSnapshot: string;
 }
 
 /** <details reference> -> basename, matching how details are resolved
@@ -188,7 +216,7 @@ export function useDiagramStack() {
     const parsed = parseDiagram(text);
     const validationErrors = await validateDiagram(text);
     const computedLayout = await computeLayout(parsed);
-    return {
+    const level: DiagramLevel = {
       fileName,
       rawText: text,
       diagram: parsed,
@@ -207,7 +235,10 @@ export function useDiagramStack() {
       hiddenEdgeLabels: new Set<string>(),
       renderStyle: 'clean',
       savedRawText: text,
+      savedLayoutSnapshot: '',
     };
+    level.savedLayoutSnapshot = layoutSnapshotOf(level);
+    return level;
   }, []);
 
   /** Eagerly parses every `details:` sub-diagram transitively reachable
@@ -264,10 +295,16 @@ export function useDiagramStack() {
 
   /** Checks for a local autosave draft of `fileName` after a fresh load
    * (PLAN3.md step 11.3) and, if one exists, surfaces the restore banner
-   * instead of silently discarding it. */
-  const checkAutosave = useCallback(async (fileName: string) => {
+   * instead of silently discarding it. `diskLevel` is what was just
+   * loaded from the real file — its saved snapshot is captured (PLAN4.md
+   * step 12.3) so a later "Restore" can tell the indicator what's
+   * genuinely on disk, distinct from the draft it's swapping in. */
+  const checkAutosave = useCallback(async (fileName: string, diskLevel: DiagramLevel) => {
     const record = await loadAutosave(fileName);
-    if (record) setRestorePrompt(record);
+    if (record) {
+      setRestorePrompt(record);
+      diskSnapshotForRestoreRef.current = { rawText: diskLevel.rawText, savedLayoutSnapshot: diskLevel.savedLayoutSnapshot };
+    }
   }, []);
 
   /** Replaces the entire open-tabs set with a freshly loaded tree rooted
@@ -312,7 +349,7 @@ export function useDiagramStack() {
         const [primaryName, primaryText] = contents[0];
         const mainLevel = await buildLevel(primaryName, primaryText);
         await openTree(mainLevel, vfs);
-        void checkAutosave(primaryName);
+        void checkAutosave(primaryName, mainLevel);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : String(err));
         resetToEmpty();
@@ -339,9 +376,10 @@ export function useDiagramStack() {
         if (positions) {
           level.positions = { ...level.positions, ...positions };
           level.manualPositionIds = new Set(Object.keys(positions));
+          level.savedLayoutSnapshot = layoutSnapshotOf(level);
         }
         await openTree(level, vfs);
-        void checkAutosave(fileName);
+        void checkAutosave(fileName, level);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : String(err));
         resetToEmpty();
@@ -418,9 +456,10 @@ export function useDiagramStack() {
             ...(imported.views.default?.hiddenEdgeLabels ?? []),
           ]);
           if (imported.renderStyle) level.renderStyle = imported.renderStyle;
+          level.savedLayoutSnapshot = layoutSnapshotOf(level);
         }
         await openTree(level, { [opened.mainName]: opened.mainText });
-        void checkAutosave(opened.mainName);
+        void checkAutosave(opened.mainName, level);
       } catch (err) {
         // AbortError: user cancelled the picker — not a real error.
         if (err instanceof Error && err.name === 'AbortError') return;
@@ -459,7 +498,7 @@ export function useDiagramStack() {
           buildLayoutFileFromLevel(current),
         );
       }
-      updateCurrentLevel({ savedRawText: current.rawText });
+      updateCurrentLevel({ savedRawText: current.rawText, savedLayoutSnapshot: layoutSnapshotOf(current) });
       return;
     }
     await writeTextToHandle(current.mainHandle, current.rawText);
@@ -475,16 +514,47 @@ export function useDiagramStack() {
         );
       }
     }
-    updateCurrentLevel({ savedRawText: current.rawText, layoutHandle: layoutHandle ?? undefined });
+    updateCurrentLevel({
+      savedRawText: current.rawText,
+      savedLayoutSnapshot: layoutSnapshotOf(current),
+      layoutHandle: layoutHandle ?? undefined,
+    });
   }, [current, updateCurrentLevel]);
 
-  const hasUnsavedChanges = current ? current.rawText !== current.savedRawText : false;
-  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
-  hasUnsavedChangesRef.current = hasUnsavedChanges;
+  // Layout serialization is O(diagram size) — memoized on `current`'s
+  // identity so it only recomputes when a mutation actually replaced the
+  // level (PLAN4.md step 12.3 AC: "не на кожен рендер"), not on every
+  // unrelated re-render of whatever owns this hook.
+  const currentLayoutSnapshot = useMemo(() => (current ? layoutSnapshotOf(current) : ''), [current]);
+  const hasUnsavedChanges = current
+    ? current.rawText !== current.savedRawText || currentLayoutSnapshot !== current.savedLayoutSnapshot
+    : false;
+
+  /** The IndexedDB draft's content/timestamp the moment it last matched
+   * what's now on screen, per tab (PLAN4.md step 12.3) — lets the save
+   * indicator tell "edited, but the draft already covers it" (`Draft ·
+   * autosaved HH:MM`) apart from "edited a moment ago, draft still
+   * catching up" (`Unsaved`). A stale entry (content no longer matching
+   * the current edit) simply stops satisfying `isDraftCurrent` below;
+   * it doesn't need to be cleaned up. */
+  const [autosavedByTab, setAutosavedByTab] = useState<Record<string, { rawText: string; layoutSnapshot: string; savedAt: number }>>({});
+  const draftMeta = current ? autosavedByTab[current.fileName] : undefined;
+  const isDraftCurrent = Boolean(
+    current && draftMeta && draftMeta.rawText === current.rawText && draftMeta.layoutSnapshot === currentLayoutSnapshot,
+  );
+  const saveStatus: 'saved' | 'draft' | 'unsaved' = !hasUnsavedChanges ? 'saved' : isDraftCurrent ? 'draft' : 'unsaved';
+  const draftSavedAt = isDraftCurrent ? draftMeta?.savedAt : undefined;
+
+  // beforeunload only warns for the "unsaved" substate (PLAN4.md step
+  // 12.3 AC 5) — a fresh IndexedDB draft already covers the edit, and
+  // the restore banner will offer it back on the next load, so warning
+  // here would just be crying wolf.
+  const shouldWarnBeforeUnloadRef = useRef(false);
+  shouldWarnBeforeUnloadRef.current = saveStatus === 'unsaved';
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (!hasUnsavedChangesRef.current) return;
+      if (!shouldWarnBeforeUnloadRef.current) return;
       e.preventDefault();
       e.returnValue = '';
     };
@@ -499,18 +569,81 @@ export function useDiagramStack() {
   // being edited).
   useEffect(() => {
     if (!current) return;
-    scheduleAutosave(current.fileName, {
-      rawText: current.rawText,
-      positions: current.positions,
-      notePositions: current.notePositions,
-      renderStyle: current.renderStyle,
-      sizes: current.sizes,
-      styles: current.styles,
-      edgeStyles: current.edgeStyles,
-      edgeLabelOffsets: current.edgeLabelOffsets,
-      hiddenEdgeLabels: Array.from(current.hiddenEdgeLabels),
+    const fileName = current.fileName;
+    const rawText = current.rawText;
+    const layoutSnapshot = currentLayoutSnapshot;
+    scheduleAutosave(
+      fileName,
+      {
+        rawText,
+        positions: current.positions,
+        notePositions: current.notePositions,
+        renderStyle: current.renderStyle,
+        sizes: current.sizes,
+        styles: current.styles,
+        edgeStyles: current.edgeStyles,
+        edgeLabelOffsets: current.edgeLabelOffsets,
+        hiddenEdgeLabels: Array.from(current.hiddenEdgeLabels),
+      },
+      (savedAt) => setAutosavedByTab((prev) => ({ ...prev, [fileName]: { rawText, layoutSnapshot, savedAt } })),
+    );
+  }, [current, currentLayoutSnapshot]);
+
+  // "Auto-save to file" (PLAN4.md step 12.3, File-menu toggle,
+  // localStorage-persisted): when on and the active tab has a native
+  // handle, the same debounce that drives the IndexedDB draft also
+  // writes straight to disk. The layout file specifically is only
+  // auto-written once a `layoutHandle` already exists (from a prior
+  // manual Save) — silently popping the native "Save As" picker in the
+  // background the first time a position becomes manual would be a
+  // surprise, not a convenience.
+  const [autoSaveToFile, setAutoSaveToFile] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(AUTO_SAVE_TO_FILE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleAutoSaveToFile = useCallback(() => {
+    setAutoSaveToFile((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(AUTO_SAVE_TO_FILE_KEY, next ? '1' : '0');
+      } catch {
+        /* localStorage unavailable (private mode, quota) — in-memory toggle still works for this session. */
+      }
+      return next;
     });
-  }, [current]);
+  }, []);
+
+  useEffect(() => {
+    if (!autoSaveToFile || !current || !current.mainHandle || !isNativeFsSupported() || !hasUnsavedChanges) return;
+    const level = current;
+    const timer = setTimeout(() => {
+      void (async () => {
+        await writeTextToHandle(level.mainHandle!, level.rawText);
+        if (level.layoutHandle) {
+          await writeTextToHandle(level.layoutHandle, JSON.stringify(buildLayoutFileFromLevel(level), null, 2));
+        }
+        // The active level may have moved on (further edits, tab switch)
+        // while this write was in flight — only commit the "saved" snapshot
+        // if it still matches exactly what was actually written to disk.
+        if (levelRef.current?.fileName === level.fileName && levelRef.current.rawText === level.rawText) {
+          updateCurrentLevel({ savedRawText: level.rawText, savedLayoutSnapshot: layoutSnapshotOf(level) });
+        }
+      })();
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [autoSaveToFile, current, hasUnsavedChanges, updateCurrentLevel, levelRef]);
+
+  /** The on-disk snapshot at the moment a restore banner was offered
+   * (PLAN4.md step 12.3) — captured alongside `restorePrompt` so
+   * `onRestoreAutosave` can leave `savedRawText`/`savedLayoutSnapshot`
+   * pointing at what's genuinely on disk (the file that was just
+   * loaded), not at the draft it's about to swap in. Without this, the
+   * indicator would falsely claim "Saved" right after a Restore even
+   * though the draft was never written back to the real file. */
+  const diskSnapshotForRestoreRef = useRef<{ rawText: string; savedLayoutSnapshot: string } | null>(null);
 
   /** Restore banner → "Restore" (PLAN3.md step 11.3): swaps in the
    * IndexedDB draft's text/positions in place of what was just loaded
@@ -518,6 +651,7 @@ export function useDiagramStack() {
   const onRestoreAutosave = useCallback(async () => {
     if (!restorePrompt) return;
     const record = restorePrompt;
+    const disk = diskSnapshotForRestoreRef.current;
     setRestorePrompt(null);
     const level = await buildLevel(record.fileName, record.rawText);
     level.positions = { ...level.positions, ...record.positions };
@@ -529,6 +663,14 @@ export function useDiagramStack() {
     level.edgeLabelOffsets = { ...level.edgeLabelOffsets, ...record.edgeLabelOffsets };
     level.hiddenEdgeLabels = new Set([...level.hiddenEdgeLabels, ...(record.hiddenEdgeLabels ?? [])]);
     level.renderStyle = record.renderStyle;
+    // Deliberately NOT `layoutSnapshotOf(level)` — that would be the
+    // draft's own layout, making the indicator lie that a just-restored,
+    // never-actually-saved draft is "Saved" (the bug PLAN4.md step 12.3
+    // set out to fix).
+    if (disk) {
+      level.savedRawText = disk.rawText;
+      level.savedLayoutSnapshot = disk.savedLayoutSnapshot;
+    }
     await openTree(level, { [record.fileName]: record.rawText });
   }, [restorePrompt, buildLevel, openTree]);
 
@@ -563,6 +705,7 @@ export function useDiagramStack() {
           ...(shared.layout.views.default?.hiddenEdgeLabels ?? []),
         ]);
         if (shared.layout.renderStyle) level.renderStyle = shared.layout.renderStyle;
+        level.savedLayoutSnapshot = layoutSnapshotOf(level);
       }
       await openTree(level, { [shared.fileName]: shared.yaml });
     })();
@@ -678,6 +821,10 @@ export function useDiagramStack() {
     onOpenNative,
     onSave,
     hasUnsavedChanges,
+    saveStatus,
+    draftSavedAt,
+    autoSaveToFile,
+    toggleAutoSaveToFile,
     openDetails,
     switchTab,
     closeTab,

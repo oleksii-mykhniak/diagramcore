@@ -85,3 +85,59 @@
   test` на edge-style/edge-marker-parity/export-dialog/flow-player
   (16 passed).
 - Commit: phase12-step2: уніфікація кольору стрілок конектів канва ↔ експорт
+
+## phase12-step3 — Баг: чесний dirty-стан і синхронізація з файлом на диску — 2026-07-19
+
+- Причина (3 окремі баги, всі підтверджені в коді до фікса):
+  1. `hasUnsavedChanges` = `rawText !== savedRawText` — жодного порівняння
+     layout-стану, тож drag/resize/стиль/приховування ніколи не
+     позначали документ як незбережений.
+  2. `onRestoreAutosave` виставляв `savedRawText` = текст ЧЕРНЕТКИ, тож
+     одразу після Restore індикатор брехав, що все збережено, хоча файл
+     на диску інший.
+  3. Для документів без native handle Save (fallback-download) уже
+     коректно знімав прапорець, але без відстеження автосейву єдиним
+     станом був вічний «Unsaved changes» — жодного сигналу, що чернетка
+     вже в безпеці в IndexedDB.
+- Фікс:
+  - `layoutFile.ts`: `layoutSnapshotOf` — детермінована серіалізація
+    (сортування ключів на кожному рівні), щоб той самий layout,
+    зібраний різними шляхами мутацій, завжди порівнювався рівним.
+  - `DiagramLevel.savedLayoutSnapshot` — снапшот layout на момент
+    останнього Save/відкриття, поряд із `savedRawText`.
+    `levelHasUnsavedChanges` (експортовано, використовує і хук, і
+    `TabStrip`) = порівняння ОБОХ. Мемоізовано на ідентичність `current`
+    (`useMemo`), не рахується на кожен рендер.
+  - `onRestoreAutosave`: новий `diskSnapshotForRestoreRef`, заповнюється
+    в `checkAutosave` тим, що реально щойно завантажено з файлу —
+    Restore лишає `savedRawText`/`savedLayoutSnapshot` вказувати на
+    диск, а не на чернетку.
+  - Індикатор трьох станів (`saveStatus: 'saved'|'draft'|'unsaved'`):
+    `scheduleAutosave` (`localAutosave.ts`) отримав опційний `onSaved`
+    колбек, що спрацьовує після реального запису в IndexedDB — хук
+    трекає `autosavedByTab` і звіряє з поточним rawText/layout-снапшотом,
+    щоб відрізнити «щойно відредаговано, дебаунс ще не доїхав»
+    (Unsaved) від «дебаунс доїхав, чернетка безпечна» (Draft ·
+    autosaved HH:MM). `beforeunload`-guard тепер зважає лише на
+    `saveStatus === 'unsaved'`.
+  - «Auto-save to file» — File-меню тумблер (`menu-auto-save-to-file-toggle`,
+    localStorage), для документів із native handle: той самий дебаунс,
+    пише YAML завжди; layout-файл — лише якщо `layoutHandle` вже існує
+    (щоб не спливав native Save-picker у фоні як несподіванка).
+- Нові тести: `layoutFile.test.ts` (`layoutSnapshotOf` — незалежність
+  від порядку ключів, чутливість до реальних змін), e2e
+  `dirty-state.spec.ts` (3 тести: Unsaved→Draft після дебаунсу; Save
+  знімає прапорець навіть без текстової правки; Restore лишає документ
+  чесно незбереженим), e2e `auto-save-to-file.spec.ts` (тумблер сам
+  доводить правку до диска, індикатор — Saved без Ctrl+S).
+- Виявлено (поза скоупом цього кроку): `drill-down.spec.ts` тест
+  «...clicking back restores dragged positions and the selected flow»
+  падає на `flow-step-count` після повернення по breadcrumb — детерміновано
+  відтворюється і на HEAD ДО цього кроку (перевірено git stash), отже
+  існуючий баг, не регресія. Занесено сюди для видимості; окремий
+  крок/фікс не заводимо, бо не в тематиці 12.3.
+- Регресія: `npm test` (97 passed), `npm run build`, `npx playwright
+  test` — 101/105 passed, 3 skipped (drawio, feature-flagged), 1
+  pre-existing failure (drill-down, див. вище, не пов'язаний з цим
+  кроком).
+- Commit: phase12-step3: чесний dirty-стан і синхронізація з диском
