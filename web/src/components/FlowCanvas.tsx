@@ -146,6 +146,10 @@ interface Props {
   canUngroupSelected?: boolean;
   onGroupSelected?: () => void;
   onUngroupSelected?: () => void;
+  canAlignSelected?: boolean;
+  canDistributeSelected?: boolean;
+  onAlignSelected?: (edge: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
+  onDistributeSelected?: (axis: 'horizontal' | 'vertical') => void;
   onDeleteSelectedNode?: () => void;
   onDuplicateSelectedNodes?: () => void;
   /** View → "Core view" (PLAN4.md step 12.8): shows every hidden
@@ -218,6 +222,10 @@ function FlowCanvasInner({
   canUngroupSelected,
   onGroupSelected,
   onUngroupSelected,
+  canAlignSelected,
+  canDistributeSelected,
+  onAlignSelected,
+  onDistributeSelected,
   onDeleteSelectedNode,
   onDuplicateSelectedNodes,
   coreView = false,
@@ -861,6 +869,10 @@ function FlowCanvasInner({
           canUngroup={canUngroupSelected}
           onGroup={onGroupSelected}
           onUngroup={onUngroupSelected}
+          canAlign={canAlignSelected}
+          canDistribute={canDistributeSelected}
+          onAlign={onAlignSelected}
+          onDistribute={onDistributeSelected}
         />
       )}
     </div>

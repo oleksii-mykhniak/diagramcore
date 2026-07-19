@@ -72,6 +72,15 @@ export default function App() {
     canUngroupSelected,
     onGroupSelected,
     onUngroupSelected,
+    canCopySelected,
+    canPasteClipboard,
+    onCopySelected,
+    onCutSelected,
+    onPasteClipboard,
+    canAlignSelected,
+    canDistributeSelected,
+    onAlignSelected,
+    onDistributeSelected,
     onSetNodeImage,
     onRemoveNodeImage,
     hoveredLinkIndex,
@@ -194,6 +203,15 @@ export default function App() {
         canUngroupSelected={canUngroupSelected}
         onGroupSelected={onGroupSelected}
         onUngroupSelected={onUngroupSelected}
+        canCopySelected={canCopySelected}
+        canPasteClipboard={canPasteClipboard}
+        onCopySelected={onCopySelected}
+        onCutSelected={onCutSelected}
+        onPasteClipboard={onPasteClipboard}
+        canAlignSelected={canAlignSelected}
+        canDistributeSelected={canDistributeSelected}
+        onAlignSelected={onAlignSelected}
+        onDistributeSelected={onDistributeSelected}
         onShowTour={() => setShowTour(true)}
         grid={view.grid}
         onToggleGrid={view.toggleGrid}
@@ -302,6 +320,10 @@ export default function App() {
         canUngroupSelected={canUngroupSelected}
         onGroupSelected={onGroupSelected}
         onUngroupSelected={onUngroupSelected}
+        canAlignSelected={canAlignSelected}
+        canDistributeSelected={canDistributeSelected}
+        onAlignSelected={onAlignSelected}
+        onDistributeSelected={onDistributeSelected}
         onSetNodeImage={onSetNodeImage}
         onRemoveNodeImage={onRemoveNodeImage}
         onUpdateLink={onUpdateLink}

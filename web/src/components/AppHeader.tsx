@@ -45,6 +45,15 @@ interface AppHeaderProps {
   canUngroupSelected: boolean;
   onGroupSelected: () => void;
   onUngroupSelected: () => void;
+  canCopySelected: boolean;
+  canPasteClipboard: boolean;
+  onCopySelected: () => void;
+  onCutSelected: () => void;
+  onPasteClipboard: () => void;
+  canAlignSelected: boolean;
+  canDistributeSelected: boolean;
+  onAlignSelected: (edge: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
+  onDistributeSelected: (axis: 'horizontal' | 'vertical') => void;
   onShowTour: () => void;
   grid: boolean;
   onToggleGrid: () => void;
@@ -136,6 +145,15 @@ export function AppHeader({
   canUngroupSelected,
   onGroupSelected,
   onUngroupSelected,
+  canCopySelected,
+  canPasteClipboard,
+  onCopySelected,
+  onCutSelected,
+  onPasteClipboard,
+  canAlignSelected,
+  canDistributeSelected,
+  onAlignSelected,
+  onDistributeSelected,
   onShowTour,
   grid,
   onToggleGrid,
@@ -267,6 +285,57 @@ export function AppHeader({
         },
         { label: 'Group', testId: 'menu-group', onSelect: onGroupSelected, disabled: !canGroupSelected },
         { label: 'Ungroup', testId: 'menu-ungroup', onSelect: onUngroupSelected, disabled: !canUngroupSelected },
+        { label: 'Copy', testId: 'menu-copy', onSelect: onCopySelected, disabled: !canCopySelected },
+        { label: 'Cut', testId: 'menu-cut', onSelect: onCutSelected, disabled: !canCopySelected },
+        { label: 'Paste', testId: 'menu-paste', onSelect: onPasteClipboard, disabled: !canPasteClipboard },
+        {
+          label: 'Align left',
+          testId: 'menu-align-left',
+          onSelect: () => onAlignSelected('left'),
+          disabled: !canAlignSelected,
+        },
+        {
+          label: 'Align center',
+          testId: 'menu-align-center',
+          onSelect: () => onAlignSelected('center'),
+          disabled: !canAlignSelected,
+        },
+        {
+          label: 'Align right',
+          testId: 'menu-align-right',
+          onSelect: () => onAlignSelected('right'),
+          disabled: !canAlignSelected,
+        },
+        {
+          label: 'Align top',
+          testId: 'menu-align-top',
+          onSelect: () => onAlignSelected('top'),
+          disabled: !canAlignSelected,
+        },
+        {
+          label: 'Align middle',
+          testId: 'menu-align-middle',
+          onSelect: () => onAlignSelected('middle'),
+          disabled: !canAlignSelected,
+        },
+        {
+          label: 'Align bottom',
+          testId: 'menu-align-bottom',
+          onSelect: () => onAlignSelected('bottom'),
+          disabled: !canAlignSelected,
+        },
+        {
+          label: 'Distribute horizontally',
+          testId: 'menu-distribute-horizontal',
+          onSelect: () => onDistributeSelected('horizontal'),
+          disabled: !canDistributeSelected,
+        },
+        {
+          label: 'Distribute vertically',
+          testId: 'menu-distribute-vertical',
+          onSelect: () => onDistributeSelected('vertical'),
+          disabled: !canDistributeSelected,
+        },
       ],
     },
     {

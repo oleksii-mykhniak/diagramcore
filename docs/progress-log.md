@@ -517,3 +517,57 @@ abs(контейнер)`. Коміт драгу контейнера (`onNodeDra
   pre-existing failure (drill-down, з кроку 12.3, не зачеплено цим
   кроком).
 - Commit: phase12-step11: групування виділеного
+
+## phase12-step12 — Copy/paste + вирівнювання/розподіл — 2026-07-20
+
+- Cmd/Ctrl+C/X/V (`useDiagramEditing.ts`): clipboard — `useState`,
+  НЕ прив'язаний до жодної вкладки (єдиний екземпляр хука на весь
+  застосунок), тому працює між вкладками як справжній clipboard.
+  Copy знімає повний знімок вибраних вузлів + лінків МІЖ ними (лінк
+  до вузла поза виділенням — dangling після вставки — відкидається) +
+  їхніх positions/sizes/styles. Paste генерує нові унікальні id (та
+  сама схема `-copy`/`-copy2`, що Duplicate), ремапить `parent:` (якщо
+  батько теж скопійований) і обидва кінці кожного скопійованого лінка,
+  зсуває позиції +40/+40 від ОРИГІНАЛЬНИХ (на момент копіювання)
+  координат, один `applyOps` виклик (addNode×N + addLink×M) → один
+  undo-крок; розміри/стилі мерджаться в layout-стан ЦІЛЬОВОЇ вкладки
+  окремим `updateCurrentLevel` після резолву (той самий патерн, що
+  Group). Cut = Copy + Delete (перевикористовує наявний
+  onDeleteSelectedNode з його confirm-діалогом для вузлів із
+  залежностями).
+- Align (`onAlignSelected`) / Distribute (`onDistributeSelected`):
+  left/center/right/top/middle/bottom і horizontal/vertical — один
+  `updateCurrentLevel({positions: ...})` виклик на всю операцію
+  (той самий патерн групового драгу 11.10). Align — відносно bbox
+  усього виділення; Distribute — рівні проміжки між краями (сортує
+  за відповідною віссю, перший/останній лишаються на місці).
+  Requires ≥2 (align) / ≥3 (distribute) вибраних.
+- UI: Edit-меню (`AppHeader.tsx`) — Copy/Cut/Paste + 6 align + 2
+  distribute пункти. Right-click меню (`NodeContextMenu.tsx`) —
+  та сама секція align/distribute (copy/paste лишились тільки в
+  Edit-меню + шорткати, план явно вимагав контекстне меню тільки для
+  вирівнювання).
+- Шорткати не спрацьовують у текстових полях — той самий
+  `isEditableTarget`-guard (11.10), перевірено e2e і на реальному
+  CodeMirror-полі YAML-панелі (`.cm-content`, `isContentEditable`),
+  не тільки на прихованому `yaml-source`-проксі, який лише читає
+  стан для тестів.
+- Відхилення від AC (див. `docs/deviations.md`): «undo повертає
+  позиції одним кроком» для Align/Distribute НЕ реалізовано в цьому
+  кроці — layout-only мутації (як і звичайний драг/ресайз) не
+  потрапляють в поточний rawText-скопований undo-стек; це саме
+  завдання кроку 12.13 (History refactor), яке вирішить це одразу
+  для всіх layout-операцій, а не тільки для цих двох.
+- Нові тести: e2e `copy-paste.spec.ts` (3: копіювання 2 зв'язаних
+  вузлів + стиль → вставка дає 2 нові вузли з лінком і збереженим
+  стилем, undo одним кроком; вставка на іншій вкладці; Cut =
+  copy+delete), `align-distribute.spec.ts` (4: Align top вирівнює y;
+  Distribute horizontally дає рівні проміжки; пункти меню disabled
+  без достатньої кількості вибраних; шорткати не спрацьовують у
+  CodeMirror YAML-полі).
+- Регресія: `go test ./...`, `go vet ./...`, `./dc validate
+  examples/*.dc.yaml` — OK; `npm test` (117 passed), `npm run build`,
+  `npx playwright test` — 132/136 passed, 3 skipped (drawio), 1
+  pre-existing failure (drill-down, з кроку 12.3, не зачеплено цим
+  кроком).
+- Commit: phase12-step12: copy/paste + вирівнювання/розподіл

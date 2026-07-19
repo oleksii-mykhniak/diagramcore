@@ -18,6 +18,10 @@ interface Props {
   canUngroup?: boolean;
   onGroup?: () => void;
   onUngroup?: () => void;
+  canAlign?: boolean;
+  canDistribute?: boolean;
+  onAlign?: (edge: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
+  onDistribute?: (axis: 'horizontal' | 'vertical') => void;
 }
 
 const itemStyle: React.CSSProperties = {
@@ -49,6 +53,10 @@ export function NodeContextMenu({
   canUngroup,
   onGroup,
   onUngroup,
+  canAlign,
+  canDistribute,
+  onAlign,
+  onDistribute,
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -129,6 +137,41 @@ export function NodeContextMenu({
               Ungroup
             </button>
           )}
+        </>
+      )}
+      {onAlign && (
+        <>
+          <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-1) 0' }} />
+          {(['left', 'center', 'right', 'top', 'middle', 'bottom'] as const).map((edge) => (
+            <button
+              key={edge}
+              type="button"
+              role="menuitem"
+              data-testid={`context-align-${edge}`}
+              style={canAlign ? itemStyle : { ...itemStyle, color: 'var(--dc-text-muted)', cursor: 'default' }}
+              disabled={!canAlign}
+              onClick={runAndClose(() => onAlign(edge))}
+            >
+              Align {edge}
+            </button>
+          ))}
+        </>
+      )}
+      {onDistribute && (
+        <>
+          {(['horizontal', 'vertical'] as const).map((axis) => (
+            <button
+              key={axis}
+              type="button"
+              role="menuitem"
+              data-testid={`context-distribute-${axis}`}
+              style={canDistribute ? itemStyle : { ...itemStyle, color: 'var(--dc-text-muted)', cursor: 'default' }}
+              disabled={!canDistribute}
+              onClick={runAndClose(() => onDistribute(axis))}
+            >
+              Distribute {axis}
+            </button>
+          ))}
         </>
       )}
       <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-1) 0' }} />

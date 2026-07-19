@@ -373,6 +373,194 @@ export function useDiagramEditing(
     setSelectedNodeId(newIds.length === 1 ? newIds[0] : null);
   }, [current, selectedNodeId, selectedNodeIds, applyOps]);
 
+  /** Copy/paste clipboard (PLAN4.md step 12.12) — deliberately plain
+   * `useState`, not tied to any per-tab state: `useDiagramEditing` is a
+   * single hook instance shared across tabs, so this naturally survives
+   * (and works across) a tab switch, same way a real OS clipboard would.
+   * Holds full node/link/style/size snapshots, not ids — pasting must
+   * still work if the source nodes get deleted (or the tab closed)
+   * between copy and paste. */
+  interface ClipboardEntry {
+    nodes: DiagramNode[];
+    links: DiagramLink[];
+    positions: Record<string, LayoutPosition>;
+    sizes: Record<string, { width: number; height: number }>;
+    styles: Record<string, StyleOverride>;
+  }
+  const [clipboard, setClipboard] = useState<ClipboardEntry | null>(null);
+
+  const canCopySelected = selectedNodeIds.length > 0 || Boolean(selectedNodeId);
+  const canPasteClipboard = clipboard !== null;
+
+  /** Cmd/Ctrl+C — snapshots the selected nodes plus any links where BOTH
+   * endpoints are in the selection (a link to a node outside it would be
+   * dangling once pasted, so it's dropped, per the plan). */
+  const onCopySelected = useCallback(() => {
+    if (!current) return;
+    const ids = selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const nodes = current.diagram.nodes.filter((n) => idSet.has(n.id));
+    if (nodes.length === 0) return;
+    const links = current.diagram.links.filter((l) => idSet.has(l.from) && idSet.has(l.to));
+    const positions: Record<string, LayoutPosition> = {};
+    const sizes: Record<string, { width: number; height: number }> = {};
+    const styles: Record<string, StyleOverride> = {};
+    for (const id of ids) {
+      positions[id] = current.positions[id] ?? { x: 0, y: 0 };
+      if (current.sizes[id]) sizes[id] = current.sizes[id];
+      if (current.styles[id]) styles[id] = current.styles[id];
+    }
+    setClipboard({ nodes, links, positions, sizes, styles });
+  }, [current, selectedNodeId, selectedNodeIds]);
+
+  /** Cmd/Ctrl+V — pastes the clipboard into whichever tab is current
+   * (may differ from the tab it was copied on), offset by +40/+40 from
+   * the ORIGINAL copied positions each time (repeated pastes stack, same
+   * as Duplicate). Ids are freshly regenerated (same `-copy`/`-copy2`…
+   * scheme as Duplicate) and remapped everywhere they're referenced: a
+   * copied node's `parent` (if the parent was copied too) and both ends
+   * of every copied link. */
+  const onPasteClipboard = useCallback(() => {
+    if (!current || !clipboard || clipboard.nodes.length === 0) return;
+    const existingIds = new Set(current.diagram.nodes.map((n) => n.id));
+    const idMap = new Map<string, string>();
+    for (const node of clipboard.nodes) {
+      let newId = `${node.id}-copy`;
+      let n = 2;
+      while (existingIds.has(newId)) {
+        newId = `${node.id}-copy${n}`;
+        n += 1;
+      }
+      existingIds.add(newId);
+      idMap.set(node.id, newId);
+    }
+    const ops: PatchOp[] = clipboard.nodes.map((node) => ({
+      op: 'addNode',
+      node: {
+        ...node,
+        id: idMap.get(node.id)!,
+        ...(node.parent && idMap.has(node.parent) ? { parent: idMap.get(node.parent) } : {}),
+      },
+    }));
+    for (const link of clipboard.links) {
+      ops.push({ op: 'addLink', link: { ...link, from: idMap.get(link.from)!, to: idMap.get(link.to)! } });
+    }
+    const manualPositions = clipboard.nodes.map((node) => {
+      const pos = clipboard.positions[node.id] ?? { x: 0, y: 0 };
+      return { id: idMap.get(node.id)!, pos: { x: pos.x + 40, y: pos.y + 40 } };
+    });
+    const newIds = [...idMap.values()];
+    void applyOps(ops, { manualPositions }).then(() => {
+      const level = levelRef.current;
+      if (!level || level.fileName !== current.fileName) return;
+      const sizes = { ...level.sizes };
+      const styles = { ...level.styles };
+      for (const [oldId, newId] of idMap) {
+        if (clipboard.sizes[oldId]) sizes[newId] = clipboard.sizes[oldId];
+        if (clipboard.styles[oldId]) styles[newId] = clipboard.styles[oldId];
+      }
+      updateCurrentLevel({ sizes, styles });
+    });
+    setSelectedNodeIds(newIds);
+    setSelectedNodeId(newIds.length === 1 ? newIds[0] : null);
+  }, [current, clipboard, applyOps, levelRef, updateCurrentLevel]);
+
+  /** Cmd/Ctrl+X = copy + delete, per the plan. */
+  const onCutSelected = useCallback(() => {
+    onCopySelected();
+    onDeleteSelectedNode();
+  }, [onCopySelected, onDeleteSelectedNode]);
+
+  /** Align/Distribute (PLAN4.md step 12.12) — both commit every affected
+   * node's new position in one `updateCurrentLevel` call (the same
+   * single-commit-per-gesture pattern group drag/Duplicate/paste already
+   * use), so undo restores all of them in one step. Layout-only (like a
+   * drag), never touches the YAML. */
+  const canAlignSelected = selectedNodeIds.length >= 2;
+
+  const onAlignSelected = useCallback(
+    (edge: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+      if (!current || selectedNodeIds.length < 2) return;
+      const boxOf = (id: string) => {
+        const pos = current.positions[id] ?? { x: 0, y: 0 };
+        const size = current.sizes[id] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
+        return { pos, size };
+      };
+      let minX = Infinity;
+      let maxRight = -Infinity;
+      let minY = Infinity;
+      let maxBottom = -Infinity;
+      for (const id of selectedNodeIds) {
+        const { pos, size } = boxOf(id);
+        minX = Math.min(minX, pos.x);
+        maxRight = Math.max(maxRight, pos.x + size.width);
+        minY = Math.min(minY, pos.y);
+        maxBottom = Math.max(maxBottom, pos.y + size.height);
+      }
+      const centerX = (minX + maxRight) / 2;
+      const centerY = (minY + maxBottom) / 2;
+      const positions = { ...current.positions };
+      for (const id of selectedNodeIds) {
+        const { pos, size } = boxOf(id);
+        const next = { ...pos };
+        switch (edge) {
+          case 'left':
+            next.x = minX;
+            break;
+          case 'right':
+            next.x = maxRight - size.width;
+            break;
+          case 'center':
+            next.x = centerX - size.width / 2;
+            break;
+          case 'top':
+            next.y = minY;
+            break;
+          case 'bottom':
+            next.y = maxBottom - size.height;
+            break;
+          case 'middle':
+            next.y = centerY - size.height / 2;
+            break;
+        }
+        positions[id] = next;
+      }
+      updateCurrentLevel({ positions, manualPositionIds: new Set([...current.manualPositionIds, ...selectedNodeIds]) });
+    },
+    [current, selectedNodeIds, updateCurrentLevel],
+  );
+
+  const canDistributeSelected = selectedNodeIds.length >= 3;
+
+  const onDistributeSelected = useCallback(
+    (axis: 'horizontal' | 'vertical') => {
+      if (!current || selectedNodeIds.length < 3) return;
+      const boxOf = (id: string) => {
+        const pos = current.positions[id] ?? { x: 0, y: 0 };
+        const size = current.sizes[id] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
+        return { pos, size };
+      };
+      const key = axis === 'horizontal' ? ('x' as const) : ('y' as const);
+      const dim = axis === 'horizontal' ? ('width' as const) : ('height' as const);
+      const sorted = [...selectedNodeIds].sort((a, b) => boxOf(a).pos[key] - boxOf(b).pos[key]);
+      const first = boxOf(sorted[0]);
+      const last = boxOf(sorted[sorted.length - 1]);
+      const totalSpan = last.pos[key] + last.size[dim] - first.pos[key];
+      const totalSize = sorted.reduce((sum, id) => sum + boxOf(id).size[dim], 0);
+      const gap = (totalSpan - totalSize) / (sorted.length - 1);
+      const positions = { ...current.positions };
+      let cursor = first.pos[key];
+      for (const id of sorted) {
+        const { pos, size } = boxOf(id);
+        positions[id] = { ...pos, [key]: cursor };
+        cursor += size[dim] + gap;
+      }
+      updateCurrentLevel({ positions, manualPositionIds: new Set([...current.manualPositionIds, ...selectedNodeIds]) });
+    },
+    [current, selectedNodeIds, updateCurrentLevel],
+  );
+
   /** Ctrl/Cmd+G (PLAN4.md step 12.11) is only enabled for ≥2 selected
    * nodes that all share the same nesting level (same `parent`,
    * including "no parent" as one level) — grouping across levels would
@@ -506,6 +694,21 @@ export function useDiagramEditing(
         onDuplicateSelectedNodes();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && canCopySelected) {
+        e.preventDefault();
+        onCopySelected();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x' && canCopySelected) {
+        e.preventDefault();
+        onCutSelected();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && canPasteClipboard) {
+        e.preventDefault();
+        onPasteClipboard();
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
         if (e.shiftKey && canUngroupSelected) {
           e.preventDefault();
@@ -523,6 +726,11 @@ export function useDiagramEditing(
     selectedNodeIds,
     onDeleteSelectedNode,
     onDuplicateSelectedNodes,
+    canCopySelected,
+    onCopySelected,
+    onCutSelected,
+    canPasteClipboard,
+    onPasteClipboard,
     canGroupSelected,
     onGroupSelected,
     canUngroupSelected,
@@ -1065,6 +1273,15 @@ export function useDiagramEditing(
     canUngroupSelected,
     onGroupSelected,
     onUngroupSelected,
+    canCopySelected,
+    canPasteClipboard,
+    onCopySelected,
+    onCutSelected,
+    onPasteClipboard,
+    canAlignSelected,
+    canDistributeSelected,
+    onAlignSelected,
+    onDistributeSelected,
     onNewFlow,
     onToggleRecording,
     onAddBranch,

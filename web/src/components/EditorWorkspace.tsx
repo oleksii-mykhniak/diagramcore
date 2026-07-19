@@ -92,6 +92,10 @@ interface EditorWorkspaceProps {
   canUngroupSelected: boolean;
   onGroupSelected: () => void;
   onUngroupSelected: () => void;
+  canAlignSelected: boolean;
+  canDistributeSelected: boolean;
+  onAlignSelected: (edge: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
+  onDistributeSelected: (axis: 'horizontal' | 'vertical') => void;
   onSetNodeImage: (file: File) => void;
   onRemoveNodeImage: () => void;
   onUpdateLink: (index: number, patch: Partial<DiagramLink>) => void;
@@ -187,6 +191,10 @@ export function EditorWorkspace({
   canUngroupSelected,
   onGroupSelected,
   onUngroupSelected,
+  canAlignSelected,
+  canDistributeSelected,
+  onAlignSelected,
+  onDistributeSelected,
   onSetNodeImage,
   onRemoveNodeImage,
   onUpdateLink,
@@ -299,6 +307,10 @@ export function EditorWorkspace({
                 canUngroupSelected={canUngroupSelected}
                 onGroupSelected={onGroupSelected}
                 onUngroupSelected={onUngroupSelected}
+                canAlignSelected={canAlignSelected}
+                canDistributeSelected={canDistributeSelected}
+                onAlignSelected={onAlignSelected}
+                onDistributeSelected={onDistributeSelected}
                 onDeleteSelectedNode={onDeleteSelectedNode}
                 onDuplicateSelectedNodes={onDuplicateSelectedNodes}
                 onEdgeLabelDragStop={onEdgeLabelDragStop}
