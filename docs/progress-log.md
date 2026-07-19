@@ -31,3 +31,26 @@
   крок 12.13 — панель History як у Photoshop (іменовані снапшоти
   YAML+layout, undo для drag/стилів, вкладка History у доці).
   Наступні кроки перенумеровано (12.3→12.4 … 12.12→12.14).
+
+## phase12-step1 — Баг: додавання елемента «стрибає» всією діаграмою — 2026-07-19
+
+- Причина: `applyOps`/`applyTextReplace` (`web/src/hooks/useDiagramEditing.ts`)
+  на кожну структурну правку брали позицію зі старого `level.positions`
+  тільки для вузлів у `manualPositionIds`; усі решта (звичайні
+  auto-layout вузли, доданих раніше без ручного перетягування) щоразу
+  отримували свіжі координати з `computeLayout`, тобто вся діаграма
+  перекладалась при будь-якій структурній правці (додавання/видалення
+  вузла, будь-який `applyPatch`).
+- Фікс: позиція наявного вузла (є в `level.positions`) завжди
+  зберігається як була, незалежно від `manualPositionIds` —
+  auto-layout координати з ELK застосовуються лише до вузлів, яких
+  раніше не було. `manualPositionIds` і далі трекає «ручність» для
+  Re-layout (не Re-layout all). Явні Re-layout/Re-layout all — без
+  змін, перераховують як і раніше.
+- Новий e2e `web/e2e/no-layout-jump.spec.ts`: drop з палітри не рухає
+  жоден наявний вузол; видалення вузла не рухає решту, undo повертає
+  і вузол, і позиції; Re-layout all і далі перекладає все.
+- Регресія: `npm test` (91 passed), `npm run build`, `npx playwright
+  test` на drag-layout/containers/multi-select/resize/undo-redo/
+  node-crud/no-layout-jump (24+3 passed).
+- Commit: phase12-step1: фікс «стрибання» діаграми при структурних правках

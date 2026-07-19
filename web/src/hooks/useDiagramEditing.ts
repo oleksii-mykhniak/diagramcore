@@ -74,8 +74,7 @@ export function useDiagramEditing(
         const manualPositionIds = new Set(level.manualPositionIds);
         const positions: Record<string, LayoutPosition> = {};
         for (const n of recomputed.nodes) {
-          positions[n.id] =
-            manualPositionIds.has(n.id) && level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
+          positions[n.id] = level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
         }
         for (const { id, pos } of opts?.manualPositions ?? []) {
           positions[id] = pos;
@@ -120,8 +119,7 @@ export function useDiagramEditing(
         const manualPositionIds = new Set(level.manualPositionIds);
         const positions: Record<string, LayoutPosition> = {};
         for (const n of recomputed.nodes) {
-          positions[n.id] =
-            manualPositionIds.has(n.id) && level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
+          positions[n.id] = level.positions[n.id] ? level.positions[n.id] : { x: n.x, y: n.y };
         }
         if (text !== level.rawText) pushHistory(level.rawText);
         updateCurrentLevel({
