@@ -153,6 +153,39 @@ describe('renderDiagramSVGString', () => {
     expect(svg).toContain('<path d="M0,0 L10,5 L0,10 z" fill="#e04b4b" />');
   });
 
+  it('applies an instance text override (PLAN4.md step 12.5) to a node label: font-size/weight/style/color/align', () => {
+    const svg = renderDiagramSVGString(diagram, layout, positions, {}, {}, [], {}, {
+      A: { text: { fontSize: 20, bold: true, italic: true, color: '#ff00ff', align: 'left' } },
+    });
+    const alphaIndex = svg.indexOf('Alpha');
+    const textOpenTag = svg.lastIndexOf('<text', alphaIndex);
+    const tag = svg.slice(textOpenTag, alphaIndex);
+    expect(tag).toContain('font-size="20"');
+    expect(tag).toContain('font-weight="bold"');
+    expect(tag).toContain('font-style="italic"');
+    expect(tag).toContain('fill="#ff00ff"');
+    expect(tag).toContain('text-anchor="start"');
+
+    // Node B has no override — default font-size, no bold/italic, default anchor.
+    const betaIndex = svg.indexOf('Beta');
+    const betaTag = svg.slice(svg.lastIndexOf('<text', betaIndex), betaIndex);
+    expect(betaTag).toContain('font-size="13"');
+    expect(betaTag).toContain('font-weight="normal"');
+    expect(betaTag).toContain('text-anchor="middle"');
+  });
+
+  it('applies an instance text override to an edge label: font-size/weight/style/color (PLAN4.md step 12.5)', () => {
+    const labeledDiagram: Diagram = { ...diagram, links: [{ from: 'A', to: 'B', type: 'request', label: 'fetches' }] };
+    const svg = renderDiagramSVGString(labeledDiagram, layout, positions, {}, {
+      edgeStyles: { 'A->B:request': { text: { fontSize: 18, bold: true, color: '#00ff00' } } },
+    });
+    const labelIndex = svg.indexOf('fetches');
+    const tag = svg.slice(svg.lastIndexOf('<text', labelIndex), labelIndex);
+    expect(tag).toContain('font-size="18"');
+    expect(tag).toContain('font-weight="bold"');
+    expect(tag).toContain('fill="#00ff00"');
+  });
+
   it('draws the edge label at its offset, respecting global and per-edge visibility (PLAN3.md step 11.9)', () => {
     const labeledDiagram: Diagram = { ...diagram, links: [{ from: 'A', to: 'B', type: 'request', label: 'fetches' }] };
 

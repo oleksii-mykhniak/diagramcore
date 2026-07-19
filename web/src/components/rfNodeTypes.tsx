@@ -1,9 +1,10 @@
 import { memo } from 'react';
+import type { CSSProperties } from 'react';
 import { Handle, NodeResizer, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { MIN_NODE_HEIGHT, MIN_NODE_WIDTH, NODE_WIDTH, NODE_HEIGHT } from '../layout';
 import { renderContainerSvgInner, resolveShape } from '../shapes';
-import type { LineStyle, RenderStyle } from '../shapes';
+import type { LineStyle, RenderStyle, TextStyleOverride } from '../shapes';
 import { CUSTOM_TYPE_ICONS } from '../customTypeIcons';
 
 export interface DcNodeData extends Record<string, unknown> {
@@ -32,6 +33,10 @@ export interface DcNodeData extends Record<string, unknown> {
   showDescription?: boolean;
   /** View → "Diagram style" (PLAN.md step 10.12). */
   renderStyle?: RenderStyle;
+  /** Instance text override (PLAN4.md step 12.5) — resolved by
+   * `resolveNodeStyle` the same way canvas/SVG-export share every other
+   * style field, so the two never render text differently. */
+  text?: TextStyleOverride;
   /** Fires once, on resize release (mirrors `onNodeDragStop`'s
    * single-commit-per-gesture pattern from step 11.1). */
   onResizeEnd?: (size: { width: number; height: number; x: number; y: number }) => void;
@@ -88,6 +93,18 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
     rounded: data.rounded,
   });
   const IconComponent = data.icon ? CUSTOM_TYPE_ICONS[data.icon] : null;
+  // Instance text override (PLAN4.md step 12.5) — `align` moves the
+  // flex/text alignment; the rest are plain CSS passthroughs. Long text
+  // still wraps naturally at any font-size since this stays a flexbox
+  // label, not `white-space: nowrap` (unchanged from before this step).
+  const textAlign = data.text?.align ?? 'center';
+  const flexAlign = textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center';
+  const labelTextStyle: CSSProperties = {
+    fontSize: data.text?.fontSize ? `${data.text.fontSize}px` : 'var(--dc-font-size-base)',
+    fontWeight: data.text?.bold ? 700 : 400,
+    fontStyle: data.text?.italic ? 'italic' : 'normal',
+    color: data.text?.color ?? 'var(--dc-text)',
+  };
 
   return (
     <div
@@ -146,9 +163,9 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
+          alignItems: flexAlign,
           justifyContent: 'center',
-          textAlign: 'center',
+          textAlign,
           padding: '0 var(--dc-space-2)',
           fontSize: 'var(--dc-font-size-base)',
           color: 'var(--dc-text)',
@@ -174,19 +191,21 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
               }
             }}
             style={{
+              ...labelTextStyle,
               width: '90%',
               font: 'inherit',
-              fontSize: 'var(--dc-font-size-base)',
-              textAlign: 'center',
+              textAlign,
               background: 'var(--dc-surface)',
-              color: 'var(--dc-text)',
               border: '1px solid var(--dc-accent)',
               borderRadius: 2,
               pointerEvents: 'auto',
             }}
           />
         ) : (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--dc-space-1)' }}>
+          <span
+            data-testid={`rf-node-label-${id}`}
+            style={{ ...labelTextStyle, display: 'inline-flex', alignItems: 'center', gap: 'var(--dc-space-1)' }}
+          >
             {IconComponent && (
               <span data-testid={`rf-node-icon-${id}`} style={{ display: 'inline-flex' }}>
                 <IconComponent size={14} />

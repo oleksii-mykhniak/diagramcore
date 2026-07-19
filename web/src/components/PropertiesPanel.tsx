@@ -1,11 +1,13 @@
 import { normalizeCustomTypes } from '../types';
 import type { Diagram, DiagramNode } from '../types';
-import type { StyleOverride } from '../shapes';
+import type { StyleOverride, TextStyleOverride } from '../shapes';
+import { TextStyleSection } from './TextStyleSection';
 
 const BASE_TYPES = ['actor', 'service', 'storage', 'queue', 'external', 'component'];
 
 const DEFAULT_FILL = '#ffffff';
 const DEFAULT_STROKE = '#333333';
+const DEFAULT_TEXT_COLOR = '#1a1a1e';
 
 interface Props {
   node: DiagramNode;
@@ -16,6 +18,10 @@ interface Props {
   style?: StyleOverride;
   onUpdateStyle: (patch: Partial<StyleOverride>) => void;
   onResetStyle: () => void;
+  /** Text override (PLAN4.md step 12.5), nested under `style.text` but
+   * edited/reset independently of the rest of the Style section. */
+  onUpdateTextStyle: (patch: Partial<TextStyleOverride>) => void;
+  onResetTextStyle: () => void;
 }
 
 /** Node properties panel (PLAN.md step 7.2): edits label/type/description/
@@ -24,7 +30,17 @@ interface Props {
  * type select includes the diagram's `custom_types` since step 10.8.
  * The Style section (PLAN3.md step 11.8) edits an instance-level style
  * override, kept in the layout file — never the YAML. */
-export function PropertiesPanel({ node, diagram, onUpdate, onDelete, style, onUpdateStyle, onResetStyle }: Props) {
+export function PropertiesPanel({
+  node,
+  diagram,
+  onUpdate,
+  onDelete,
+  style,
+  onUpdateStyle,
+  onResetStyle,
+  onUpdateTextStyle,
+  onResetTextStyle,
+}: Props) {
   const customTypeNames = normalizeCustomTypes(diagram.diagram).map((t) => t.name);
   return (
     <aside
@@ -148,6 +164,15 @@ export function PropertiesPanel({ node, diagram, onUpdate, onDelete, style, onUp
       <button type="button" data-testid="reset-style" onClick={onResetStyle} disabled={!style} style={{ marginBottom: 'var(--dc-space-3)' }}>
         Reset style
       </button>
+      <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-3) 0' }} />
+      <TextStyleSection
+        text={style?.text}
+        onUpdate={onUpdateTextStyle}
+        onReset={onResetTextStyle}
+        showAlign
+        testIdPrefix="prop"
+        defaultColor={DEFAULT_TEXT_COLOR}
+      />
       <br />
       <button type="button" data-testid="delete-node" onClick={onDelete}>
         Delete node

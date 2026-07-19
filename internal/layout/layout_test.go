@@ -62,7 +62,8 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 			DefaultView: {
 				Positions:        map[string]Position{"User": {X: 0, Y: 0}},
 				NotePositions:    map[string]Position{"note1": {X: 40, Y: 40}},
-				EdgeStyles:       map[string]EdgeStyle{"User->Gateway:request": {MarkerEnd: "open-arrow", Color: "#123456"}},
+				Styles:           map[string]Style{"User": {Fill: "#ff00ff", Text: &TextStyle{FontSize: 18, Bold: true, Align: "center"}}},
+				EdgeStyles:       map[string]EdgeStyle{"User->Gateway:request": {MarkerEnd: "open-arrow", Color: "#123456", Text: &TextStyle{Italic: true, Color: "#abcdef"}}},
 				EdgeLabelOffsets: map[string]Position{"User->Gateway:request": {X: 10, Y: -5}},
 				HiddenEdgeLabels: []string{"User->Gateway:request"},
 			},
@@ -95,8 +96,15 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 		t.Errorf("Positions[User] = %+v, want the newly-saved {200 50}", got)
 	}
 	view := f.Views[DefaultView]
-	if got := view.EdgeStyles["User->Gateway:request"]; got != (EdgeStyle{MarkerEnd: "open-arrow", Color: "#123456"}) {
-		t.Errorf("EdgeStyles[User->Gateway:request] = %+v, want preserved {open-arrow  0 #123456}", got)
+	if got := view.Styles["User"]; got.Fill != "#ff00ff" || got.Text == nil || got.Text.FontSize != 18 || !got.Text.Bold || got.Text.Align != "center" {
+		t.Errorf("Styles[User] = %+v, want preserved fill+text override", got)
+	}
+	edgeStyle := view.EdgeStyles["User->Gateway:request"]
+	if edgeStyle.MarkerEnd != "open-arrow" || edgeStyle.Color != "#123456" {
+		t.Errorf("EdgeStyles[User->Gateway:request] = %+v, want preserved {open-arrow  0 #123456 <text>}", edgeStyle)
+	}
+	if edgeStyle.Text == nil || !edgeStyle.Text.Italic || edgeStyle.Text.Color != "#abcdef" {
+		t.Errorf("EdgeStyles[User->Gateway:request].Text = %+v, want preserved {italic:true color:#abcdef}", edgeStyle.Text)
 	}
 	if got := view.EdgeLabelOffsets["User->Gateway:request"]; got != (Position{X: 10, Y: -5}) {
 		t.Errorf("EdgeLabelOffsets[User->Gateway:request] = %+v, want preserved {10 -5}", got)

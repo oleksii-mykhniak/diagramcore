@@ -84,7 +84,8 @@
         "stroke": { "type": "string" },
         "strokeWidth": { "type": "number" },
         "lineStyle": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
-        "rounded": { "type": "boolean" }
+        "rounded": { "type": "boolean" },
+        "text": { "$ref": "#/$defs/textStyle" }
       }
     },
     "edgeStyle": {
@@ -95,7 +96,20 @@
         "markerEnd": { "type": "string", "enum": ["none", "arrow", "open-arrow"] },
         "lineStyle": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
         "strokeWidth": { "type": "number" },
-        "color": { "type": "string" }
+        "color": { "type": "string" },
+        "text": { "$ref": "#/$defs/textStyle" }
+      }
+    },
+    "textStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Instance-level text override (phase 12, step 12.5) — `align` only meaningful on a node's Style, ignored on an edge label's EdgeStyle.",
+      "properties": {
+        "fontSize": { "type": "number" },
+        "bold": { "type": "boolean" },
+        "italic": { "type": "boolean" },
+        "color": { "type": "string" },
+        "align": { "type": "string", "enum": ["left", "center", "right"] }
       }
     }
   }

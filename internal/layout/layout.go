@@ -22,14 +22,29 @@ type Size struct {
 	Height float64 `json:"h"`
 }
 
+// TextStyle is a node's or edge label's instance-level text override
+// (phase 12, step 12.5): all fields optional, only the ones the user
+// actually changed are set. Align is node-only (edge labels don't have
+// one — web-side ignores it for edges); left unvalidated here since Go
+// never round-trips a partial override differently based on which
+// container it's nested in.
+type TextStyle struct {
+	FontSize float64 `json:"fontSize,omitempty"`
+	Bold     bool    `json:"bold,omitempty"`
+	Italic   bool    `json:"italic,omitempty"`
+	Color    string  `json:"color,omitempty"`
+	Align    string  `json:"align,omitempty"`
+}
+
 // Style is a node's instance-level style override (phase 11, step 11.8):
 // all fields optional, only the ones the user actually changed are set.
 type Style struct {
-	Fill        string  `json:"fill,omitempty"`
-	Stroke      string  `json:"stroke,omitempty"`
-	StrokeWidth float64 `json:"strokeWidth,omitempty"`
-	LineStyle   string  `json:"lineStyle,omitempty"`
-	Rounded     bool    `json:"rounded,omitempty"`
+	Fill        string     `json:"fill,omitempty"`
+	Stroke      string     `json:"stroke,omitempty"`
+	StrokeWidth float64    `json:"strokeWidth,omitempty"`
+	LineStyle   string     `json:"lineStyle,omitempty"`
+	Rounded     bool       `json:"rounded,omitempty"`
+	Text        *TextStyle `json:"text,omitempty"`
 }
 
 // EdgeStyle is a link's instance-level style override (phase 11, step
@@ -38,11 +53,12 @@ type Style struct {
 // `edgeLinkKey`, e.g. "A->B:request") in View.EdgeStyles/
 // EdgeLabelOffsets, since links have no explicit id in the format.
 type EdgeStyle struct {
-	MarkerStart string  `json:"markerStart,omitempty"`
-	MarkerEnd   string  `json:"markerEnd,omitempty"`
-	LineStyle   string  `json:"lineStyle,omitempty"`
-	StrokeWidth float64 `json:"strokeWidth,omitempty"`
-	Color       string  `json:"color,omitempty"`
+	MarkerStart string     `json:"markerStart,omitempty"`
+	MarkerEnd   string     `json:"markerEnd,omitempty"`
+	LineStyle   string     `json:"lineStyle,omitempty"`
+	StrokeWidth float64    `json:"strokeWidth,omitempty"`
+	Color       string     `json:"color,omitempty"`
+	Text        *TextStyle `json:"text,omitempty"`
 }
 
 // View holds the positions for one named view. v0 only uses "default".

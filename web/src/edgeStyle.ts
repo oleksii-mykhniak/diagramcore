@@ -1,5 +1,5 @@
 import type { DiagramLink } from './types';
-import type { LineStyle } from './shapes';
+import type { LineStyle, TextStyleOverride } from './shapes';
 
 /** Stable(ish) key for a link's per-instance styling/label state (PLAN3.md
  * step 11.9) — the format has no explicit link id, so this is derived
@@ -17,6 +17,9 @@ export interface EdgeStyleOverride {
   lineStyle?: LineStyle;
   strokeWidth?: number;
   color?: string;
+  /** `align` is meaningless for an edge label — always ignored here
+   * (PLAN4.md step 12.5). */
+  text?: TextStyleOverride;
 }
 
 export interface ResolvedEdgeStyle {
@@ -25,6 +28,7 @@ export interface ResolvedEdgeStyle {
   lineStyle?: LineStyle;
   strokeWidth?: number;
   color?: string;
+  text?: TextStyleOverride;
 }
 
 /** Resolves an edge's style: instance override first, then `undefined`
@@ -39,6 +43,7 @@ export function resolveEdgeStyle(override?: EdgeStyleOverride): ResolvedEdgeStyl
     lineStyle: override?.lineStyle,
     strokeWidth: override?.strokeWidth,
     color: override?.color,
+    text: override?.text,
   };
 }
 

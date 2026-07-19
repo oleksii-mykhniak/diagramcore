@@ -92,8 +92,12 @@ export default function App() {
     onNodeResizeStop,
     onUpdateNodeStyle,
     onResetNodeStyle,
+    onUpdateNodeTextStyle,
+    onResetNodeTextStyle,
     onUpdateEdgeStyle,
     onResetEdgeStyle,
+    onUpdateEdgeTextStyle,
+    onResetEdgeTextStyle,
     onEdgeLabelDragStop,
     onEdgeLabelCommit,
     onToggleEdgeLabelHidden,
@@ -245,6 +249,8 @@ export default function App() {
         onNodeResizeStop={onNodeResizeStop}
         onUpdateNodeStyle={onUpdateNodeStyle}
         onResetNodeStyle={onResetNodeStyle}
+        onUpdateNodeTextStyle={onUpdateNodeTextStyle}
+        onResetNodeTextStyle={onResetNodeTextStyle}
         onNodeDoubleClick={(node) => void openDetails(node)}
         onNodeClick={onNodeClick}
         onNodeLabelCommit={onUpdateNodeLabel}
@@ -262,6 +268,8 @@ export default function App() {
         onSelectLinkIndex={setSelectedLinkIndex}
         onUpdateEdgeStyle={onUpdateEdgeStyle}
         onResetEdgeStyle={onResetEdgeStyle}
+        onUpdateEdgeTextStyle={onUpdateEdgeTextStyle}
+        onResetEdgeTextStyle={onResetEdgeTextStyle}
         onEdgeLabelDragStop={onEdgeLabelDragStop}
         onEdgeLabelCommit={onEdgeLabelCommit}
         onToggleEdgeLabelHidden={onToggleEdgeLabelHidden}

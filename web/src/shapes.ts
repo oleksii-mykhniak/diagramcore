@@ -237,6 +237,18 @@ export function nodeVisual(diagram: DiagramLike, nodeType: string): NodeVisual {
   };
 }
 
+/** Instance-level text override (PLAN4.md step 12.5) — shared shape for
+ * a node's label and an edge's label; `align` is node-only (an edge
+ * label has no meaningful alignment axis — callers resolving an edge's
+ * text ignore it). */
+export interface TextStyleOverride {
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+  align?: 'left' | 'center' | 'right';
+}
+
 /** An instance-level style override (PLAN3.md step 11.8) — persisted in
  * the layout file/share link (`layoutFile.ts`'s `LayoutStyle`), not the
  * semantic YAML — so styling a node never touches `rawText`. */
@@ -246,6 +258,7 @@ export interface StyleOverride {
   strokeWidth?: number;
   lineStyle?: LineStyle;
   rounded?: boolean;
+  text?: TextStyleOverride;
 }
 
 export interface ResolvedNodeStyle {
@@ -256,6 +269,7 @@ export interface ResolvedNodeStyle {
   strokeWidth?: number;
   lineStyle?: LineStyle;
   rounded?: boolean;
+  text?: TextStyleOverride;
 }
 
 /** Resolves a node's final style by priority (PLAN3.md step 11.8):
@@ -275,5 +289,6 @@ export function resolveNodeStyle(diagram: DiagramLike, nodeType: string, instanc
     strokeWidth: instanceOverride?.strokeWidth ?? visual.strokeWidth,
     lineStyle: instanceOverride?.lineStyle ?? visual.lineStyle,
     rounded: instanceOverride?.rounded ?? visual.rounded,
+    text: instanceOverride?.text,
   };
 }

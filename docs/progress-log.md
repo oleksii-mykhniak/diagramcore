@@ -183,3 +183,50 @@
   test` — 106/110 passed, 3 skipped (drawio), 1 pre-existing failure
   (drill-down, задокументовано в кроці 12.3, не зачеплено цим кроком).
 - Commit: phase12-step4: інлайн-редагування тексту вузлів і лейблів ребер
+
+## phase12-step5 — Налаштування тексту (розмір, жирність, колір, вирівнювання) — 2026-07-19
+
+- Go `internal/layout`: новий `TextStyle` (`fontSize`, `bold`, `italic`,
+  `color`, `align`), поле `Text *TextStyle` у `Style` і `EdgeStyle`;
+  `Save` уже round-трипить `Styles`/`EdgeStyles` цілими мапами (без
+  пофайлового розбору полів), тож новий `Text` зберігається без
+  додаткових змін у `Save`. Схема (`schema/layout.schema.json`) отримала
+  `$defs/textStyle`, підключений з `style`/`edgeStyle`.
+  `TestSavePreservesWebEditorOnlyFields` розширено: тепер сідить і
+  звіряє і `Styles["User"].Text`, і `EdgeStyles[...].Text`.
+- Веб-дзеркало: `shapes.ts` (`TextStyleOverride`, `StyleOverride.text`,
+  `ResolvedNodeStyle.text`, `resolveNodeStyle` резолвить — інстанс →
+  дефолт теми, без проміжного custom_types-рівня, якого текст-стилі й
+  не мають), `edgeStyle.ts` (`EdgeStyleOverride.text`/
+  `ResolvedEdgeStyle.text`, `align` присутній типово, але завжди
+  ігнорується для ребра), `layoutFile.ts` (`LayoutTextStyle`, вкладено
+  в `LayoutStyle`/`LayoutEdgeStyle`). Жодних додаткових змін merge-точок
+  (buildLevel/autosave/share-link/onSave/onImportLayout) не знадобилось
+  — `Style`/`EdgeStyle` там завжди трактуються як непрозорі об'єкти,
+  тож вкладений `text` подорожує автоматично.
+- Єдина точка резолву — `resolveNodeStyle`/`resolveEdgeStyle`, як і для
+  решти інстанс-стилів; канва (`NodeShell` в rfNodeTypes.tsx, `DcEdge`
+  в rfEdgeTypes.tsx) і SVG-експорт застосовують те саме
+  `resolved.text` — жодних розбіжностей рендеру.
+- `onUpdateNodeStyle`/`onUpdateEdgeStyle` роблять ТІЛЬКИ shallow-мердж
+  верхнього рівня — патч `{text: {...}}` вичистив би поля `text`, яких
+  немає в конкретному патчі. Тому нові `onUpdateNodeTextStyle`/
+  `onUpdateEdgeTextStyle` (і окремі `onResetNodeTextStyle`/
+  `onResetEdgeTextStyle`, що чистять лише `text`, лишаючи fill/stroke)
+  мерджять саме вкладений `text`-об'єкт.
+- UI: новий спільний `TextStyleSection.tsx` (font-size select, B/I
+  кнопки, color-picker, align-кнопки — тільки для вузла, Reset text) —
+  використовується і в `PropertiesPanel.tsx` (вузол), і в
+  `LinksPanel.tsx` (ребро, з `idSuffix` через кілька рядків лінків).
+- Нові тести: Go `layout_test.go` (Text round-trip), web unit
+  `shapes.test.ts`/`svgExport.test.ts` (резолв + SVG-рендер тексту
+  вузла й ребра), e2e `text-style.spec.ts` (5: зміна розміру/жирності/
+  кольору на канві + YAML незмінний + SVG-експорт той самий стиль;
+  Export→Import layout; Reset text; align left/center/right; edge-лейбл
+  розмір/колір).
+- Регресія: `go test ./...`, `go vet ./...`, `./dc validate
+  examples/*.dc.yaml`, `make wasm && make wasm-test` — усе OK; `npm
+  test` (100 passed), `npm run build`, `npx playwright test` —
+  111/115 passed, 3 skipped (drawio), 1 pre-existing failure
+  (drill-down, з кроку 12.3, не зачеплено цим кроком).
+- Commit: phase12-step5: налаштування тексту вузлів і лейблів ребер

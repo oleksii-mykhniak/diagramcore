@@ -103,4 +103,14 @@ describe('resolveNodeStyle', () => {
     expect(resolved.fill).toBeUndefined();
     expect(resolved.stroke).toBe('#123456');
   });
+
+  it('resolves the instance text override with no type-level tier (PLAN4.md step 12.5)', () => {
+    const noText = resolveNodeStyle(diagram, 'service');
+    expect(noText.text).toBeUndefined();
+
+    const resolved = resolveNodeStyle(diagram, 'service', {
+      text: { fontSize: 20, bold: true, italic: true, color: '#ff00ff', align: 'left' },
+    });
+    expect(resolved.text).toEqual({ fontSize: 20, bold: true, italic: true, color: '#ff00ff', align: 'left' });
+  });
 });

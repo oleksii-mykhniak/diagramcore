@@ -16,6 +16,18 @@ export interface LayoutSize {
 
 export type RenderStyle = 'clean' | 'sketch';
 
+/** An instance-level text override (PLAN4.md step 12.5) — mirrors
+ * `shapes.ts`'s `TextStyleOverride` (and Go's `internal/layout.TextStyle`),
+ * nested inside `LayoutStyle`/`LayoutEdgeStyle` below. `align` is
+ * node-only; present but ignored when resolving an edge label. */
+export interface LayoutTextStyle {
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+  align?: 'left' | 'center' | 'right';
+}
+
 /** An instance-level node style override (PLAN3.md step 11.8) — mirrors
  * `shapes.ts`'s `StyleOverride`, kept as its own small type here (like
  * `LayoutSize`) since `layoutFile.ts` doesn't otherwise depend on
@@ -26,6 +38,7 @@ export interface LayoutStyle {
   strokeWidth?: number;
   lineStyle?: 'solid' | 'dashed' | 'dotted';
   rounded?: boolean;
+  text?: LayoutTextStyle;
 }
 
 /** An instance-level edge style override (PLAN3.md step 11.9) — mirrors
@@ -38,6 +51,7 @@ export interface LayoutEdgeStyle {
   lineStyle?: 'solid' | 'dashed' | 'dotted';
   strokeWidth?: number;
   color?: string;
+  text?: LayoutTextStyle;
 }
 
 export interface LayoutFile {

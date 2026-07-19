@@ -4,6 +4,7 @@ import type { DiagramLayout, LayoutEdge, LayoutPoint } from './layout';
 import type { LayoutEdgeStyle, LayoutPosition, LayoutStyle } from './layoutFile';
 import { pairKey } from './flowPlayer';
 import { edgeLinkKey, resolveEdgeStyle } from './edgeStyle';
+import type { EdgeStyleOverride } from './edgeStyle';
 import { renderContainerSvgInner, resolveNodeStyle } from './shapes';
 import type { RenderStyle } from './shapes';
 import { sketchLineD } from './sketch';
@@ -117,11 +118,23 @@ function edgeMidpoint(points: LayoutPoint[]): LayoutPoint {
   return { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 };
 }
 
-function renderEdgeLabelSvg(points: LayoutPoint[], offset: LayoutPosition | undefined, label: string, color: string): string {
+function renderEdgeLabelSvg(
+  points: LayoutPoint[],
+  offset: LayoutPosition | undefined,
+  label: string,
+  color: string,
+  text?: EdgeStyleOverride['text'],
+): string {
   const mid = edgeMidpoint(points);
   const x = mid.x + (offset?.x ?? 0);
   const y = mid.y + (offset?.y ?? 0);
-  return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="12" font-family="system-ui, sans-serif" fill="${color}">${esc(label)}</text>`;
+  // Same resolve as the canvas (PLAN4.md step 12.5) — `align` doesn't
+  // apply to an edge label (no meaningful axis), so it's never read here.
+  const fontSize = text?.fontSize ?? 12;
+  const fontWeight = text?.bold ? 'bold' : 'normal';
+  const fontStyle = text?.italic ? 'italic' : 'normal';
+  const fill = text?.color ?? color;
+  return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" font-family="system-ui, sans-serif" fill="${fill}">${esc(label)}</text>`;
 }
 
 /** Renders diagram + layout + positions to a standalone SVG string, with
@@ -188,7 +201,7 @@ export function renderDiagramSVGString(
       const labelKey = link ? edgeLinkKey(link) : null;
       const labelSvg =
         label && showEdgeLabels && (!labelKey || !hiddenEdgeLabels.has(labelKey))
-          ? renderEdgeLabelSvg(e.points, labelKey ? options.edgeLabelOffsets?.[labelKey] : undefined, label, theme.text)
+          ? renderEdgeLabelSvg(e.points, labelKey ? options.edgeLabelOffsets?.[labelKey] : undefined, label, theme.text, resolved.text)
           : '';
 
       return pathSvg + labelSvg;
@@ -234,6 +247,19 @@ export function renderDiagramSVGString(
       const descriptionSvg = description
         ? `<text x="${n.width / 2}" y="${n.height / 2 + 9}" text-anchor="middle" dominant-baseline="middle" font-size="11" font-family="system-ui, sans-serif" fill="${theme.text}" opacity="0.65">${esc(description)}</text>`
         : '';
+      // Instance text style (PLAN4.md step 12.5) — same resolve as the
+      // canvas (`resolveNodeStyle`'s `text`), so font-size/weight/style/
+      // color/align never render differently between the two. `align`
+      // moves both the anchor and the x coordinate so the text still
+      // sits inside the node's padding instead of clipping at the edge.
+      const textPad = 8;
+      const align = resolved.text?.align ?? 'center';
+      const textAnchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle';
+      const textX = align === 'left' ? textPad : align === 'right' ? n.width - textPad : n.width / 2;
+      const fontSize = resolved.text?.fontSize ?? 13;
+      const fontWeight = resolved.text?.bold ? 'bold' : 'normal';
+      const fontStyle = resolved.text?.italic ? 'italic' : 'normal';
+      const textFill = resolved.text?.color ?? theme.text;
       return (
         `<g transform="translate(${pos.x},${pos.y})">` +
         shape.renderSvgInner(n.width, n.height, {
@@ -245,7 +271,7 @@ export function renderDiagramSVGString(
           rounded: resolved.rounded,
         }) +
         inner +
-        `<text x="${n.width / 2}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="system-ui, sans-serif" fill="${theme.text}">${label}</text>` +
+        `<text x="${textX}" y="${labelY}" text-anchor="${textAnchor}" dominant-baseline="middle" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" font-family="system-ui, sans-serif" fill="${textFill}">${label}</text>` +
         descriptionSvg +
         `</g>`
       );

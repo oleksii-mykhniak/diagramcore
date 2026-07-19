@@ -53,6 +53,8 @@ interface EditorWorkspaceProps {
   onNodeResizeStop: (id: string, size: { width: number; height: number }, pos: LayoutPosition) => void;
   onUpdateNodeStyle: (patch: Partial<StyleOverride>) => void;
   onResetNodeStyle: () => void;
+  onUpdateNodeTextStyle: (patch: Partial<StyleOverride['text']>) => void;
+  onResetNodeTextStyle: () => void;
   onNodeDoubleClick: (node: DiagramNode) => void;
   onNodeClick: (node: DiagramNode) => void;
   onNodeLabelCommit: (id: string, label: string) => void;
@@ -70,6 +72,8 @@ interface EditorWorkspaceProps {
   onSelectLinkIndex: (index: number | null) => void;
   onUpdateEdgeStyle: (patch: Partial<EdgeStyleOverride>) => void;
   onResetEdgeStyle: () => void;
+  onUpdateEdgeTextStyle: (patch: Partial<EdgeStyleOverride['text']>) => void;
+  onResetEdgeTextStyle: () => void;
   onEdgeLabelDragStop: (linkIndex: number, offset: LayoutPosition) => void;
   onEdgeLabelCommit: (linkIndex: number, label: string) => void;
   onToggleEdgeLabelHidden: (linkIndex: number) => void;
@@ -133,6 +137,8 @@ export function EditorWorkspace({
   onNodeResizeStop,
   onUpdateNodeStyle,
   onResetNodeStyle,
+  onUpdateNodeTextStyle,
+  onResetNodeTextStyle,
   onNodeDoubleClick,
   onNodeClick,
   onNodeLabelCommit,
@@ -150,6 +156,8 @@ export function EditorWorkspace({
   onSelectLinkIndex,
   onUpdateEdgeStyle,
   onResetEdgeStyle,
+  onUpdateEdgeTextStyle,
+  onResetEdgeTextStyle,
   onEdgeLabelDragStop,
   onEdgeLabelCommit,
   onToggleEdgeLabelHidden,
@@ -281,6 +289,8 @@ export function EditorWorkspace({
                     style={current.styles[selectedNode.id]}
                     onUpdateStyle={onUpdateNodeStyle}
                     onResetStyle={onResetNodeStyle}
+                    onUpdateTextStyle={onUpdateNodeTextStyle}
+                    onResetTextStyle={onResetNodeTextStyle}
                   />
                 ) : (
                   <p data-testid="properties-empty" style={{ padding: 'var(--dc-space-3)', color: 'var(--dc-text-muted)' }}>
@@ -300,6 +310,8 @@ export function EditorWorkspace({
                   edgeStyles={current.edgeStyles}
                   onUpdateEdgeStyle={onUpdateEdgeStyle}
                   onResetEdgeStyle={onResetEdgeStyle}
+                  onUpdateEdgeTextStyle={onUpdateEdgeTextStyle}
+                  onResetEdgeTextStyle={onResetEdgeTextStyle}
                   hiddenEdgeLabels={current.hiddenEdgeLabels}
                   onToggleEdgeLabelHidden={onToggleEdgeLabelHidden}
                 />

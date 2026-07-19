@@ -1,9 +1,9 @@
 import { memo, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useReactFlow } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
 import { sketchEdgeD } from '../sketch';
-import type { LineStyle, RenderStyle } from '../shapes';
+import type { LineStyle, RenderStyle, TextStyleOverride } from '../shapes';
 import { resolveEdgeColor } from '../edgeStyle';
 
 export interface DcEdgeData extends Record<string, unknown> {
@@ -20,6 +20,9 @@ export interface DcEdgeData extends Record<string, unknown> {
   color?: string;
   strokeWidthOverride?: number;
   lineStyle?: LineStyle;
+  /** Instance text override (PLAN4.md step 12.5) — `align` is ignored
+   * for an edge label (see `TextStyleOverride`). */
+  text?: TextStyleOverride;
   /** Label drag offset relative to the edge's own midpoint (PLAN3.md
    * step 11.9). */
   labelOffset?: { x: number; y: number };
@@ -78,6 +81,12 @@ export const DcEdge = memo(function DcEdge({
 
   const baseOffset = edgeData?.labelOffset ?? { x: 0, y: 0 };
   const effectiveOffset = dragOffset ?? baseOffset;
+  const labelTextStyle: CSSProperties = {
+    fontSize: edgeData?.text?.fontSize ? `${edgeData.text.fontSize}px` : 'var(--dc-font-size-sm)',
+    fontWeight: edgeData?.text?.bold ? 700 : 400,
+    fontStyle: edgeData?.text?.italic ? 'italic' : 'normal',
+    color: edgeData?.text?.color ?? 'var(--dc-text)',
+  };
 
   const handleLabelPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -142,12 +151,11 @@ export const DcEdge = memo(function DcEdge({
                 }
               }}
               style={{
+                ...labelTextStyle,
                 position: 'absolute',
                 transform: `translate(-50%, -50%) translate(${labelX + effectiveOffset.x}px,${labelY + effectiveOffset.y}px)`,
-                fontSize: 'var(--dc-font-size-sm)',
                 font: 'inherit',
                 background: 'var(--dc-surface)',
-                color: 'var(--dc-text)',
                 border: '1px solid var(--dc-accent)',
                 borderRadius: 2,
                 padding: '0 2px',
@@ -166,11 +174,10 @@ export const DcEdge = memo(function DcEdge({
                 setIsEditingLabel(true);
               }}
               style={{
+                ...labelTextStyle,
                 position: 'absolute',
                 transform: `translate(-50%, -50%) translate(${labelX + effectiveOffset.x}px,${labelY + effectiveOffset.y}px)`,
-                fontSize: 'var(--dc-font-size-sm)',
                 background: 'var(--dc-surface)',
-                color: 'var(--dc-text)',
                 padding: '0 2px',
                 cursor: 'grab',
                 pointerEvents: 'auto',

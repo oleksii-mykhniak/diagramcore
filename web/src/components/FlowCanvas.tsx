@@ -308,6 +308,7 @@ function FlowCanvasInner({
                 description: dcNode?.description,
                 showDescription: showDescriptions,
                 renderStyle,
+                text: resolvedStyle?.text,
                 onResizeEnd: (next: { width: number; height: number; x: number; y: number }) =>
                   onNodeResizeStop?.(
                     n.id,
@@ -373,6 +374,7 @@ function FlowCanvasInner({
           color: resolved.color,
           strokeWidthOverride: resolved.strokeWidth,
           lineStyle: resolved.lineStyle,
+          text: resolved.text,
           labelOffset: edgeLabelOffsets?.[linkKey],
           showLabel: showEdgeLabels && !hidden,
           onLabelDragStop: (offset) => onEdgeLabelDragStop?.(i, offset),

@@ -482,6 +482,23 @@ export function useDiagramEditing(
     [current, selectedNodeId, updateCurrentLevel],
   );
 
+  /** Properties → Text section (PLAN4.md step 12.5) — merges into the
+   * selected node's nested `text` override specifically, unlike
+   * `onUpdateNodeStyle`'s shallow top-level merge, which would otherwise
+   * wholesale-replace `text` and drop whichever of its fields (e.g.
+   * `bold`) weren't part of this particular patch. */
+  const onUpdateNodeTextStyle = useCallback(
+    (patch: Partial<StyleOverride['text']>) => {
+      if (!current || !selectedNodeId) return;
+      const existing = current.styles[selectedNodeId] ?? {};
+      const existingText = existing.text ?? {};
+      updateCurrentLevel({
+        styles: { ...current.styles, [selectedNodeId]: { ...existing, text: { ...existingText, ...patch } } },
+      });
+    },
+    [current, selectedNodeId, updateCurrentLevel],
+  );
+
   /** "Reset style" — drops the selected node's entire override, back to
    * its `custom_types`/theme default. */
   const onResetNodeStyle = useCallback(() => {
@@ -490,6 +507,16 @@ export function useDiagramEditing(
     const styles = { ...current.styles };
     delete styles[selectedNodeId];
     updateCurrentLevel({ styles });
+  }, [current, selectedNodeId, updateCurrentLevel]);
+
+  /** "Reset text" — drops only the selected node's text override,
+   * leaving fill/stroke/etc. untouched (PLAN4.md step 12.5). */
+  const onResetNodeTextStyle = useCallback(() => {
+    if (!current || !selectedNodeId) return;
+    const existing = current.styles[selectedNodeId];
+    if (!existing?.text) return;
+    const { text: _text, ...rest } = existing;
+    updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: rest } });
   }, [current, selectedNodeId, updateCurrentLevel]);
 
   /** Links panel/edge Style section (PLAN3.md step 11.9): patches an
@@ -517,6 +544,35 @@ export function useDiagramEditing(
     const edgeStyles = { ...current.edgeStyles };
     delete edgeStyles[key];
     updateCurrentLevel({ edgeStyles });
+  }, [current, selectedLinkIndex, updateCurrentLevel]);
+
+  /** Links panel Text section (PLAN4.md step 12.5) — same nested-merge
+   * reasoning as `onUpdateNodeTextStyle`. */
+  const onUpdateEdgeTextStyle = useCallback(
+    (patch: Partial<EdgeStyleOverride['text']>) => {
+      if (!current || selectedLinkIndex === null) return;
+      const link = current.diagram.links[selectedLinkIndex];
+      if (!link) return;
+      const key = edgeLinkKey(link);
+      const existing = current.edgeStyles[key] ?? {};
+      const existingText = existing.text ?? {};
+      updateCurrentLevel({
+        edgeStyles: { ...current.edgeStyles, [key]: { ...existing, text: { ...existingText, ...patch } } },
+      });
+    },
+    [current, selectedLinkIndex, updateCurrentLevel],
+  );
+
+  /** "Reset text" for the selected link — drops only the text override. */
+  const onResetEdgeTextStyle = useCallback(() => {
+    if (!current || selectedLinkIndex === null) return;
+    const link = current.diagram.links[selectedLinkIndex];
+    if (!link) return;
+    const key = edgeLinkKey(link);
+    const existing = current.edgeStyles[key];
+    if (!existing?.text) return;
+    const { text: _text, ...rest } = existing;
+    updateCurrentLevel({ edgeStyles: { ...current.edgeStyles, [key]: rest } });
   }, [current, selectedLinkIndex, updateCurrentLevel]);
 
   /** Edge label drag (PLAN3.md step 11.9): committed once, on release —
@@ -750,8 +806,12 @@ export function useDiagramEditing(
     onNodeResizeStop,
     onUpdateNodeStyle,
     onResetNodeStyle,
+    onUpdateNodeTextStyle,
+    onResetNodeTextStyle,
     onUpdateEdgeStyle,
     onResetEdgeStyle,
+    onUpdateEdgeTextStyle,
+    onResetEdgeTextStyle,
     onEdgeLabelDragStop,
     onEdgeLabelCommit,
     onToggleEdgeLabelHidden,

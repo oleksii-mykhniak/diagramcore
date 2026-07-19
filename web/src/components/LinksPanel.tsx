@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { DiagramLink } from '../types';
 import { edgeLinkKey } from '../edgeStyle';
 import type { EdgeStyleOverride } from '../edgeStyle';
+import type { TextStyleOverride } from '../shapes';
+import { TextStyleSection } from './TextStyleSection';
 
 const LINK_TYPES = ['request', 'call', 'query', 'event', 'dataflow', 'inherits', 'contains'];
 
@@ -21,6 +23,8 @@ interface Props {
   edgeStyles: Record<string, EdgeStyleOverride>;
   onUpdateEdgeStyle: (patch: Partial<EdgeStyleOverride>) => void;
   onResetEdgeStyle: () => void;
+  onUpdateEdgeTextStyle: (patch: Partial<TextStyleOverride>) => void;
+  onResetEdgeTextStyle: () => void;
   hiddenEdgeLabels: Set<string>;
   onToggleEdgeLabelHidden: (linkIndex: number) => void;
 }
@@ -43,6 +47,8 @@ export function LinksPanel({
   edgeStyles,
   onUpdateEdgeStyle,
   onResetEdgeStyle,
+  onUpdateEdgeTextStyle,
+  onResetEdgeTextStyle,
   hiddenEdgeLabels,
   onToggleEdgeLabelHidden,
 }: Props) {
@@ -207,6 +213,15 @@ export function LinksPanel({
                     >
                       Reset style
                     </button>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-2) 0' }} />
+                    <TextStyleSection
+                      text={style.text}
+                      onUpdate={onUpdateEdgeTextStyle}
+                      onReset={onResetEdgeTextStyle}
+                      testIdPrefix="link"
+                      idSuffix={`-${index}`}
+                      defaultColor="#333333"
+                    />
                   </div>
                 </div>
               )}
