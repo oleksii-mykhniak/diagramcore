@@ -39,6 +39,9 @@ export interface LayoutStyle {
   lineStyle?: 'solid' | 'dashed' | 'dotted';
   rounded?: boolean;
   text?: LayoutTextStyle;
+  /** Path to a custom image (PLAN4.md step 12.10), relative to the
+   * diagram's own YAML file — never a data URI. */
+  image?: string;
 }
 
 /** An instance-level edge style override (PLAN3.md step 11.9) — mirrors

@@ -38,7 +38,23 @@ export async function writeTextToHandle(handle: FileSystemFileHandle, text: stri
   await writable.close();
 }
 
+/** Binary counterpart of `writeTextToHandle` (PLAN4.md step 12.10) — a
+ * custom node image's bytes, not text. */
+export async function writeBlobToHandle(handle: FileSystemFileHandle, blob: Blob): Promise<void> {
+  const writable = await handle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+}
+
 export async function pickSaveHandle(suggestedName: string): Promise<FileSystemFileHandle | null> {
   if (!window.showSaveFilePicker) return null;
   return window.showSaveFilePicker({ suggestedName, types: YAML_TYPES });
+}
+
+/** Save picker for a custom node image (PLAN4.md step 12.10) — no
+ * YAML/JSON extension filter; `suggestedName` is conventionally under
+ * `assets/`, but the picker still lets the user save anywhere. */
+export async function pickImageSaveHandle(suggestedName: string): Promise<FileSystemFileHandle | null> {
+  if (!window.showSaveFilePicker) return null;
+  return window.showSaveFilePicker({ suggestedName });
 }

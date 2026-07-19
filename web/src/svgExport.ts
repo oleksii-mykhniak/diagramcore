@@ -46,6 +46,13 @@ export interface RenderOptions {
    * (`resolveZOrder`) the canvas uses for RF `zIndex`, so draw order
    * never disagrees between the two. */
   zOrder?: string[];
+  /** Custom node images (PLAN4.md step 12.10), keyed by the SAME
+   * relative path `styles[id].image` holds, resolved to a data URL —
+   * inlined as a self-contained `<image>` element (never a path, so
+   * the exported SVG/PNG never depends on any external file). A node
+   * whose `image` path has no entry here (not resolvable in this
+   * session) draws its normal shape instead — never a crash. */
+  images?: Record<string, string>;
   /** View → "Connection labels" show/hide-all (PLAN3.md step 11.9) —
    * defaults to showing every label with a non-empty `label`, same as
    * before this step. `dc context`/AI export never see this: they read
@@ -285,9 +292,27 @@ export function renderDiagramSVGString(
       const fontStyle = resolved.text?.italic ? 'italic' : 'normal';
       const textFill = resolved.text?.color ?? theme.text;
       // "Hide label" (PLAN4.md step 12.7) — shape only, no text.
-      const labelSvg = hiddenNodeLabels.has(n.id)
+      const hideLabel = hiddenNodeLabels.has(n.id);
+      // Custom image (PLAN4.md step 12.10) — same "draws instead of the
+      // shape, label as a caption underneath" layout as the canvas
+      // (`rfNodeTypes.tsx`'s `NodeShell`). `options.images` already
+      // holds a data URL (never a bare path), so the export stays
+      // self-contained.
+      const imageDataUrl = resolved.image ? options.images?.[resolved.image] : undefined;
+      const captionHeight = hideLabel ? 0 : 18;
+      const imageSvg = imageDataUrl
+        ? `<image href="${imageDataUrl}" x="0" y="0" width="${n.width}" height="${n.height - captionHeight}" preserveAspectRatio="xMidYMid meet" />`
+        : '';
+      const imageLabelSvg =
+        imageDataUrl && !hideLabel
+          ? `<text x="${n.width / 2}" y="${n.height - captionHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" font-family="system-ui, sans-serif" fill="${textFill}">${label}</text>`
+          : '';
+      const labelSvg = hideLabel
         ? ''
         : `<text x="${textX}" y="${labelY}" text-anchor="${textAnchor}" dominant-baseline="middle" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" font-family="system-ui, sans-serif" fill="${textFill}">${label}</text>`;
+      if (imageDataUrl) {
+        return `<g transform="translate(${pos.x},${pos.y})">${imageSvg}${imageLabelSvg}</g>`;
+      }
       return (
         `<g transform="translate(${pos.x},${pos.y})">` +
         shape.renderSvgInner(n.width, n.height, {

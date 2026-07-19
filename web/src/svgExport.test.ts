@@ -119,6 +119,27 @@ describe('renderDiagramSVGString', () => {
     expect(svg.indexOf('GCP')).toBeLessThan(svg.indexOf('Svc'));
   });
 
+  it('inlines a custom node image as a data URI, never a bare path, and draws the shape normally when unresolvable (PLAN4.md step 12.10)', () => {
+    const dataUrl = 'data:image/png;base64,AAAA';
+    const withImage = renderDiagramSVGString(diagram, layout, positions, {}, { images: { 'assets/a.png': dataUrl } }, [], {}, {
+      A: { image: 'assets/a.png' },
+    });
+    expect(withImage).toContain(`<image href="${dataUrl}"`);
+    expect(withImage).not.toContain('assets/a.png"'); // the path itself never leaks into the export
+    // Node A (the imaged one) no longer draws its actor ellipse.
+    expect(withImage).not.toContain('<ellipse');
+    // Node B has no image override — still draws its normal shape.
+    expect(withImage).toContain('<rect');
+
+    // The path is set, but this session has no resolved bytes for it
+    // (e.g. reopened without the asset) — draws the shape, not a crash.
+    const unresolved = renderDiagramSVGString(diagram, layout, positions, {}, { images: {} }, [], {}, {
+      A: { image: 'assets/missing.png' },
+    });
+    expect(unresolved).not.toContain('<image');
+    expect(unresolved).toContain('<ellipse');
+  });
+
   it('applies an instance style override (PLAN3.md step 11.8) to the matching node only', () => {
     const svg = renderDiagramSVGString(diagram, layout, positions, {}, {}, [], {}, {
       A: { fill: '#ff00ff', stroke: '#00ffff', strokeWidth: 4, lineStyle: 'dashed' },

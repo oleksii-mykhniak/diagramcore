@@ -62,7 +62,7 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 			DefaultView: {
 				Positions:        map[string]Position{"User": {X: 0, Y: 0}},
 				NotePositions:    map[string]Position{"note1": {X: 40, Y: 40}},
-				Styles:           map[string]Style{"User": {Fill: "#ff00ff", Text: &TextStyle{FontSize: 18, Bold: true, Align: "center"}}},
+				Styles:           map[string]Style{"User": {Fill: "#ff00ff", Text: &TextStyle{FontSize: 18, Bold: true, Align: "center"}, Image: "assets/user.png"}},
 				EdgeStyles:       map[string]EdgeStyle{"User->Gateway:request": {MarkerEnd: "open-arrow", Color: "#123456", Text: &TextStyle{Italic: true, Color: "#abcdef"}}},
 				EdgeLabelOffsets: map[string]Position{"User->Gateway:request": {X: 10, Y: -5}},
 				HiddenEdgeLabels: []string{"User->Gateway:request"},
@@ -99,8 +99,8 @@ func TestSavePreservesWebEditorOnlyFields(t *testing.T) {
 		t.Errorf("Positions[User] = %+v, want the newly-saved {200 50}", got)
 	}
 	view := f.Views[DefaultView]
-	if got := view.Styles["User"]; got.Fill != "#ff00ff" || got.Text == nil || got.Text.FontSize != 18 || !got.Text.Bold || got.Text.Align != "center" {
-		t.Errorf("Styles[User] = %+v, want preserved fill+text override", got)
+	if got := view.Styles["User"]; got.Fill != "#ff00ff" || got.Text == nil || got.Text.FontSize != 18 || !got.Text.Bold || got.Text.Align != "center" || got.Image != "assets/user.png" {
+		t.Errorf("Styles[User] = %+v, want preserved fill+text+image override", got)
 	}
 	edgeStyle := view.EdgeStyles["User->Gateway:request"]
 	if edgeStyle.MarkerEnd != "open-arrow" || edgeStyle.Color != "#123456" {

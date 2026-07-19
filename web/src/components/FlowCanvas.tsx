@@ -88,6 +88,10 @@ interface Props {
   /** Instance-level style overrides (PLAN3.md step 11.8) — like `sizes`,
    * only nodes the user actually styled get an entry. */
   styles?: Record<string, StyleOverride>;
+  /** Custom node images (PLAN4.md step 12.10), keyed by the SAME
+   * relative path `styles[id].image` holds — resolves it to a data URL
+   * for this session, or `undefined` if not resolvable right now. */
+  imageAssets?: Record<string, string>;
   visitedStepKeys?: Set<string>;
   activeStep?: ActiveStep;
   onNodeDoubleClick?: (node: DiagramNode) => void;
@@ -183,6 +187,7 @@ function FlowCanvasInner({
   sizes,
   onNodeResizeStop,
   styles,
+  imageAssets,
   visitedStepKeys,
   activeStep,
   onNodeDoubleClick,
@@ -350,6 +355,7 @@ function FlowCanvasInner({
                 showDescription: showDescriptions,
                 renderStyle,
                 text: resolvedStyle?.text,
+                imageSrc: resolvedStyle?.image ? imageAssets?.[resolvedStyle.image] : undefined,
                 // Core view (PLAN4.md step 12.8): a hidden label still
                 // renders (ghosted) instead of being suppressed.
                 labelHidden: (hiddenNodeLabels?.has(n.id) ?? false) && !coreView,
@@ -384,6 +390,7 @@ function FlowCanvasInner({
       renderStyle,
       onNodeResizeStop,
       styles,
+      imageAssets,
       hiddenNodeLabels,
       coreView,
       zIndexById,

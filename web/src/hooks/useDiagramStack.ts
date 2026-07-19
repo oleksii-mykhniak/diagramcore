@@ -85,6 +85,15 @@ export interface DiagramLevel {
    * (import/restore) REPLACES this rather than merging into it — it's
    * itself already the full resolved order as of that snapshot. */
   zOrder: string[];
+  /** Custom node images (PLAN4.md step 12.10), keyed by the SAME
+   * relative path stored in `styles[id].image` — resolves that path to
+   * actual bytes (a data URL) for the CURRENT session only. Never
+   * persisted in the layout file itself (that only ever holds the
+   * path). A path with no entry here means "not resolvable right now"
+   * (freshly reopened without the asset file, or it's genuinely
+   * missing) — canvas/export both fall back to drawing the shape with
+   * no image, never a crash. */
+  imageAssets: Record<string, string>;
   /** Diagram style preset (PLAN.md step 10.12), persisted in the layout
    * file/share link — see `layoutFile.ts`'s `RenderStyle`. */
   renderStyle: RenderStyle;
@@ -249,6 +258,7 @@ export function useDiagramStack() {
       hiddenEdges: new Set<string>(),
       hiddenNodeLabels: new Set<string>(),
       zOrder: [],
+      imageAssets: {},
       renderStyle: 'clean',
       savedRawText: text,
       savedLayoutSnapshot: '',

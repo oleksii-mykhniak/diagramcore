@@ -46,6 +46,13 @@ export interface DcNodeData extends Record<string, unknown> {
    * `labelHidden` (the caller sets `labelHidden: false` whenever this
    * is true, so the label renders in the first place). */
   labelGhost?: boolean;
+  /** Custom image (PLAN4.md step 12.10) — resolved data URL for THIS
+   * session (`FlowCanvas`'s `current.imageAssets[style.image]`), or
+   * `undefined` when the path is set but not resolvable right now. When
+   * present, the image draws instead of the dc-type shape (draw.io
+   * "image node" style), with the label as a caption underneath;
+   * resize scales the image (`object-fit: contain`). */
+  imageSrc?: string;
   /** Fires once, on resize release (mirrors `onNodeDragStop`'s
    * single-commit-per-gesture pattern from step 11.1). */
   onResizeEnd?: (size: { width: number; height: number; x: number; y: number }) => void;
@@ -134,22 +141,24 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
           data.onResizeEnd?.({ width: params.width, height: params.height, x: params.x, y: params.y })
         }
       />
-      <svg
-        width={width}
-        height={height}
-        // Same reasoning as the label div below: this comes after
-        // <NodeResizer> in DOM order, so at z-index:auto it paints (and
-        // hit-tests) on top of the resize handles wherever the shape's
-        // path actually has fill/stroke near the node's edges/corners
-        // (e.g. the storage cylinder's arc) — pointer-events:none hands
-        // those pixels back to the resize handles/plain node div
-        // underneath without affecting node click/drag/select, which
-        // React Flow attaches to the ancestor `.react-flow__node`, not
-        // to this element specifically.
-        style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: svgInner }}
-      />
+      {!data.imageSrc && (
+        <svg
+          width={width}
+          height={height}
+          // Same reasoning as the label div below: this comes after
+          // <NodeResizer> in DOM order, so at z-index:auto it paints (and
+          // hit-tests) on top of the resize handles wherever the shape's
+          // path actually has fill/stroke near the node's edges/corners
+          // (e.g. the storage cylinder's arc) — pointer-events:none hands
+          // those pixels back to the resize handles/plain node div
+          // underneath without affecting node click/drag/select, which
+          // React Flow attaches to the ancestor `.react-flow__node`, not
+          // to this element specifically.
+          style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: svgInner }}
+        />
+      )}
       <Handle type="target" position={Position.Top} />
       <div
         // This label layer sits in DOM order right after <NodeResizer>,
@@ -181,6 +190,14 @@ function NodeShell({ id, data, nodeType, shapeName, className, width, height }: 
           pointerEvents: 'none',
         }}
       >
+        {data.imageSrc && (
+          <img
+            data-testid={`rf-node-image-${id}`}
+            src={data.imageSrc}
+            alt=""
+            style={{ maxWidth: '100%', flex: '1 1 auto', minHeight: 0, objectFit: 'contain' }}
+          />
+        )}
         {data.isEditing ? (
           <input
             data-testid={`rf-node-label-input-${id}`}

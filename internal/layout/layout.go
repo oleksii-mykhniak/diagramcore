@@ -45,6 +45,11 @@ type Style struct {
 	LineStyle   string     `json:"lineStyle,omitempty"`
 	Rounded     bool       `json:"rounded,omitempty"`
 	Text        *TextStyle `json:"text,omitempty"`
+	// Image is a path to a custom image (phase 12, step 12.10), relative
+	// to the diagram's own YAML file (conventionally under an `assets/`
+	// subdirectory next to it) — never a data URI; the web editor
+	// resolves and inlines it as one only at SVG/PNG export time.
+	Image string `json:"image,omitempty"`
 }
 
 // EdgeStyle is a link's instance-level style override (phase 11, step

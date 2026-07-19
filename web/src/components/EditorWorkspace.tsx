@@ -88,6 +88,8 @@ interface EditorWorkspaceProps {
   onDeleteSelectedNode: () => void;
   onDuplicateSelectedNodes: () => void;
   onZOrderOp: (op: 'front' | 'forward' | 'backward' | 'back') => void;
+  onSetNodeImage: (file: File) => void;
+  onRemoveNodeImage: () => void;
   onUpdateLink: (index: number, patch: Partial<DiagramLink>) => void;
   onDeleteLink: (index: number) => void;
   onCommitYamlText: (text: string) => void;
@@ -177,6 +179,8 @@ export function EditorWorkspace({
   onDeleteSelectedNode,
   onDuplicateSelectedNodes,
   onZOrderOp,
+  onSetNodeImage,
+  onRemoveNodeImage,
   onUpdateLink,
   onDeleteLink,
   onCommitYamlText,
@@ -260,6 +264,7 @@ export function EditorWorkspace({
                 sizes={current.sizes}
                 onNodeResizeStop={onNodeResizeStop}
                 styles={current.styles}
+                imageAssets={current.imageAssets}
                 onNodeDoubleClick={onNodeDoubleClick}
                 onNodeClick={onNodeClick}
                 onNodeLabelCommit={onNodeLabelCommit}
@@ -320,6 +325,13 @@ export function EditorWorkspace({
                     onResetTextStyle={onResetNodeTextStyle}
                     labelHidden={current.hiddenNodeLabels.has(selectedNode.id)}
                     onToggleLabelHidden={onToggleNodeLabelHidden}
+                    imageSrc={
+                      current.styles[selectedNode.id]?.image
+                        ? current.imageAssets[current.styles[selectedNode.id]!.image!]
+                        : undefined
+                    }
+                    onSetImage={onSetNodeImage}
+                    onRemoveImage={onRemoveNodeImage}
                   />
                 ) : selectedLink ? (
                   <LinkProperties

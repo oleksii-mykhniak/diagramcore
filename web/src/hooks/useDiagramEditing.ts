@@ -18,6 +18,8 @@ import { findNodeDependents } from '../dependents';
 import { applyZOrderOp } from '../zOrder';
 import type { BranchTarget } from '../components/FlowEditorPanel';
 import type { DiagramLevel } from './useDiagramStack';
+import { isNativeFsSupported, pickImageSaveHandle, writeBlobToHandle } from '../nativeFile';
+import { downloadBlob } from '../svgExport';
 
 /** All node/link/flow editing handlers, plus the transient UI state they
  * drive (selection, hover, flow recording, focus requests). Everything
@@ -670,6 +672,67 @@ export function useDiagramEditing(
     [current, selectedNodeId, selectedNodeIds, updateCurrentLevel],
   );
 
+  /** Properties → "Image…" (PLAN4.md step 12.10) — reads the picked file
+   * as a data URL for THIS session's canvas/export rendering
+   * (`imageAssets`, keyed by the same relative path the layout file's
+   * `styles[id].image` holds), and separately gets the actual bytes
+   * onto disk: a real save-as prompt when the document has a native
+   * handle (the user can navigate into `assets/` there — the File
+   * System Access API has no silent "copy next to this other file"
+   * primitive), or a plain download otherwise. 2MB cap mirrors the
+   * plan's "reasonable size limit"; over that, bail with a load-error
+   * toast instead of silently bloating the layout/session state. */
+  const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+  const onSetNodeImage = useCallback(
+    (file: File) => {
+      if (!current || !selectedNodeId) return;
+      if (file.size > MAX_IMAGE_BYTES) {
+        setLoadError(`Image "${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)}MB — the limit is 2MB.`);
+        return;
+      }
+      void (async () => {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+        const path = `assets/${selectedNodeId}-${file.name}`;
+        const existing = current.styles[selectedNodeId] ?? {};
+        updateCurrentLevel({
+          styles: { ...current.styles, [selectedNodeId]: { ...existing, image: path } },
+          imageAssets: { ...current.imageAssets, [path]: dataUrl },
+        });
+        if (isNativeFsSupported()) {
+          try {
+            const handle = await pickImageSaveHandle(path.split('/').pop()!);
+            if (handle) await writeBlobToHandle(handle, file);
+          } catch (err) {
+            // AbortError: user cancelled the save-as picker — the image
+            // still displays for this session either way, so this isn't
+            // fatal, just unsaved-to-disk.
+            if (!(err instanceof Error && err.name === 'AbortError')) {
+              setLoadError(err instanceof Error ? err.message : String(err));
+            }
+          }
+        } else {
+          downloadBlob(file.name, file);
+        }
+      })();
+    },
+    [current, selectedNodeId, updateCurrentLevel, setLoadError],
+  );
+
+  /** Properties → "Remove image" — drops the style override's `image`
+   * field only, leaving fill/stroke/text/etc. untouched. */
+  const onRemoveNodeImage = useCallback(() => {
+    if (!current || !selectedNodeId) return;
+    const existing = current.styles[selectedNodeId];
+    if (!existing?.image) return;
+    const { image: _image, ...rest } = existing;
+    updateCurrentLevel({ styles: { ...current.styles, [selectedNodeId]: rest } });
+  }, [current, selectedNodeId, updateCurrentLevel]);
+
   const recordingFlow =
     current?.flowPlayerState.flowIndex != null ? current.diagram.flows?.[current.flowPlayerState.flowIndex] ?? null : null;
 
@@ -882,6 +945,8 @@ export function useDiagramEditing(
     onToggleEdgeHidden,
     onToggleNodeLabelHidden,
     onZOrderOp,
+    onSetNodeImage,
+    onRemoveNodeImage,
     onNewFlow,
     onToggleRecording,
     onAddBranch,

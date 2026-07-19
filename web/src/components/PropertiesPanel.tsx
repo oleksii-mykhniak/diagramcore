@@ -25,6 +25,14 @@ interface Props {
   /** "Hide label" (PLAN4.md step 12.7) — shape stays, text label doesn't. */
   labelHidden: boolean;
   onToggleLabelHidden: () => void;
+  /** Custom image (PLAN4.md step 12.10) — `imageSrc` is the resolved
+   * data URL for THIS session (`current.imageAssets[style.image]`),
+   * `undefined` when the path is set but not resolvable right now
+   * (freshly reopened, or genuinely missing — shown as a note, not an
+   * error, since the shape still renders fine either way). */
+  imageSrc?: string;
+  onSetImage: (file: File) => void;
+  onRemoveImage: () => void;
 }
 
 /** Node properties panel (PLAN.md step 7.2): edits label/type/description/
@@ -45,6 +53,9 @@ export function PropertiesPanel({
   onResetTextStyle,
   labelHidden,
   onToggleLabelHidden,
+  imageSrc,
+  onSetImage,
+  onRemoveImage,
 }: Props) {
   const customTypeNames = normalizeCustomTypes(diagram.diagram).map((t) => t.name);
   return (
@@ -111,6 +122,47 @@ export function PropertiesPanel({
         <input type="checkbox" data-testid="prop-hide-label" checked={labelHidden} onChange={onToggleLabelHidden} />
         Hide label
       </label>
+      <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-3) 0' }} />
+      <h4 style={{ fontSize: 'var(--dc-font-size-base)', margin: `0 0 var(--dc-space-2)` }}>Image</h4>
+      {style?.image && (
+        <div style={{ marginBottom: 'var(--dc-space-2)' }}>
+          {imageSrc ? (
+            <img
+              data-testid="prop-image-preview"
+              src={imageSrc}
+              alt=""
+              style={{ maxWidth: '100%', maxHeight: 80, display: 'block', marginBottom: 'var(--dc-space-1)' }}
+            />
+          ) : (
+            <p data-testid="prop-image-missing" style={{ fontSize: 'var(--dc-font-size-sm)', color: 'var(--dc-text-muted)' }}>
+              Image not available in this session ({style.image}).
+            </p>
+          )}
+        </div>
+      )}
+      <label style={{ display: 'block', marginBottom: 'var(--dc-space-2)' }}>
+        {style?.image ? 'Replace image…' : 'Image…'}
+        <input
+          type="file"
+          accept="image/*"
+          data-testid="prop-image-input"
+          style={{ display: 'block' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onSetImage(file);
+            e.target.value = '';
+          }}
+        />
+      </label>
+      <button
+        type="button"
+        data-testid="prop-image-remove"
+        onClick={onRemoveImage}
+        disabled={!style?.image}
+        style={{ marginBottom: 'var(--dc-space-3)' }}
+      >
+        Remove image
+      </button>
       <hr style={{ border: 'none', borderTop: '1px solid var(--dc-border)', margin: 'var(--dc-space-3) 0' }} />
       <h4 style={{ fontSize: 'var(--dc-font-size-base)', margin: `0 0 var(--dc-space-2)` }}>Style</h4>
       <label style={{ display: 'block', marginBottom: 'var(--dc-space-2)' }}>

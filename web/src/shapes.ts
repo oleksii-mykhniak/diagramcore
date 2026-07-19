@@ -259,6 +259,11 @@ export interface StyleOverride {
   lineStyle?: LineStyle;
   rounded?: boolean;
   text?: TextStyleOverride;
+  /** Path to a custom image (PLAN4.md step 12.10), relative to the
+   * diagram's own YAML file — never a data URI in the layout file
+   * itself; resolved to one only at SVG/PNG export time. Instance-only,
+   * no `custom_types`/theme tier (mirrors `text`). */
+  image?: string;
 }
 
 export interface ResolvedNodeStyle {
@@ -270,6 +275,7 @@ export interface ResolvedNodeStyle {
   lineStyle?: LineStyle;
   rounded?: boolean;
   text?: TextStyleOverride;
+  image?: string;
 }
 
 /** Resolves a node's final style by priority (PLAN3.md step 11.8):
@@ -290,5 +296,6 @@ export function resolveNodeStyle(diagram: DiagramLike, nodeType: string, instanc
     lineStyle: instanceOverride?.lineStyle ?? visual.lineStyle,
     rounded: instanceOverride?.rounded ?? visual.rounded,
     text: instanceOverride?.text,
+    image: instanceOverride?.image,
   };
 }

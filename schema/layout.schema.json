@@ -100,7 +100,11 @@
         "strokeWidth": { "type": "number" },
         "lineStyle": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
         "rounded": { "type": "boolean" },
-        "text": { "$ref": "#/$defs/textStyle" }
+        "text": { "$ref": "#/$defs/textStyle" },
+        "image": {
+          "type": "string",
+          "description": "Path to a custom image (phase 12, step 12.10), relative to the diagram's own YAML file (conventionally under assets/) — never a data URI."
+        }
       }
     },
     "edgeStyle": {

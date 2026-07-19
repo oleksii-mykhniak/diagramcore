@@ -393,3 +393,47 @@
   passed, 3 skipped (drawio), 1 pre-existing failure (drill-down, з
   кроку 12.3, не зачеплено цим кроком).
 - Commit: phase12-step9: шари — z-порядок вузлів (zOrder)
+
+## phase12-step10 — Власні картинки — 2026-07-19
+
+- Go `internal/layout.Style.Image string` (шлях, ніколи data URI) +
+  схема + `Save` round-трип (частина непрозорого `Styles`-мапу, як
+  `Text`) + тест.
+- Веб-дзеркало: `shapes.ts` (`StyleOverride.image`/
+  `ResolvedNodeStyle.image`, `resolveNodeStyle` резолвить — інстанс
+  тільки, без custom_types-рівня), `layoutFile.ts`
+  (`LayoutStyle.image`).
+- **Відхилення від плану** (детально в `docs/deviations.md`, крок
+  12.10): File System Access API в проєкті працює лише з окремими
+  file-handle (без директорійного доступу) — «мовчки скопіювати в
+  assets/» неможливо; «Save as zip» для картинок теж не існувало.
+  Замість цього: шлях у layout-файлі лишається як і задумано, реальні
+  байти живуть у сесійному `DiagramLevel.imageAssets` (шлях → data
+  URL); додавання картинки одразу пропонує native save-picker (де
+  користувач сам може зберегти в assets/) або звичайний download.
+  Свіже відкриття без цього файлу під рукою — шлях лишається валідним,
+  вузол малює фігуру як завжди + примітка в Properties (не в
+  Problems-панелі — вона прив'язана до Go-валідації YAML, а
+  відсутність картинки суто layout-стан).
+- Канва (`rfNodeTypes.tsx`'s `NodeShell`): картинка малюється ЗАМІСТЬ
+  dc-type фігури (draw.io "image node" стиль) — `object-fit: contain`,
+  лейбл підписом знизу; ресайз вузла масштабує картинку природно (той
+  самий flex-контейнер). SVG-експорт (`svgExport.ts`) — той самий
+  макет, `<image href="data:...">` замість фігури; шлях НІКОЛИ не
+  потрапляє в експортований SVG (тільки резолвлений data URI).
+- UI: секція Image в `PropertiesPanel.tsx` (file input, прев'ю або
+  примітка «не доступно в цій сесії», Remove image) — 2MB ліміт з
+  `setLoadError`-тостом при перевищенні.
+- Нові тести: Go `layout_test.go` (round-trip Image), web unit
+  `svgExport.test.ts` (data-URI замість шляху; вузол без резолву
+  малює фігуру, не падає), e2e `node-image.spec.ts` (2: додати
+  картинку → видно на канві + прев'ю, Export layout містить шлях НЕ
+  data-URI, SVG-експорт містить data-URI НЕ шлях, Remove прибирає;
+  відкриття layout з посиланням на відсутній файл не падає + показує
+  фігуру звичайно + примітку).
+- Регресія: `go test ./...`, `go vet ./...`, `./dc validate
+  examples/*.dc.yaml`, `make wasm && make wasm-test` — OK; `npm test`
+  (117 passed), `npm run build`, `npx playwright test` — 122/126
+  passed, 3 skipped (drawio), 1 pre-existing failure (drill-down, з
+  кроку 12.3, не зачеплено цим кроком).
+- Commit: phase12-step10: власні картинки вузлів

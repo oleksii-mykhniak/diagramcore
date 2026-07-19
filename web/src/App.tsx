@@ -68,6 +68,8 @@ export default function App() {
     onGroupNodeDragStop,
     onDuplicateSelectedNodes,
     onZOrderOp,
+    onSetNodeImage,
+    onRemoveNodeImage,
     hoveredLinkIndex,
     setHoveredLinkIndex,
     selectedLinkIndex,
@@ -288,6 +290,8 @@ export default function App() {
         onDeleteSelectedNode={onDeleteSelectedNode}
         onDuplicateSelectedNodes={onDuplicateSelectedNodes}
         onZOrderOp={onZOrderOp}
+        onSetNodeImage={onSetNodeImage}
+        onRemoveNodeImage={onRemoveNodeImage}
         onUpdateLink={onUpdateLink}
         onDeleteLink={onDeleteLink}
         onCommitYamlText={(text) => void applyTextReplace(text)}
