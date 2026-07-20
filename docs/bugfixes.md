@@ -207,3 +207,12 @@ deferred-таймер), тож відкочено на користь per-tab-с
 drill-down, тепер зелений); `go test ./...`, `go vet ./...`,
 `./dc validate examples/*.dc.yaml`, `npm test` (117 passed), `npm run
 build` — усі чисті.
+
+**Додатково (той самий день):** ті самі 3 флейки (`align-distribute`,
+`autosave`) все ще падали в CI під повним `fullyParallel` — CI-раннер
+має значно менше реальних ядер, ніж дев-машина, тож `os.cpus()`-based
+дефолт воркерів (6) перевантажував його, і таймінг-чутливі тести
+(дебаунсний autosave, 5с `toBeVisible`-вікно) впирались у таймаут не
+через регресію, а через конкуренцію за ресурси. Виправлення:
+`web/playwright.config.ts` — `workers: 2` і `retries: 1` лише під
+`process.env.CI` (лишає dev-запуск без змін).
