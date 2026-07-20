@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlowCanvas } from './FlowCanvas';
 import { FlowPlayer } from './FlowPlayer';
 import { Palette } from './Palette';
@@ -234,6 +234,25 @@ export function EditorWorkspace({
     setRightDockTab('properties');
     setRightDockCollapsed(false);
   }, [selectedNodeId]);
+
+  /** Which dock tab was active on each tab, so drilling into a
+   * sub-diagram (which selects its node and flips the dock to
+   * Properties, per the effect above) doesn't leave the PARENT tab
+   * stuck on Properties too once the user navigates back via
+   * breadcrumb — e.g. a Flows tab open before drill-down should still
+   * be there after returning (drill-down.spec.ts). */
+  const dockTabByTabRef = useRef<Record<string, RightDockTab>>({});
+  const prevTabRef = useRef(activeTab);
+  useEffect(() => {
+    const prev = prevTabRef.current;
+    if (activeTab === prev) return;
+    if (prev) dockTabByTabRef.current[prev] = rightDockTab;
+    if (activeTab) setRightDockTab(dockTabByTabRef.current[activeTab] ?? 'properties');
+    prevTabRef.current = activeTab;
+    // Only fires on an actual tab switch — `rightDockTab` is read via the
+    // ref-captured closure at that moment, not a reactive dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   /** Clicking an edge on the canvas (outside flow recording) opens its
    * properties in the Properties tab (PLAN3.md step 11.9; folded from

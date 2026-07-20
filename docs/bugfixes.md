@@ -166,3 +166,44 @@ A (бо `selectedNodeId === n.id`), навіть якщо React Flow вже зн
 ~443) фікс не зачіпає — це повністю окремий шлях коду.
 
 **Перевірка:** `npm test` — 91/91 passed, `npm run build` успішний.
+
+## 2026-07-20 — `drill-down.spec.ts`: панель Flows зникає після повернення по breadcrumb
+
+**Симптом:** CI (`.github` workflow `CI` / job `web`) падав на
+`drill-down.spec.ts` — "double-clicking a details node drills down...
+clicking back restores dragged positions and the selected flow":
+після повернення на батьківський таб по breadcrumb елемент
+`flow-step-count` (панель Flows у правому доку) зникав, хоча позиції
+й вибраний флоу відновлювались коректно. Відтворювалось детерміновано
+й локально (не флейк CI), задокументовано ще в кроці 12.3
+(`docs/progress-log.md`) як pre-existing, свідомо залишене поза
+скоупом фази 12.
+
+**Причина:** правий док (`rightDockTab`, `EditorWorkspace.tsx`) —
+єдиний глобальний стан, спільний для всіх вкладок. Подвійний клік на
+вузлі з `details:` викликає `onNodeClick` (виставляє `selectedNodeId`)
+ще ДО переходу на дочірню вкладку (`FlowCanvas.tsx`, той самий тік —
+React батчить обидва setState в один коміт), а ефект, що стежить за
+`selectedNodeId`, примусово перемикає док на Properties. Це
+перемикання належало б дочірній вкладці, але через глобальний стан
+лишалось і після повернення на батьківську вкладку по breadcrumb —
+навіть якщо там до drill-down був відкритий Flows.
+
+**Виправлення:** `web/src/components/EditorWorkspace.tsx` — доданий
+ефект, що при зміні `activeTab` зберігає поточний `rightDockTab` у
+`Record<string, RightDockTab>` (кероване `useRef`, ключ — ім'я файла
+вкладки, що покидається) і відновлює збережене значення для вкладки,
+на яку переходимо (замість `'properties'` за замовчуванням, якщо
+збереженого значення ще нема). `FlowCanvas.tsx` не чіпався — початкова
+спроба прибрати `onNodeClick` з drill-down-гілки dblclick-хендлера
+ламала інший тест (`inline-label-edit.spec.ts` — F2 одразу після
+повернення по breadcrumb редагував НЕ той вузол, бо `selectedNodeId`
+лишався від попереднього кліку, поки не спрацював власний 250мс
+deferred-таймер), тож відкочено на користь per-tab-стану доку.
+
+**Перевірка:** повний `npx playwright test` — 133/137 passed
+(4 з них раніше падали: 3 через паралелізм CI-раннера — флейк, не
+регресія, підтверджено повторним прогоном в ізоляції; 1 —
+drill-down, тепер зелений); `go test ./...`, `go vet ./...`,
+`./dc validate examples/*.dc.yaml`, `npm test` (117 passed), `npm run
+build` — усі чисті.
