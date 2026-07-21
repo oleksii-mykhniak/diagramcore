@@ -8,11 +8,23 @@ interface FileSystemWritableFileStream {
   close(): Promise<void>;
 }
 
+type FileSystemPermissionMode = 'read' | 'readwrite';
+
+interface FileSystemHandlePermissionDescriptor {
+  mode?: FileSystemPermissionMode;
+}
+
 interface FileSystemFileHandle {
   readonly kind: 'file';
   readonly name: string;
   getFile(): Promise<File>;
   createWritable(): Promise<FileSystemWritableFileStream>;
+  /** Session persistence (PLAN4.md follow-up: session restore across page
+   * reload) — a handle stored in IndexedDB survives reload but its
+   * permission grant may not; both must be feature-detected, since only
+   * Chromium implements them. */
+  queryPermission?(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>;
+  requestPermission?(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>;
 }
 
 interface OpenFilePickerOptions {

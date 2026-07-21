@@ -84,6 +84,26 @@ test('closing a tab removes it; double-clicking its details node again reopens i
   await expect(page.getByTestId('rf-node-OAuthGateway')).toBeVisible();
 });
 
+test('double-clicking a tab title renames the diagram (diagram.title, not the filename)', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('file-input').setInputFiles(authSystemPath);
+  await expect(page.getByTestId('reactflow-canvas')).toBeVisible();
+
+  const tab = page.getByTestId('tab-auth-system.dc.yaml');
+  await expect(tab).toContainText('Система авторизації');
+
+  await tab.dblclick();
+  const input = page.getByTestId('tab-rename-input-auth-system.dc.yaml');
+  await expect(input).toBeVisible();
+  await input.fill('Перейменована діаграма');
+  await input.press('Enter');
+
+  await expect(input).toHaveCount(0);
+  await expect(tab).toContainText('Перейменована діаграма');
+  // The tab id (fileName) is unchanged — only diagram.title moved.
+  await expect(page.getByTestId('tab-auth-system.dc.yaml')).toBeVisible();
+});
+
 test('undo is independent per tab', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles([authSystemPath, oauthDetailPath]);

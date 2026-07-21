@@ -271,6 +271,20 @@ export function useDiagramEditing(
     [selectedNodeId, applyOps],
   );
 
+  /** Tab-strip double-click rename — targets whichever tab is currently
+   * active (rename is only ever offered for that tab, since a click
+   * always switches the active tab before the rename input appears). A
+   * blank title is ignored rather than committed, since `diagram.title`
+   * is required by the format. */
+  const onRenameDiagram = useCallback(
+    (title: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+      void applyOps([{ op: 'updateDiagramMeta', patch: { title: trimmed } }]);
+    },
+    [applyOps],
+  );
+
   /** Inline label edit commit (PLAN4.md step 12.4) — unlike
    * `onUpdateSelectedNode`, targets `id` directly rather than the
    * current selection: a dblclick can open the editor for a node that
@@ -1298,6 +1312,7 @@ export function useDiagramEditing(
     onNodeClick,
     onUpdateSelectedNode,
     onUpdateNodeLabel,
+    onRenameDiagram,
     onDeleteSelectedNode,
     onConnectNodes,
     onUpdateLink,

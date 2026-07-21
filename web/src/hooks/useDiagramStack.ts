@@ -23,6 +23,8 @@ import { decodeShareState } from '../shareLink';
 import { downloadBlob } from '../svgExport';
 import { AUTOSAVE_DEBOUNCE_MS, cancelScheduledAutosave, clearAutosave, loadAutosave, scheduleAutosave } from '../localAutosave';
 import type { AutosaveRecord } from '../localAutosave';
+import { loadSession, scheduleSessionSave } from '../sessionStore';
+import type { SessionRecord } from '../sessionStore';
 
 const AUTO_SAVE_TO_FILE_KEY = 'dc-auto-save-to-file';
 
@@ -36,6 +38,30 @@ const AUTO_SAVE_TO_FILE_KEY = 'dc-auto-save-to-file';
  * marker. */
 export function levelHasUnsavedChanges(level: LayoutFileSource & { rawText: string; savedRawText: string; savedLayoutSnapshot: string }): boolean {
   return level.rawText !== level.savedRawText || layoutSnapshotOf(level) !== level.savedLayoutSnapshot;
+}
+
+/** Overlays an `AutosaveRecord`'s layout-state fields onto `level` in
+ * place — the patch shared between the restore-banner flow
+ * (`onRestoreAutosave`) and the silent per-tab overlay session restore
+ * applies on reload (`finishSessionRestore`). Does NOT touch
+ * `savedRawText`/`savedLayoutSnapshot`; callers decide what "saved" means
+ * for their situation (a banner-driven restore treats it as still unsaved
+ * against disk, a session-continuity restore treats the draft itself as
+ * the new baseline). */
+function applyAutosaveRecordToLevel(level: DiagramLevel, record: AutosaveRecord): DiagramLevel {
+  level.positions = { ...level.positions, ...record.positions };
+  level.manualPositionIds = new Set(Object.keys(record.positions));
+  level.notePositions = { ...level.notePositions, ...record.notePositions };
+  level.sizes = { ...level.sizes, ...record.sizes };
+  level.styles = { ...level.styles, ...record.styles };
+  level.edgeStyles = { ...level.edgeStyles, ...record.edgeStyles };
+  level.edgeLabelOffsets = { ...level.edgeLabelOffsets, ...record.edgeLabelOffsets };
+  level.hiddenEdgeLabels = new Set([...level.hiddenEdgeLabels, ...(record.hiddenEdgeLabels ?? [])]);
+  level.hiddenEdges = new Set([...level.hiddenEdges, ...(record.hiddenEdges ?? [])]);
+  level.hiddenNodeLabels = new Set([...level.hiddenNodeLabels, ...(record.hiddenNodeLabels ?? [])]);
+  if (record.zOrder?.length) level.zOrder = record.zOrder;
+  level.renderStyle = record.renderStyle;
+  return level;
 }
 
 export interface DiagramLevel {
@@ -180,6 +206,12 @@ export function useDiagramStack() {
    * has its own explicit state) finds a local IndexedDB autosave record
    * for the same `fileName`, offering to swap in that draft instead. */
   const [restorePrompt, setRestorePrompt] = useState<AutosaveRecord | null>(null);
+  /** "Resume session?" banner — the native-handle counterpart of the
+   * silent session restore below: a stored `mainHandle` whose permission
+   * grant didn't survive the reload (`queryPermission` returned anything
+   * but `'granted'`) needs a user gesture to re-request access, so this
+   * case alone can't restore silently. */
+  const [sessionResumePrompt, setSessionResumePrompt] = useState<SessionRecord | null>(null);
 
   const current = activeTab ? (levels[activeTab] ?? null) : null;
   /** Mirrors the active level synchronously (React state updates are not
@@ -188,6 +220,18 @@ export function useDiagramStack() {
    * `rawText` and clobber the first edit — see docs/deviations.md, step
    * 7.4). Reassigned on every tab switch as well as on every mutation. */
   const levelRef = useRef<DiagramLevel | null>(null);
+
+  /** Bumped by every explicit "open" entry point (`openFiles`,
+   * `openTextAsDiagram`, `onOpenNative`) — lets the async, mount-time
+   * `restoreSession`/`finishSessionRestore` notice it lost a race against
+   * a user action that happened while it was still awaiting IndexedDB/disk
+   * reads, and bail out instead of clobbering whatever the user just
+   * opened with stale session state. */
+  const openGenerationRef = useRef(0);
+  /** The generation `restoreSession` captured at the moment it surfaced
+   * the "Resume session?" banner — `onResumeSession` reuses it for the
+   * same staleness check when the user actually clicks it. */
+  const sessionResumeGenerationRef = useRef(0);
 
   /** One serialized mutation queue per tab (keyed by fileName at the
    * moment a mutation is queued, not read lazily at run time) — so an
@@ -364,13 +408,28 @@ export function useDiagramStack() {
    * loaded from the real file — its saved snapshot is captured (PLAN4.md
    * step 12.3) so a later "Restore" can tell the indicator what's
    * genuinely on disk, distinct from the draft it's swapping in. */
-  const checkAutosave = useCallback(async (fileName: string, diskLevel: DiagramLevel) => {
-    const record = await loadAutosave(fileName);
-    if (record) {
+  const checkAutosave = useCallback(
+    async (fileName: string, diskLevel: DiagramLevel) => {
+      const record = await loadAutosave(fileName);
+      if (!record) return;
+      // A draft that's byte-identical to what's now on disk isn't a real
+      // "unsaved work" conflict — most commonly a stale record left over
+      // from a previous, uneventful open of the same file (the content
+      // autosave effect writes on every open, not just on edits). Prompting
+      // for it would be a false positive, and leaving it around would just
+      // do the same on some future reopen, so clear it instead.
+      if (record.rawText === diskLevel.rawText) {
+        const draftLevel = applyAutosaveRecordToLevel(await buildLevel(fileName, record.rawText), record);
+        if (layoutSnapshotOf(draftLevel) === diskLevel.savedLayoutSnapshot) {
+          void clearAutosave(fileName);
+          return;
+        }
+      }
       setRestorePrompt(record);
       diskSnapshotForRestoreRef.current = { rawText: diskLevel.rawText, savedLayoutSnapshot: diskLevel.savedLayoutSnapshot };
-    }
-  }, []);
+    },
+    [buildLevel],
+  );
 
   /** Replaces the entire open-tabs set with a freshly loaded tree rooted
    * at `mainLevel` — shared by every "open a new document" entry point
@@ -404,9 +463,11 @@ export function useDiagramStack() {
   const openFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
+      openGenerationRef.current += 1;
       setLoadError(null);
       setDrillError(null);
       setRestorePrompt(null);
+      setSessionResumePrompt(null);
       try {
         const contents = await Promise.all(files.map(async (f) => [f.name, await f.text()] as const));
         const vfs = Object.fromEntries(contents);
@@ -431,9 +492,11 @@ export function useDiagramStack() {
    * they were in the source diagram. */
   const openTextAsDiagram = useCallback(
     async (fileName: string, text: string, positions?: Record<string, LayoutPosition>) => {
+      openGenerationRef.current += 1;
       setLoadError(null);
       setDrillError(null);
       setRestorePrompt(null);
+      setSessionResumePrompt(null);
       try {
         const vfs = { [fileName]: text };
         setVirtualFS(vfs);
@@ -546,9 +609,11 @@ export function useDiagramStack() {
         fallback();
         return;
       }
+      openGenerationRef.current += 1;
       setLoadError(null);
       setDrillError(null);
       setRestorePrompt(null);
+      setSessionResumePrompt(null);
       try {
         const opened = await openDiagramFiles();
         if (!opened) return;
@@ -715,6 +780,24 @@ export function useDiagramStack() {
     );
   }, [current, currentLayoutSnapshot]);
 
+  // Session persistence fix: remembers WHICH document/tabs were open (not
+  // their content — that's `localAutosave.ts`'s job) so a reload can
+  // silently reconstruct the session instead of coming back empty. Reruns
+  // on every level mutation (same as the content-autosave effect above),
+  // but `scheduleSessionSave` debounces to one write regardless.
+  useEffect(() => {
+    if (!mainFileName) return;
+    const mainLevel = levels[mainFileName];
+    scheduleSessionSave({
+      mainFileName,
+      virtualFS,
+      openTabs,
+      activeTab,
+      mainHandle: mainLevel?.mainHandle,
+      layoutHandle: mainLevel?.layoutHandle,
+    });
+  }, [mainFileName, openTabs, activeTab, virtualFS, levels]);
+
   // "Auto-save to file" (PLAN4.md step 12.3, File-menu toggle,
   // localStorage-persisted): when on and the active tab has a native
   // handle, the same debounce that drives the IndexedDB draft also
@@ -779,19 +862,7 @@ export function useDiagramStack() {
     const record = restorePrompt;
     const disk = diskSnapshotForRestoreRef.current;
     setRestorePrompt(null);
-    const level = await buildLevel(record.fileName, record.rawText);
-    level.positions = { ...level.positions, ...record.positions };
-    level.manualPositionIds = new Set(Object.keys(record.positions));
-    level.notePositions = { ...level.notePositions, ...record.notePositions };
-    level.sizes = { ...level.sizes, ...record.sizes };
-    level.styles = { ...level.styles, ...record.styles };
-    level.edgeStyles = { ...level.edgeStyles, ...record.edgeStyles };
-    level.edgeLabelOffsets = { ...level.edgeLabelOffsets, ...record.edgeLabelOffsets };
-    level.hiddenEdgeLabels = new Set([...level.hiddenEdgeLabels, ...(record.hiddenEdgeLabels ?? [])]);
-    level.hiddenEdges = new Set([...level.hiddenEdges, ...(record.hiddenEdges ?? [])]);
-    level.hiddenNodeLabels = new Set([...level.hiddenNodeLabels, ...(record.hiddenNodeLabels ?? [])]);
-    if (record.zOrder?.length) level.zOrder = record.zOrder;
-    level.renderStyle = record.renderStyle;
+    const level = applyAutosaveRecordToLevel(await buildLevel(record.fileName, record.rawText), record);
     // Deliberately NOT `layoutSnapshotOf(level)` — that would be the
     // draft's own layout, making the indicator lie that a just-restored,
     // never-actually-saved draft is "Saved" (the bug PLAN4.md step 12.3
@@ -804,12 +875,159 @@ export function useDiagramStack() {
   }, [restorePrompt, buildLevel, openTree]);
 
   /** Restore banner → "Discard": drops the draft and keeps whatever was
-   * just loaded from the real file. */
-  const onDiscardAutosave = useCallback(() => {
+   * just loaded from the real file. Async (awaits the actual IndexedDB
+   * delete) rather than fire-and-forget: a delete that's still in flight
+   * when the tab reloads/closes a moment later can lose the race against
+   * unload and never commit, leaving the "discarded" draft to reappear
+   * on the very next open. */
+  const onDiscardAutosave = useCallback(async () => {
     if (!restorePrompt) return;
-    void clearAutosave(restorePrompt.fileName);
+    // The content-autosave effect may already have a debounced write
+    // in flight for this same fileName (e.g. it fires on every open, not
+    // just on edits) — without cancelling it too, that write can land
+    // moments after Discard and leave a fresh-looking record behind,
+    // which a later reopen's `checkAutosave` would otherwise have to
+    // rediscover and dedup away instead of there simply being nothing to
+    // find.
+    cancelScheduledAutosave(restorePrompt.fileName);
+    await clearAutosave(restorePrompt.fileName);
     setRestorePrompt(null);
   }, [restorePrompt]);
+
+  /** Rebuilds the whole open-tabs tree from a session snapshot (session
+   * persistence fix — reload used to lose the open document entirely even
+   * though its autosave draft was safe in IndexedDB, because nothing
+   * remembered a document had been open). `mainText` is either the
+   * session's stored snapshot or freshly re-read disk content, decided by
+   * the caller. Every restored tab that isn't the disk-backed main file
+   * gets its OWN autosave draft (if any) overlaid silently — becoming the
+   * new saved baseline, since for a document with no native handle there
+   * is no other durable copy to be "unsaved" against. */
+  const finishSessionRestore = useCallback(
+    async (
+      session: SessionRecord,
+      mainText: string,
+      expectedGeneration: number,
+      mainHandle?: FileSystemFileHandle,
+      layoutHandle?: FileSystemFileHandle | null,
+    ) => {
+      const mainLevel = await buildLevel(session.mainFileName, mainText);
+      if (mainHandle) mainLevel.mainHandle = mainHandle;
+      if (layoutHandle !== undefined) mainLevel.layoutHandle = layoutHandle;
+      const vfs = { ...session.virtualFS, [session.mainFileName]: mainText };
+      const { levels: builtLevels, tabs, errors, parents } = await loadReachableDetails(session.mainFileName, mainLevel, vfs);
+      // Reachable details are eagerly parsed regardless (matches every
+      // other open path), but only the tabs that were actually open
+      // reappear in the strip — a tab the user had deliberately closed
+      // shouldn't resurrect itself just because it's still reachable.
+      const restoredTabs = tabs.filter((f) => f === session.mainFileName || session.openTabs.includes(f));
+
+      for (const fileName of restoredTabs) {
+        if (fileName === session.mainFileName && mainHandle) continue; // disk is authoritative here
+        const level = builtLevels[fileName];
+        if (!level) continue;
+        const record = await loadAutosave(fileName);
+        if (!record) continue;
+        const restored = applyAutosaveRecordToLevel(await buildLevel(fileName, record.rawText), record);
+        restored.savedRawText = restored.rawText;
+        restored.savedLayoutSnapshot = layoutSnapshotOf(restored);
+        builtLevels[fileName] = restored;
+      }
+
+      // The whole point of the generation check: if a user action (opening
+      // a different file, starting a new diagram…) happened while any of
+      // the awaits above were in flight, committing this snapshot now
+      // would silently overwrite it with stale session state. Bail out
+      // instead — the newer, explicit open already reflects what the user
+      // actually wants on screen.
+      if (openGenerationRef.current !== expectedGeneration) return;
+
+      const active = session.activeTab && restoredTabs.includes(session.activeTab) ? session.activeTab : session.mainFileName;
+      levelRef.current = builtLevels[active] ?? mainLevel;
+      setLevels(builtLevels);
+      setOpenTabs(restoredTabs);
+      setTabErrors(errors);
+      setTabParent(parents);
+      setMainFileName(session.mainFileName);
+      setActiveTab(active);
+      setVirtualFS(vfs);
+      resetAllHistory(active, levelRef.current);
+
+      // A native-handle main file with a draft newer than what's now on
+      // disk is a genuine conflict (edited, then reloaded before Saving)
+      // — keep the existing restore-banner flow for that, distinct from
+      // the silent continuity restore above.
+      if (mainHandle) void checkAutosave(session.mainFileName, mainLevel);
+    },
+    [buildLevel, loadReachableDetails, resetAllHistory, checkAutosave],
+  );
+
+  /** Entry point for the mount-time session restore (see the mount effect
+   * below) — tries a silent restore first, falling back to the
+   * "Resume session?" banner only when a stored native handle needs a
+   * user gesture to regain permission. Captures `openGenerationRef` up
+   * front (before any await) so a user action that races ahead of this
+   * (e.g. the mount effect's restore is still resolving when the user
+   * has already picked a different file by hand) is detected by
+   * `finishSessionRestore`'s check rather than silently clobbered. */
+  const restoreSession = useCallback(async () => {
+    const myGeneration = openGenerationRef.current;
+    let session: SessionRecord | null;
+    try {
+      session = await loadSession();
+    } catch {
+      return;
+    }
+    if (!session) return;
+    if (openGenerationRef.current !== myGeneration) return;
+    try {
+      if (session.mainHandle) {
+        const perm = session.mainHandle.queryPermission ? await session.mainHandle.queryPermission({ mode: 'readwrite' }) : 'prompt';
+        if (openGenerationRef.current !== myGeneration) return;
+        if (perm === 'granted') {
+          const mainText = await (await session.mainHandle.getFile()).text();
+          await finishSessionRestore(session, mainText, myGeneration, session.mainHandle, session.layoutHandle ?? null);
+          return;
+        }
+        if (openGenerationRef.current !== myGeneration) return;
+        sessionResumeGenerationRef.current = myGeneration;
+        setSessionResumePrompt(session);
+        return;
+      }
+      const mainText = session.virtualFS[session.mainFileName];
+      if (mainText === undefined) return;
+      await finishSessionRestore(session, mainText, myGeneration);
+    } catch {
+      // Corrupt/unavailable session (e.g. a handle from a different
+      // profile) — fall back to the pre-existing empty state instead of
+      // surfacing an error for a background convenience feature.
+    }
+  }, [finishSessionRestore]);
+
+  /** "Resume session" banner → click: re-requests permission on the
+   * stored handle (a user gesture, so — unlike `queryPermission` above —
+   * this one is allowed to prompt). Falls back to the session's static
+   * snapshot if the user denies it, rather than leaving the editor empty. */
+  const onResumeSession = useCallback(async () => {
+    const session = sessionResumePrompt;
+    if (!session?.mainHandle) return;
+    const myGeneration = sessionResumeGenerationRef.current;
+    setSessionResumePrompt(null);
+    try {
+      const perm = session.mainHandle.requestPermission ? await session.mainHandle.requestPermission({ mode: 'readwrite' }) : 'denied';
+      if (perm === 'granted') {
+        const mainText = await (await session.mainHandle.getFile()).text();
+        await finishSessionRestore(session, mainText, myGeneration, session.mainHandle, session.layoutHandle ?? null);
+        return;
+      }
+    } catch {
+      /* fall through to the static-snapshot fallback below */
+    }
+    const mainText = session.virtualFS[session.mainFileName];
+    if (mainText !== undefined) await finishSessionRestore(session, mainText, myGeneration);
+  }, [sessionResumePrompt, finishSessionRestore]);
+
+  const onDismissSessionResume = useCallback(() => setSessionResumePrompt(null), []);
 
   // Restore a share link (PLAN.md step 8.2) on load: the diagram opens as
   // an unsaved document (no native file handle — Save falls back to
@@ -817,7 +1035,12 @@ export function useDiagramStack() {
   // the browser (it's after `#`, so it isn't part of any HTTP request).
   useEffect(() => {
     const shared = decodeShareState(window.location.hash);
-    if (!shared) return;
+    if (!shared) {
+      // No share link — try to silently pick up where the last session
+      // left off (session persistence fix) instead of coming back empty.
+      void restoreSession();
+      return;
+    }
     void (async () => {
       const level = await buildLevel(shared.fileName, shared.yaml);
       if (shared.layout) {
@@ -973,5 +1196,8 @@ export function useDiagramStack() {
     restorePrompt,
     onRestoreAutosave,
     onDiscardAutosave,
+    sessionResumePrompt,
+    onResumeSession,
+    onDismissSessionResume,
   };
 }

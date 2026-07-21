@@ -1,6 +1,6 @@
 import { parseDocument } from 'yaml';
 import type { Document, YAMLMap, YAMLSeq } from 'yaml';
-import type { DiagramLink, DiagramNode, DiagramNoteDef, FlowStep } from './types';
+import type { DiagramLink, DiagramMeta, DiagramNode, DiagramNoteDef, FlowStep } from './types';
 
 /** Where an `addFlowStep` lands: the flow's top-level `steps[]`, or a
  * `then`/`else` arm of one of its branches (PLAN.md step 7.4). */
@@ -15,6 +15,7 @@ export interface FlowStepTarget {
  * hood (PLAN.md step 7.1). Each operation works on an already-parsed
  * `yaml.Document`; `applyPatch` is the text-in/text-out entry point. */
 export type PatchOp =
+  | { op: 'updateDiagramMeta'; patch: Partial<DiagramMeta> }
   | { op: 'addNode'; node: DiagramNode }
   | { op: 'updateNode'; id: string; patch: Partial<DiagramNode> }
   | { op: 'removeNode'; id: string }
@@ -69,6 +70,8 @@ export function describePatchOps(ops: PatchOp[], beforeNodesById?: Map<string, D
 
 function describeSingleOp(op: PatchOp, beforeNodesById?: Map<string, DiagramNode>): string {
   switch (op.op) {
+    case 'updateDiagramMeta':
+      return typeof op.patch.title === 'string' ? `Rename diagram to "${op.patch.title}"` : 'Edit diagram info';
     case 'addNode':
       return `Add node ${op.node.id}`;
     case 'removeNode':
@@ -151,6 +154,15 @@ function findFlow(doc: Document, flowName: string): YAMLMap {
 
 function applyOp(doc: Document, op: PatchOp): void {
   switch (op.op) {
+    case 'updateDiagramMeta': {
+      const meta = doc.get('diagram', true) as YAMLMap | undefined;
+      if (!meta) throw new Error('document has no diagram: section');
+      for (const [key, value] of Object.entries(op.patch)) {
+        if (value === undefined) meta.delete(key);
+        else meta.set(key, value);
+      }
+      break;
+    }
     case 'addNode': {
       nodesSeq(doc).add(doc.createNode(op.node));
       break;

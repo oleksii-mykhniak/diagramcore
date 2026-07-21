@@ -58,6 +58,9 @@ export default function App() {
     restorePrompt,
     onRestoreAutosave,
     onDiscardAutosave,
+    sessionResumePrompt,
+    onResumeSession,
+    onDismissSessionResume,
   } = useDiagramStack();
 
   const { onUndo, onRedo } = useHistory(historyRef, jumpToHistoryStep);
@@ -101,6 +104,7 @@ export default function App() {
     onNodeClick,
     onUpdateSelectedNode,
     onUpdateNodeLabel,
+    onRenameDiagram,
     onDeleteSelectedNode,
     onConnectNodes,
     onUpdateLink,
@@ -228,6 +232,30 @@ export default function App() {
         onToggleRenderStyle={() => setRenderStyle(current?.renderStyle === 'sketch' ? 'clean' : 'sketch')}
         onImportDrawio={(file) => void onImportDrawio(file)}
       />
+      {sessionResumePrompt && (
+        <div
+          data-testid="resume-session-banner"
+          role="alert"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--dc-space-3)',
+            padding: 'var(--dc-space-2) var(--dc-space-3)',
+            background: 'var(--dc-surface)',
+            borderBottom: '1px solid var(--dc-border)',
+            color: 'var(--dc-text)',
+            fontSize: 'var(--dc-font-size-base)',
+          }}
+        >
+          <span>Continue working on "{sessionResumePrompt.mainFileName}" from before the reload?</span>
+          <button type="button" data-testid="resume-session-resume" onClick={() => void onResumeSession()}>
+            Resume session
+          </button>
+          <button type="button" data-testid="resume-session-dismiss" onClick={onDismissSessionResume}>
+            Dismiss
+          </button>
+        </div>
+      )}
       {restorePrompt && (
         <div
           data-testid="restore-autosave-banner"
@@ -247,7 +275,7 @@ export default function App() {
           <button type="button" data-testid="restore-autosave-restore" onClick={() => void onRestoreAutosave()}>
             Restore
           </button>
-          <button type="button" data-testid="restore-autosave-discard" onClick={onDiscardAutosave}>
+          <button type="button" data-testid="restore-autosave-discard" onClick={() => void onDiscardAutosave()}>
             Discard
           </button>
         </div>
@@ -289,6 +317,7 @@ export default function App() {
         onNodeDoubleClick={(node) => void openDetails(node)}
         onNodeClick={onNodeClick}
         onNodeLabelCommit={onUpdateNodeLabel}
+    onRenameDiagram={onRenameDiagram}
         editNodeRequest={editNodeRequest}
         onDropNodeType={onDropNodeType}
         onDropNoteType={onDropNoteType}

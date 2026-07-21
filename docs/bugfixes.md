@@ -5,6 +5,55 @@
 
 ---
 
+## 2026-07-21 — Оновлення сторінки (F5) губило відкритий документ; + перейменування діаграми
+
+**Симптом:** оновлення вкладки браузера під час роботи в редакторі
+повертало користувача до порожнього стану — жоден документ не
+відкривався автоматично, хоча всі зміни фізично лежали в IndexedDB
+autosave-чернетці. Порівняно з draw.io (де сесія відновлюється мовчки),
+цей розрив був явним регресом UX.
+
+**Причина:** `web/src/localAutosave.ts` зберігає вміст активної
+вкладки за ключем `fileName`, але ніщо не пам'ятало сам факт «документ
+X був відкритий» — весь стек вкладок (`levels`/`openTabs`/`activeTab`/
+`mainFileName` у `useDiagramStack.ts`) жив тільки в React-стані.
+Mount-ефект перевіряв лише share-link hash; для звичайного відкриття
+файлу/native-handle нічого не відновлювалось.
+
+**Виправлення:**
+- Новий `web/src/sessionStore.ts` — окрема IndexedDB (`dc-session`):
+  дебаунсний знімок `{mainFileName, virtualFS, openTabs, activeTab,
+  mainHandle?, layoutHandle?}`.
+- `web/src/hooks/useDiagramStack.ts` — на mount (якщо нема share-hash)
+  `restoreSession()`: для документа з native `FileSystemFileHandle`
+  й дозволом `'granted'` — тихо перечитує диск; якщо дозвіл `'prompt'`
+  — банер «Продовжити сесію» (`onResumeSession`, потребує жесту
+  користувача для `requestPermission`); для документів без handle —
+  мовчки накладає autosave-чернетку кожної відкритої вкладки як нову
+  збережену базову лінію (без «Unsaved»). Закрита вкладка не
+  воскресає. Гонка з явним «Open»/«New» під час відновлення вирішена
+  лічильником поколінь (`openGenerationRef`) — пізніший explicit-open
+  завжди виграє.
+- Побічний фікс (виявлений тестами): `checkAutosave` тепер порівнює
+  чернетку з диском і мовчки чистить чернетку, що байтово однакова з
+  диском (раніше банер міг з'явитись навіть без реальної розбіжності).
+  `onDiscardAutosave` тепер `await`-ить `clearAutosave` (було
+  fire-and-forget) — швидкий reload одразу після Discard міг перервати
+  ще не завершену IndexedDB-транзакцію видалення, і «відкинута»
+  чернетка відроджувалась на наступному відкритті.
+- **Крок B (за запитом власника):** перейменування діаграми — новий
+  `PatchOp: 'updateDiagramMeta'` (`web/src/yamlPatch.ts`) редагує
+  `diagram.title` через `yaml.Document` (формат не чіпається). Подвійний
+  клік по назві вкладки (`TabStrip.tsx`) відкриває inline-інпут;
+  `onRenameDiagram` (`useDiagramEditing.ts`) комітить через `applyOps`
+  — працює для активної вкладки (головної чи details).
+
+**Перевірка:** `go test ./...`, `go vet ./...`, `./dc validate
+examples/*.dc.yaml`, `npm test` (117 passed), `npm run build`,
+`npx playwright test` (workers:2, retries:1) — 138 passed, 3 skipped
+(drawio); повторено 5x поспіль без ретраїв для стабільності нового
+`session-restore.spec.ts` і фіксу гонки в `autosave.spec.ts`.
+
 ## 2026-07-05 — Ресайз вузла: фігура "відлітає" в протилежний бік по завершенні
 
 **Симптом:** при зміні розміру вузла (особливо перетягуванням верхнього/

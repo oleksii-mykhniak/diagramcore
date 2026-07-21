@@ -36,6 +36,7 @@ interface EditorWorkspaceProps {
   tabErrors: Record<string, string>;
   onSwitchTab: (fileName: string) => void;
   onCloseTab: (fileName: string) => void;
+  onRenameDiagram: (title: string) => void;
   onSelectProblem: (error: ValidationError) => void;
   onFlowPlayerChange: (state: FlowPlayerState) => void;
   recordingFlow: Flow | null;
@@ -138,6 +139,7 @@ export function EditorWorkspace({
   tabErrors,
   onSwitchTab,
   onCloseTab,
+  onRenameDiagram,
   onSelectProblem,
   onFlowPlayerChange,
   recordingFlow,
@@ -286,6 +288,7 @@ export function EditorWorkspace({
           tabErrors={tabErrors}
           onSwitchTab={onSwitchTab}
           onCloseTab={onCloseTab}
+          onRenameDiagram={onRenameDiagram}
         />
       )}
       {activeTab && tabErrors[activeTab] && (
